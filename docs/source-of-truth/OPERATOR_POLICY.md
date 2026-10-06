@@ -71,3 +71,20 @@ Adopted research takeaways (2026-10-06 brief): strategy-level metabolism/surviva
 $1 calibration trades, learned backtest→live haircut, pre-registered power targets, planted-signal (positive-control) evaluator tests, cost-ruler
 versioning with automatic re-adjudication, loop/meltdown watchdog, stepping-stone archive, conduct rules in code, verified-independent-payer
 admission for new income rails. Applied with progressive exposure scaling — caution must not paralyze.
+
+## OP-007 — 2026-10-06 — PERMANENT ARCHITECTURE: two continuous concurrent loops (Earning + Improvement)
+Permanent architectural requirement (not optional, not future):
+1. **EARNING LOOP** — proven strategies keep operating while their real, fee-adjusted, risk-adjusted edge remains valid. Never interrupt a
+   profitable incumbent merely because a newer idea exists. Capital stays deployed where evidence shows it is currently productive.
+2. **IMPROVEMENT LOOP** — runs continuously in parallel with live earning; FORGE must never become strategically stagnant. Always capable of
+   producing: new families, mutations, parameter improvements, component combinations, market hypotheses, indicators/features, asset/venue
+   opportunities, regime variants, alternative execution methods, new legitimate API income rails.
+- Every live strategy is an **incumbent, never a finished product**, continuously challenged by candidates:
+  generated → simulated → backtested → walk-forward → shadow → compared → promoted or rejected.
+- Strategy states: **PRODUCTION · CHALLENGER · EXPERIMENTAL · SHADOW · HIBERNATING · RETIRED** (+ QUARANTINED for invalid/bug results).
+- Capital and compute continuously migrate toward the strongest demonstrated opportunities (real net performance, EV, uncertainty, liquidity,
+  fees, slippage, drawdown, correlation, probability of ruin).
+- Weak strategies never just disappear; FORGE decides: repair · mutate · reduce · hibernate (until regime returns) · combine · retire into
+  permanent institutional memory (lineage, assumptions, results, failure reasons, applicable regimes retained).
+- 24/7 = economically and intellectually active, not forced trading. Always at least one of: **EARNING → LEARNING → PREPARING TO EARN BETTER**.
+- Implement by extending the existing architecture (no redesign).
