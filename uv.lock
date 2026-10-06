@@ -503,6 +503,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyjwt" },
     { name = "pyyaml" },
+    { name = "sortedcontainers" },
     { name = "uvicorn" },
     { name = "websockets" },
 ]
@@ -533,6 +534,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.8" },
     { name = "pyjwt", specifier = ">=2.9" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "sortedcontainers", specifier = ">=2.4" },
     { name = "uvicorn", specifier = ">=0.30" },
     { name = "uvloop", marker = "extra == 'fast'", specifier = ">=0.21" },
     { name = "websockets", specifier = ">=13" },

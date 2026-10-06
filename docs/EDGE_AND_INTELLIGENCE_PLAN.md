@@ -82,3 +82,30 @@ Prompt-engineering architecture:
 ## 6. What FORGE will never do (to keep earning sustainable)
 Force trades, use leverage (Phase 1), let an LLM place orders directly, bypass platform rules, or report
 gross P&L as profit. Every claim of edge is backed by recorded evidence.
+
+---------------------------------------------------------------------------------------------------------------
+## 7. Intelligence Attribution Ledger (OP-006) — "optimize AI, don't minimize it"
+Every DeepSeek call and Modal job is a node in a provenance graph:
+
+  intel_call ──produces──▶ artifact (hypothesis | regime_call | diagnosis | genome | venue_lead | routing_decision | veto)
+  artifact ──influences──▶ decision (strategy activated/retired, mutation, opportunity escalated/rejected, allocation change, trade)
+  decision ──yields──▶ economic outcome (realized P&L, avoided loss vs counterfactual, successor lifetime P&L, shadow EV)
+
+Credit assignment: outcomes flow back along edges with weights (direct > enabling), time-decayed, so FORGE estimates
+value per (agent role × model × effort × prompt version × task type). Avoided losses are valued with the counterfactual
+outcome of the rejected/vetoed action (triple-barrier replay). Discoveries are credited with the downstream lifetime net P&L
+of their descendants (lineage graph). The InferenceRouter uses these estimates (contextual bandit) to decide WHEN to call
+Flash, WHEN to escalate to Pro (max), and WHEN to buy Modal simulation — maximizing expected value of information.
+Learned examples the ledger is designed to surface: "Flash regime classification → high value", "Pro postmortem → very high
+value", "LLM re-reading an ordinary order book → wasteful".
+
+## 8. Tiered intelligence escalation loop
+  anomaly (deterministic detectors, ms) → Flash triage (cheap, continuous) → if unusual/valuable/ambiguous → Pro max reasoning
+  → if EVI justifies → Modal burst (~1,000 sims / walk-forward / perturbation) → deterministic Risk Governor → execute or reject
+  → outcome + counterfactual → memory + attribution ledger → router policy update.
+Fast path never waits on an LLM; LLM conclusions become *validated genomes and regime/activation policies* that the fast path executes.
+
+## 9. Strategy metabolism (earn-or-die inside FORGE, never for the treasury)
+Each strategy and agent role carries "rent" = its attributed inference + compute spend. Net-of-rent fitness drives survival tiers:
+THRIVING (gets more capital/compute) → STABLE → STARVING (shadow only, cheaper brain) → HIBERNATING (sleeps until its regime returns).
+Lineage is never deleted; dormant DNA can be resurrected.
