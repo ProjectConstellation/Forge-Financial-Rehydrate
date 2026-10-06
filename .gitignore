@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+.venv/
+__pycache__/
+logs/*
+runtime/*
+data/*
+backups/
+!**/.gitkeep
