@@ -2,7 +2,8 @@
 
 **FORGE = Find Opportunities · Reinvest · Grow · Evolve** — an autonomous capital growth engine.
 
-## Sources of truth (verbatim, read-only, sha256-pinned in `docs/source-of-truth/`)
+## Sources of truth (in `docs/source-of-truth/`)
+0. `OPERATOR_POLICY.md` — operator overrides recorded during the build (**highest precedence**; e.g. OP-001 treasury = full account balance).
 1. `FORGE_AUTONOMOUS_BUILD_DIRECTIVE.md` — the operator's directive; newer; **wins conflicts** (`scripts/dossier.sh -d ...`).
 2. `FORGE_MASTER_BUILD_DOSSIER.md` — the full blueprint (`scripts/dossier.sh ...`).
 3. `RESOLUTIONS.md` — how the two are reconciled. `DOSSIER_DIGEST.md` — reading notes (its Pass-3 open questions are answered in RESOLUTIONS).

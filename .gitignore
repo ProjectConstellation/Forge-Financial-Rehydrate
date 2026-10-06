@@ -1,12 +1,21 @@
+# secrets — never commit
 .env
 .env.*
 !.env.example
 *.key
 *.pem
+secrets/
+# environments / tooling
 .venv/
+.tools/
+.cache/
 __pycache__/
-logs/*
-runtime/*
-data/*
-backups/
-!**/.gitkeep
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+web/node_modules/
+# runtime state (prod: var/ owned by forge; dev: .devvar/)
+var/*
+!var/.gitkeep
+.devvar/
