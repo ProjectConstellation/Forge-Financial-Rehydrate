@@ -30,3 +30,4 @@ footer{text-align:center;padding:18px;font-size:12px}
 .grid3 .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}.doing{margin-top:10px;padding:10px;border-radius:12px;background:#0f1a14;color:#bfe8d0;font-size:14px}
 .tag.ok{border-color:var(--ok);color:var(--ok)}.tag.bad{border-color:var(--bad);color:var(--bad)}
 @media (max-width:620px){.grid3{grid-template-columns:repeat(2,1fr)}}
+.refill{display:block;margin:6px 0 10px;padding:14px;border-radius:14px;background:#3a0f16;border:1px solid var(--bad);color:#ffd5db;font-weight:700;text-decoration:none}

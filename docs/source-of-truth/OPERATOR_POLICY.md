@@ -132,3 +132,12 @@ preserving unlimited scalability. Never force trades to satisfy it.
 - Compute concentrates on near-miss candidates (closest to the evidence gate) — "racing" — to reach validated earning edges sooner.
 - Hard limits that remain: cannot spend money that does not exist (DeepSeek balance; Modal monthly ceiling set by operator, raisable),
   and the evidence gate for capital (OP-004) — confidence must be earned, then capital and intelligence scale with it.
+
+## OP-011 — 2026-10-07 — DeepSeek balance sentinel ($5 threshold → $10 refill)
+Operator request: monitor DeepSeek balance continuously (lightweight); when it falls below $5, add exactly $10, once, intelligently.
+Verified 2026-10-07: DeepSeek API has no top-up/payment endpoint (chat, models, balance only); OpenRouter's programmatic crypto
+top-up is deprecated/removed. Credential-based website automation rejected (fragile, likely ToS violation, DIRECTIVE forbids bypassing
+browser protections, puts card-spending power on the server). Implemented instead: Balance Sentinel — 5-min free balance polling;
+below $5 → ONE "add $10" alert per episode (dashboard banner + optional ntfy push); detects top-ups and books them as inference funding;
+tracks self-funding progress; graceful degradation (engine never stops). Upgrade path: provider-side auto-reload if available, or a
+future programmatic payment rail (e.g. x402-capable inference provider paid from an allowlisted agentic wallet) when authorized.

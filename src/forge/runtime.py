@@ -152,6 +152,9 @@ class Forge:
                                                                 beat=lambda: self.sup.beat(n))), i + 900)
         if self.brain is not None:
             B("brain", lambda: self.brain.run(self), 3600)
+            from forge.brain.sentinel import BalanceSentinel
+            self.sentinel = BalanceSentinel(self)
+            B("balance_sentinel", self.sentinel.run, 1200)
         if self.compute is not None:
             B("compute", lambda: self.compute.run(self), 900)
         self.sup.on_restart = self._on_loop_restart

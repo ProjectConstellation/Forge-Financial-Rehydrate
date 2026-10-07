@@ -23,6 +23,9 @@ async function refresh() {
     $("regime").textContent = `${reg.name || "—"} regime · reserve ${usd(t.reserve_usd)} · cash ${usd(t.cash_usd)}`;
     $("truenet").textContent = usd(t.true_net_usd, 4); $("truenet").className = "num " + cls(t.true_net_usd);
     $("truenet_sub").textContent = `realized ${usd(t.realized_pnl_usd, 4)} · unrealized ${usd(t.unrealized_pnl_usd, 4)} · today ${usd(t.daily_pnl_usd, 4)}`;
+    const ds = o.deepseek_sentinel || {};
+    if (ds.status === "LOW") { $("refill").hidden = false; $("refill").textContent = `⚠ DeepSeek balance ${usd(ds.balance)} — tap to add $10 (research is throttled until funded)`; }
+    else { $("refill").hidden = true; }
     const e = o.earnings || {};
     for (const [id, k, d] of [["inc_today", "today_usd", 4], ["inc_hour", "per_hour_today_usd", 4], ["inc_7d", "7d_usd", 4], ["inc_life", "lifetime_true_net_usd", 4]]) {
       $(id).textContent = usd(e[k], d); $(id).className = "v " + cls(e[k]); }
