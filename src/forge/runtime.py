@@ -43,8 +43,7 @@ from forge.research.calibration import CalibrationEngine
 from forge.risk.breakers import BreakerBoard
 from forge.risk.governor import RiskContext, RiskGovernor
 from forge.strategies.genome import Genome, barrier_pcts, chandelier_k, compile_entries, convex_atr
-from forge.strategies.registry import repair_genome
-from forge.strategies.registry import ACTIVE_LIVE, ACTIVE_OBSERVING, State, StrategyRegistry
+from forge.strategies.registry import ACTIVE_LIVE, ACTIVE_OBSERVING, State, StrategyRegistry, repair_genome
 from forge.treasury.allocation import (
     SPECIALIST_FAMILIES,
     breadth_multiplier,
@@ -265,6 +264,11 @@ class Forge:
 
     async def _init_treasury(self) -> None:
         if self.book == "live":
+            from forge.treasury.idle_yield import IdleYield
+            with contextlib.suppress(Exception):            # USDC idle-yield cash → USD before trading -USD books
+                g = await IdleYield(self).live_start_guard()
+                if g:
+                    await self.say("Treasury", f"Live-start guard: USDC → USD {g.get('amount')} ({g.get('status')})")
             bals = await self.coinbase.get_balances()
             marks = await self._marks_rest({b.asset for b in bals if b.total > 0})
             if not self.db.kv_get("live.opened"):
@@ -353,6 +357,10 @@ class Forge:
                 await self._reconcile_live()
             if self.rest.authenticated and n % 4 == 1:
                 await self._refresh_account()
+            if self.rest.authenticated and n % 120 == 3:          # ~hourly: verify USDC rewards from wallet truth
+                from forge.treasury.idle_yield import IdleYield
+                with contextlib.suppress(Exception):
+                    await IdleYield(self).observe()
             eq0 = float(self.day["start_equity"] or 0)
             if eq0 > 0 and t["daily_pnl_usd"] / eq0 <= -float(self.s.risk.daily_drawdown_breaker_fraction):
                 if tstate.trading_state(self.db) == "RUNNING":

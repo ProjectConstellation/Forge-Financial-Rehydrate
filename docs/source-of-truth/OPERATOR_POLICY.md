@@ -202,3 +202,14 @@ Heavy work goes to Modal ($30/month, via FORGE's compute governor). Hermes must 
 for itself (measured value-per-$ through the intelligence attribution ledger) — it exists to generate income.
 Implemented: `forge.slice` (CPUQuota 400%, MemoryMax 4G, MemoryHigh 3.8G) containing forge.service (≤ 300% / 3G) and
 forge-hermes.service. Supersedes the earlier 3 vCPU hard ceiling for the slice as a whole.
+
+## OP-018 — 2026-10-07 — Operator Azure credit: Claude Opus 5.5 for Hermes for ~72 h (free compute)
+Hermes uses Opus 5.5 (high reasoning) via the operator's Azure Foundry endpoint; treated as free compute (not a treasury
+expense; list-price tracked only to measure value-per-$), paced over the window. Swap back to DeepSeek V4.1 Flash at any time
+with zero recoding (`forge-hermes-mode deepseek`; docs/HERMES.md). All prompts/genomes live in FORGE.
+
+## OP-019 — 2026-10-07 — "Get it live and actively earning" → idle cash earns USDC rewards now
+Executed 2026-10-07 05:5x UTC: $23.27 USD → 23.27 USDC via Advanced Trade convert (fee $0, 1:1, trade 64eadfb9…,
+COMPLETED); $5.00 USD kept liquid for the Coinbase One fee (first charge 2026-10-14). Rewards are verified hourly from wallet
+truth (unexplained USDC increases); before any LIVE trading session FORGE converts USDC back to USD (live-start guard).
+Spot strategy trading stays behind the readiness gate: no strategy has validated edge on clean data yet.

@@ -321,10 +321,16 @@ class SurfaceRegistry:
         y.capabilities.update(convert_api="Advanced Trade convert quote/commit (USD↔USDC)",
                               advertised_apy="3.50–3.75% (Coinbase One pages, 2026-10) — never assumed",
                               verified_apy=apy)
-        y.capabilities.update(membership=mem.get("tier"), member_apy=mem.get("usdc_reward_apy"))
-        y.blockers = ["live USD→USDC idle sweep needs operator 'yes' (ledger/reconciler switch to USDC cash) — "
-                      "FORGE verifies the rate from posted rewards"]
-        y.status, y.executable = ("LIVE_ELIGIBLE", False) if apy else ("CANDIDATE", False)
+        ys = self.f.db.kv_get("yield.usdc") or {}
+        y.capabilities.update(membership=mem.get("tier"), member_apy=mem.get("usdc_reward_apy"),
+                              usdc_balance=ys.get("usdc_balance"), rewards_usdc=ys.get("rewards_usdc"),
+                              realized_apy=ys.get("realized_apy"))
+        if ys.get("conversions"):
+            y.blockers = [] if ys.get("realized_apy") else ["rate not yet verified from posted rewards (needs ≥ 1 day)"]
+            y.status, y.executable = "LIVE", True
+        else:
+            y.blockers = ["no idle USDC yet"]
+            y.status, y.executable = ("LIVE_ELIGIBLE", False) if apy else ("CANDIDATE", False)
         o = self._rail("cdp.onchain", "Coinbase CDP (Server Wallet v2, swaps, Aave/Morpho vaults, x402)", "onchain / DeFi")
         o.blockers = ["Coinbase key can_transfer=false (cannot fund a wallet)"] if not account.get("can_transfer") else []
         o.blockers += ["no CDP wallet secret / spend policy authorized by operator"]
