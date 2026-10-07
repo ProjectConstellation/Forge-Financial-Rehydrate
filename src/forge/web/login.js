@@ -5,6 +5,6 @@ document.getElementById("f").addEventListener("submit", async (e) => {
     const r = await fetch("/auth/login", {method: "POST", headers: {"Content-Type": "application/json"}, credentials: "same-origin",
       body: JSON.stringify({username: document.getElementById("u").value, password: document.getElementById("p").value})});
     if (!r.ok) { err.textContent = (await r.json()).detail || "Sign-in failed"; return; }
-    location.href = "/";
+    location.href = new URLSearchParams(location.search).get("next") === "/setup" ? "/setup" : "/";   // fixed allowlist (no open redirect)
   } catch (x) { err.textContent = "Network error"; }
 });

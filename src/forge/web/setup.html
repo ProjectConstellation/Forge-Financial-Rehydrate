@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FORGE · Executive Ops setup</title><link rel="stylesheet" href="/static/styles.css">
+<style>
+ body{max-width:560px;margin:0 auto;padding:18px;font-family:system-ui,sans-serif;line-height:1.45}
+ .step{border:1px solid #333;border-radius:12px;padding:14px;margin:14px 0}
+ .n{display:inline-block;width:26px;height:26px;border-radius:13px;background:#f59e0b;color:#000;text-align:center;font-weight:700;margin-right:6px}
+ a.btn,button{display:block;width:100%;padding:14px;margin:10px 0;border-radius:10px;border:0;background:#2563eb;color:#fff;
+   font-size:17px;text-align:center;text-decoration:none;font-weight:600}
+ textarea{width:100%;font-size:16px;padding:10px;border-radius:8px;min-height:70px;box-sizing:border-box}
+ code{background:#222;padding:2px 6px;border-radius:5px} .ok{color:#22c55e;font-weight:700} .err{color:#ef4444}
+ .muted{opacity:.75;font-size:14px}
+</style></head><body>
+<h2>FORGE EXECUTIVE OPS — phone setup</h2>
+<p class="muted">About 3 minutes. Your bot will answer only you, in a private chat.</p>
+<div id="connected" class="step" hidden><p class="ok">✅ Connected.</p><p id="connInfo"></p>
+ <a class="btn" id="openBot" href="#">Open my FORGE chat</a><p class="muted">Try: “Debrief me.”</p></div>
+<div id="flow">
+<div class="step"><span class="n">1</span><b>Install Telegram</b>
+ <a class="btn" href="https://play.google.com/store/apps/details?id=org.telegram.messenger">Get Telegram (Google Play)</a>
+ <p class="muted">Open it and sign up with your phone number. Then come back to this page.</p></div>
+<div class="step"><span class="n">2</span><b>Create your private bot</b>
+ <a class="btn" href="https://t.me/BotFather">Open BotFather</a>
+ <p>In BotFather: tap <b>Start</b>, send <code>/newbot</code>.<br>Name: <code>FORGE Executive Ops</code><br>
+ Username: anything ending in <code>bot</code>, e.g. <code>forge_exec_7731_bot</code>.<br>
+ BotFather replies with a long code like <code>8123456789:AAH…</code> — long-press it and <b>Copy</b>.</p></div>
+<div class="step"><span class="n">3</span><b>Paste it here</b>
+ <textarea id="tok" placeholder="Paste the code from BotFather" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+ <button id="go">Continue</button><p id="msg"></p></div>
+<div class="step" id="s4" hidden><span class="n">4</span><b>Connect it to you</b>
+ <a class="btn" id="link" href="#">Tap here, then press START in Telegram</a>
+ <p class="muted" id="wait">Waiting for you to press Start…</p></div>
+</div>
+<script src="/static/setup.js"></script>
+</body></html>

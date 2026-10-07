@@ -260,7 +260,7 @@ def build_app(forge: Any) -> FastAPI:
         elif path not in PUBLIC and who(request) is None:
             if path.startswith("/api/") or request.method != "GET" or path in ("/ready", "/metrics"):
                 return JSONResponse({"detail": "login required"}, status_code=401)
-            return RedirectResponse("/login", status_code=303)
+            return RedirectResponse("/login?next=/setup" if path == "/setup" else "/login", status_code=303)
         resp = await call_next(request)
         if path.startswith("/static/") or path in ("/sw.js", "/manifest.webmanifest"):
             resp.headers["Cache-Control"] = "no-store, max-age=0"     # never let Cloudflare/browser serve stale app code
@@ -457,6 +457,34 @@ def build_app(forge: Any) -> FastAPI:
     @app.get("/")
     async def index() -> HTMLResponse:
         return _html("index.html")
+
+    # ------------------------------------------------------------------ EXECUTIVE OPS: one-tap private Telegram setup
+    from forge.ops.telegram_setup import TelegramPairer
+    pairer = TelegramPairer(forge)
+    forge.telegram_pairer = pairer
+
+    @app.get("/setup")
+    async def setup_page() -> HTMLResponse:
+        return _html("setup.html")
+
+    @app.get("/api/setup/telegram")
+    async def setup_status(request: Request) -> Any:
+        if who(request) is None:
+            raise HTTPException(401, "login required")
+        return {"pairing": pairer.state, "connected": pairer.connected()}
+
+    @app.post("/api/setup/telegram")
+    async def setup_start(request: Request) -> Any:
+        actor = require_csrf(request)
+        if pairer.connected() and not (await request.json()).get("replace"):
+            raise HTTPException(409, "already connected — choose 'replace' to bind a new bot")
+        body = await request.json()
+        try:
+            st = await pairer.start(str(body.get("token") or ""))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        forge.audit.append("OPS_TELEGRAM_SETUP", {"actor": actor, "bot": st.get("bot_username")}, actor=actor)
+        return st
 
     @app.get("/manifest.webmanifest")
     async def manifest() -> FileResponse:

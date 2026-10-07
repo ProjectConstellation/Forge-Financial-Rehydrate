@@ -274,6 +274,48 @@ PY
 X
 chmod 700 /usr/local/sbin/forge-exec-transfer-setup
 
+# ---------------------------------------------------------------- portal one-tap pairing → root installs into the sandbox
+cat > /usr/local/sbin/forge-exec-provision <<'X'
+#!/usr/bin/env python3
+"""Consume /srv/forge/var/run/ops_provision.json (written by FORGE after a verified portal pairing), install the
+credentials into the EXECUTIVE OPS profile (private-chat + user-ID bound), delete the file, restart the agent."""
+import json, os, re, subprocess, sys
+P = "/srv/forge/var/run/ops_provision.json"
+if not os.path.exists(P):
+    sys.exit(0)
+try:
+    d = json.load(open(P))
+finally:
+    os.remove(P)
+tok, uid = str(d.get("token", "")), str(d.get("user_id", ""))
+if d.get("platform") != "telegram" or not re.fullmatch(r"\d{6,12}:[A-Za-z0-9_-]{30,64}", tok) or not re.fullmatch(r"\d{5,15}", uid):
+    sys.exit("invalid provision payload")
+subprocess.run(["/usr/local/sbin/forge-exec-env-set", f"TELEGRAM_BOT_TOKEN={tok}", f"TELEGRAM_ALLOWED_USERS={uid}",
+                f"TELEGRAM_ALLOWED_CHATS={uid}", f"TELEGRAM_HOME_CHANNEL={uid}", "GATEWAY_ALLOW_ALL_USERS=__DELETE__",
+                "TELEGRAM_WEBHOOK_URL=__DELETE__", "TELEGRAM_GROUP_ALLOWED_CHATS=__DELETE__",
+                "TELEGRAM_GROUP_ALLOWED_USERS=__DELETE__"], check=True)
+subprocess.run(["chown", "forge-ops:forge-ops", "/srv/forge/runtime/ops/home/.env"], check=True)
+subprocess.run(["systemctl", "restart", "forge-ops"], check=True)
+print("EXECUTIVE OPS Telegram provisioned for user", uid)
+X
+chmod 700 /usr/local/sbin/forge-exec-provision
+cat > /etc/systemd/system/forge-ops-provision.path <<'X'
+[Unit]
+Description=Install EXECUTIVE OPS messaging credentials after a verified portal pairing
+[Path]
+PathExists=/srv/forge/var/run/ops_provision.json
+[Install]
+WantedBy=multi-user.target
+X
+cat > /etc/systemd/system/forge-ops-provision.service <<'X'
+[Unit]
+Description=Install EXECUTIVE OPS messaging credentials (root, one-shot)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/forge-exec-provision
+X
+systemctl daemon-reload; systemctl enable --now forge-ops-provision.path >/dev/null 2>&1
+
 # ---------------------------------------------------------------- emergency revocation
 cat > /usr/local/sbin/forge-exec-revoke <<'X'
 #!/usr/bin/env bash
@@ -283,6 +325,8 @@ systemctl disable --now forge-ops forge-signal 2>/dev/null
 /usr/local/sbin/forge-exec-env-set TELEGRAM_BOT_TOKEN=__DELETE__ TELEGRAM_ALLOWED_USERS=__DELETE__ TELEGRAM_ALLOWED_CHATS=__DELETE__ \
   SIGNAL_ACCOUNT=__DELETE__ SIGNAL_ALLOWED_USERS=__DELETE__ SIGNAL_HTTP_URL=__DELETE__
 python3 -c "import secrets; open('/srv/forge/var/run/ops_token','w').write(secrets.token_urlsafe(32))"
+sudo -u forge env PYTHONPATH=/srv/forge/src /srv/forge/.venv/bin/python -c "
+from forge.persistence.db import Database; Database('/srv/forge/var/state/forge.sqlite').kv_set('ops.telegram', None)"
 chown forge:forge /srv/forge/var/run/ops_token; chmod 600 /srv/forge/var/run/ops_token
 systemctl restart forge
 echo "REVOKED: forge-ops stopped+disabled, messaging credentials removed, OPS API token rotated. Trading engine unaffected."
