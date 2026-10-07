@@ -1,0 +1,3 @@
+name: hermes-forge-eng
+version: "1.0"
+description: FORGE Engineer tools — ticket workflow (next/claim/update/submit) and FORGE read tools. The engineer never deploys; the root deployer does.

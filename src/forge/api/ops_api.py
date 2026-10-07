@@ -45,12 +45,14 @@ ACTIONS: dict[str, tuple[str, str]] = {
     "launch_objective": ("SAFE", "executive objective → coordinated multi-role campaign: params {kind: grow_profit | "
                                  "integrate_platform | fix | custom, objective}"),
     "file_ticket": ("SAFE", "engineering ticket for code changes / new adapters: params {title, spec, credential_needed}"),
+    "release_ticket": ("SAFE", "release a HOLD engineering ticket to the engineer: params {ticket_id}"),
+    "approve_deploy": ("CONFIRM", "approve deploying an engineering change that touches a PROTECTED area: params {ticket_id}"),
     "lockdown": ("SAFE", "FREEZE remote control: only status reads and stop_trading work until unlocked"),
     "unlock": ("CONFIRM", "lift a lockdown"),
 }
 ALWAYS_ALLOWED_WHEN_LOCKED = {"stop_trading", "lockdown"}
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}
-READ_AUDIT_SKIP_MIRROR = {"capabilities", "status", "tool", "econ", "debrief", "directives_read", "objectives_read", "audit_read"}
+READ_AUDIT_SKIP_MIRROR = {"eng_next", "eng_ticket", "eng_queue", "capabilities", "status", "tool", "econ", "debrief", "directives_read", "objectives_read", "audit_read"}
 RATE = {"read": (240, 60.0), "write": (30, 600.0), "confirm": (12, 3600.0)}     # (max calls, window seconds)
 _hits: dict[str, list[float]] = {}
 
@@ -137,7 +139,20 @@ def status(forge: Any) -> dict[str, Any]:
     }
 
 
-def mount_ops(app: FastAPI, forge: Any, token: str) -> None:
+ENG_PATHS = ("/api/ops/tool", "/api/ops/tools", "/api/ops/tickets", "/api/ops/eng/next", "/api/ops/eng/claim",
+             "/api/ops/eng/update", "/api/ops/eng/ticket")
+
+
+def eng_token(home: Path) -> str:
+    p = Path(home) / "run" / "eng_token"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    if not p.exists():
+        p.write_text(secrets.token_urlsafe(32))
+        os.chmod(p, 0o600)
+    return p.read_text().strip()
+
+
+def mount_ops(app: FastAPI, forge: Any, token: str, etoken: str | None = None) -> None:
     db = forge.db
 
     from forge.ops import totp
@@ -171,10 +186,14 @@ def mount_ops(app: FastAPI, forge: Any, token: str) -> None:
         a = req.headers.get("authorization", "")
         if "cf-connecting-ip" in req.headers or "x-forwarded-for" in req.headers:
             raise HTTPException(404, "not found")                     # never reachable through the portal tunnel
-        if host not in LOOPBACK or not (a.startswith("Bearer ") and
-                                                                 hmac.compare_digest(a[7:].strip(), token)):
+        presented = a[7:].strip() if a.startswith("Bearer ") else ""
+        is_ops = bool(presented) and hmac.compare_digest(presented, token)
+        is_eng = bool(presented and etoken) and hmac.compare_digest(presented, etoken or "~")
+        if host not in LOOPBACK or not (is_ops or is_eng):
             raise HTTPException(401, "ops token required (loopback only)")
-        actor = req.headers.get("x-ops-actor", "ops")[:80]
+        if is_eng and not is_ops and req.url.path not in ENG_PATHS:
+            raise HTTPException(403, "engineer scope: read tools + ticket workflow only")
+        actor = ("engineer" if is_eng and not is_ops else req.headers.get("x-ops-actor", "ops"))[:80]
         if not _rate(cls):
             audit(actor, action, None, "RATE_LIMITED")
             raise HTTPException(429, f"ops rate limit ({cls})")
@@ -209,7 +228,16 @@ def mount_ops(app: FastAPI, forge: Any, token: str) -> None:
         if action == "file_ticket":
             from forge.ops.executive import file_ticket
             return file_ticket(db, str(p.get("title") or "untitled"), str(p.get("spec") or ""), p.get("credential_needed"),
-                               f"ops:{actor}")
+                               f"ops:{actor}", str(p.get("priority") or "normal"), bool(p.get("hold")))
+        if action == "release_ticket":
+            db.execute("UPDATE eng_tickets SET status = 'OPEN' WHERE id = ? AND status = 'HOLD'", (int(p.get("ticket_id") or 0),))
+            return {"ticket": int(p.get("ticket_id") or 0), "status": db.scalar("SELECT status FROM eng_tickets WHERE id = ?",
+                                                                                 (int(p.get("ticket_id") or 0),))}
+        if action == "approve_deploy":
+            tid = int(p.get("ticket_id") or 0)
+            db.execute("UPDATE eng_tickets SET deploy_status = 'APPROVED', approved_ts = ? WHERE id = ? AND "
+                       "deploy_status = 'AWAITING_OWNER'", (time.time(), tid))
+            return {"ticket": tid, "deploy_status": db.scalar("SELECT deploy_status FROM eng_tickets WHERE id = ?", (tid,))}
         if action == "lockdown":
             db.kv_set("ops.locked", {"locked": True, "ts": time.time(), "by": actor})
             return {"locked": True, "note": "remote control frozen: reads + stop_trading only; unlock needs 2FA"}
@@ -347,6 +375,79 @@ def mount_ops(app: FastAPI, forge: Any, token: str) -> None:
         return db.query("SELECT id, ts, actor, channel, action, substr(args, 1, 300) args, outcome, substr(detail, 1, 300) detail "
                         "FROM ops_audit ORDER BY id DESC LIMIT ?", (min(limit, 200),))
 
+    # ------------------------------------------------------------------ Engineering Cell
+    @app.get("/api/ops/eng/next")
+    async def eng_next(request: Request) -> Any:
+        check(request, "read", "eng_next")
+        t = db.query_one("SELECT * FROM eng_tickets WHERE status IN ('OPEN', 'IN_PROGRESS') OR deploy_status IN "
+                         "('TESTS_FAILED', 'REBASE_REQUIRED', 'REJECTED', 'ROLLED_BACK') AND status = 'SUBMITTED' "
+                         "ORDER BY priority = 'high' DESC, id LIMIT 1")
+        return {"ticket": t}
+
+    @app.get("/api/ops/eng/ticket")
+    async def eng_ticket(request: Request, id: int) -> Any:
+        check(request, "read", "eng_ticket")
+        t = db.query_one("SELECT * FROM eng_tickets WHERE id = ?", (id,))
+        if not t:
+            raise HTTPException(404, "no such ticket")
+        obj = db.query_one("SELECT * FROM ops_objectives WHERE ticket_id = ?", (id,))
+        if obj:
+            ids = json.loads(obj.get("directive_ids") or "[]")
+            t["objective"] = {"objective": obj["objective"], "research": db.query(
+                f"SELECT role, status, substr(result, 1, 3000) result FROM ops_directives WHERE id IN "  # noqa: S608
+                f"({','.join('?' * len(ids))})", ids) if ids else []}
+        return t
+
+    @app.post("/api/ops/eng/claim")
+    async def eng_claim(request: Request) -> Any:
+        actor = check(request, "write", "eng_claim")
+        tid = int((await request.json()).get("id") or 0)
+        db.execute("UPDATE eng_tickets SET status = 'IN_PROGRESS', claimed_ts = ? WHERE id = ? AND status IN ('OPEN','IN_PROGRESS',"
+                   "'SUBMITTED')", (time.time(), tid))
+        audit(actor, "eng_claim", {"id": tid}, "OK")
+        return {"id": tid, "status": db.scalar("SELECT status FROM eng_tickets WHERE id = ?", (tid,))}
+
+    @app.post("/api/ops/eng/update")
+    async def eng_update(request: Request) -> Any:
+        """Engineer reports progress. SUBMITTED (with commit_sha) queues the change for the root deployer — the engineer
+        never deploys. DONE = no code needed (investigation answered). BLOCKED = needs the owner/ops."""
+        actor = check(request, "write", "eng_update")
+        b = await request.json()
+        tid, st = int(b.get("id") or 0), str(b.get("status") or "").upper()
+        if st not in ("IN_PROGRESS", "SUBMITTED", "DONE", "BLOCKED"):
+            raise HTTPException(400, "status: IN_PROGRESS | SUBMITTED | DONE | BLOCKED")
+        note = str(b.get("note") or "")[:6000]
+        if st == "SUBMITTED":
+            sha = str(b.get("commit_sha") or "")
+            if not (7 <= len(sha) <= 40 and all(ch in "0123456789abcdef" for ch in sha)):
+                raise HTTPException(400, "SUBMITTED requires the full commit_sha of the change in the engineer repo")
+            db.execute("UPDATE eng_tickets SET status = 'SUBMITTED', commit_sha = ?, branch = ?, deploy_status = 'QUEUED', "
+                       "deploy_log = NULL, notes = ? WHERE id = ?", (sha, str(b.get("branch") or "")[:100], note, tid))
+        else:
+            db.execute("UPDATE eng_tickets SET status = ?, notes = ?, resolution = CASE WHEN ? IN ('DONE','BLOCKED') THEN ? "
+                       "ELSE resolution END, done_ts = CASE WHEN ? = 'DONE' THEN ? ELSE done_ts END WHERE id = ?",
+                       (st, note, st, note, st, time.time(), tid))
+        audit(actor, "eng_update", {"id": tid, "status": st}, "OK", {"note": note[:300]})
+        return {"id": tid, "status": st}
+
+    @app.get("/api/ops/eng/queue")
+    async def eng_queue(request: Request) -> Any:
+        check(request, "read", "eng_queue")
+        return db.query("SELECT id, title, commit_sha, branch, deploy_status, deploy_class, approved_ts FROM eng_tickets "
+                        "WHERE deploy_status IN ('QUEUED', 'APPROVED') ORDER BY id")
+
+    @app.post("/api/ops/eng/deploy_result")
+    async def eng_deploy_result(request: Request) -> Any:
+        actor = check(request, "write", "eng_deploy_result")
+        b = await request.json()
+        tid, ds = int(b.get("id") or 0), str(b.get("deploy_status") or "")
+        status = {"DEPLOYED": "DONE"}.get(ds, "SUBMITTED")
+        db.execute("UPDATE eng_tickets SET deploy_status = ?, deploy_class = COALESCE(?, deploy_class), deploy_log = ?, "
+                   "status = ?, done_ts = CASE WHEN ? = 'DEPLOYED' THEN ? ELSE done_ts END WHERE id = ?",
+                   (ds, b.get("deploy_class"), str(b.get("log") or "")[:8000], status, ds, time.time(), tid))
+        audit(actor, "eng_deploy_result", {"id": tid, "deploy_status": ds}, "OK", {"class": b.get("deploy_class")})
+        return {"id": tid, "deploy_status": ds}
+
     @app.get("/api/ops/capabilities")
     async def ops_capabilities(request: Request) -> Any:
         """Live roster: every agent, service, loop, rail, budget and power the EXECUTIVE OPS agent commands."""
@@ -383,10 +484,12 @@ def mount_ops(app: FastAPI, forge: Any, token: str) -> None:
             "your_actions": {k: {"class": c, "description": d} for k, (c, d) in ACTIONS.items()},
             "your_tools": ["ops_status", "ops_debrief", "ops_econ", "ops_capabilities", "ops_objective", "ops_objectives",
                            "ops_assign", "ops_directives", "ops_action", "ops_confirm", "ops_restart", "ops_logs", "ops_host",
-                           "ops_ticket", "ops_tickets", "ops_transfer_preview", "ops_transfer_confirm", "ops_audit"]
+                           "ops_engineer", "ops_tickets", "ops_transfer_preview", "ops_transfer_confirm", "ops_audit"]
                           + [f"ops_{t}" for t in READ_TOOLS],
-            "engineering": {"open_tickets": db.scalar("SELECT COUNT(*) FROM eng_tickets WHERE status IN ('OPEN','IN_PROGRESS')"),
-                            "note": "code changes / new engines / adapters are built by the engineering channel from tickets"},
+            "engineering": {"open_tickets": db.scalar("SELECT COUNT(*) FROM eng_tickets WHERE status IN ('OPEN','IN_PROGRESS','SUBMITTED')"),
+                            "awaiting_owner": db.scalar("SELECT COUNT(*) FROM eng_tickets WHERE deploy_status = 'AWAITING_OWNER'"),
+                            "engineer": "FORGE ENGINEER (Hermes, Opus 5.5 xhigh, sandboxed): writes code + tests from ops_engineer "
+                                        "tickets; root deployer scans, tests, deploys, watches, rolls back"},
             "treasury": v.get("treasury"), "regime": (v.get("regime") or {}).get("regime"),
             "target_usd_per_h": v.get("target_usd_per_h"),
         }

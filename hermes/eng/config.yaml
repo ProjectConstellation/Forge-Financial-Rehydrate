@@ -1,0 +1,64 @@
+model:
+  provider: azure-opus
+  default: claude-opus-5-5
+cron:
+  model: claude-opus-5-5
+  model_provider: azure-opus
+approvals:
+  mode: "off"
+  cron_mode: approve
+  single_query_mode: approve
+  unattended_mode: approve
+  deny:
+    - "sudo *"
+    - "systemctl *"
+    - "ssh *"
+    - "scp *"
+    - "*forge.env*"
+    - "*/etc/forge*"
+    - "*ops_token*"
+    - "*agent_token*"
+    - "*operator_token*"
+terminal:
+  backend: local
+  cwd: /srv/forge/runtime/eng/repo
+agent:
+  reasoning_effort: xhigh
+  max_turns: 120
+  disabled_toolsets:
+    - browser
+    - computer_use
+    - image_gen
+    - homeassistant
+    - discord
+    - discord_admin
+    - spotify
+    - connections
+memory:
+  user_profile_enabled: false
+plugins:
+  enabled:
+    - hermes-forge-eng
+  disabled:
+    - hermes-forge
+    - hermes-forge-ops
+platform_toolsets:
+  cron:
+    - forge_eng
+    - terminal
+    - file
+    - code_execution
+    - todo
+    - memory
+    - session_search
+providers:
+  azure-opus:
+    name: Claude Opus 5.5 (Microsoft Azure, operator credit)
+    api: https://matt-6083-resource.services.ai.azure.com/anthropic
+    key_env: AZURE_ANTHROPIC_API_KEY
+    transport: anthropic_messages
+    default_model: claude-opus-5-5
+    models:
+      claude-opus-5-5:
+        context_length: 1000000
+    discover_models: false

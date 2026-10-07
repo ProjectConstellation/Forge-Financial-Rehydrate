@@ -56,7 +56,7 @@ def launch_objective(db: Any, kind: str, objective: str, actor: str) -> dict[str
         ticket = db.insert_id("eng_tickets", {"ts": time.time(), "title": f"Integrate platform: {objective[:120]}",
                                               "spec": "Build adapter (read + trade, no withdrawal) after rail_hunter go; "
                                                       "shadow first; allocator only after evidence.",
-                                              "status": "OPEN", "requested_by": actor})
+                                              "status": "HOLD", "requested_by": actor, "priority": "high"})
     oid = db.insert_id("ops_objectives", {"ts": time.time(), "kind": kind, "objective": objective, "status": "ACTIVE",
                                           "directive_ids": json.dumps(ids), "ticket_id": ticket})
     return {"objective_id": oid, "kind": kind, "directives": ids, "engineering_ticket": ticket,
@@ -78,12 +78,16 @@ def objectives(db: Any, status: str = "ACTIVE") -> list[dict[str, Any]]:
     return rows
 
 
-def file_ticket(db: Any, title: str, spec: str, credential: str | None, actor: str) -> dict[str, Any]:
-    tid = db.insert_id("eng_tickets", {"ts": time.time(), "title": title[:200], "spec": spec[:4000],
-                                       "credential_needed": (credential or None) and credential[:300], "status": "OPEN",
-                                       "requested_by": actor})
-    return {"ticket_id": tid, "status": "OPEN",
-            "note": "queued for the engineering channel (code changes/deploys are done there, tested, then deployed)"}
+def file_ticket(db: Any, title: str, spec: str, credential: str | None, actor: str, priority: str = "normal",
+                hold: bool = False) -> dict[str, Any]:
+    st = "HOLD" if hold else "OPEN"
+    tid = db.insert_id("eng_tickets", {"ts": time.time(), "title": title[:200], "spec": spec[:8000],
+                                       "credential_needed": (credential or None) and credential[:300], "status": st,
+                                       "requested_by": actor, "priority": "high" if priority == "high" else "normal"})
+    return {"ticket_id": tid, "status": st,
+            "note": "the Engineer (sandboxed coding agent) picks it up within ~10 min, writes code + tests, submits; the "
+                    "root deployer scans, tests, deploys (protected areas wait for owner approval), watches health and "
+                    "rolls back on any degradation" + (" — on HOLD until released (release_ticket)" if hold else "")}
 
 
 # ------------------------------------------------------------------------------------------------ debrief

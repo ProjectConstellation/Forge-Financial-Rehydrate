@@ -231,15 +231,21 @@ def register(ctx):
 
     def h_ticket(params, session_id=None, **kw):
         return _out(_call("POST", "/api/ops/action", {"action": "file_ticket", "params": params}, _actor(session_id)))
-    ctx.register_tool(name="ops_ticket", toolset="forge_ops", handler=h_ticket, schema=_schema(
-        "ops_ticket", "[FORGE EXEC] File an engineering ticket when a goal needs code (new platform adapter, algorithm "
-        "change, bug fix). Include the credential type needed, if any.",
-        {"title": {"type": "string"}, "spec": {"type": "string"}, "credential_needed": {"type": "string"}}, ["title"]))
+    ctx.register_tool(name="ops_engineer", toolset="forge_ops", handler=h_ticket, schema=_schema(
+        "ops_engineer", "[FORGE EXEC] Give the FORGE ENGINEER (sandboxed coding agent, Opus 5.5 xhigh) a code task: "
+        "upgrade/debug/advance an algorithm or engine, build a platform adapter, fix a bug, add telemetry. Write a precise "
+        "spec: goal, evidence, acceptance criteria, expected $/h effect. It picks it up within ~10 min, writes code + "
+        "tests, submits; the root deployer policy-scans, tests in a sandbox, deploys, watches health 10 min and rolls back "
+        "on degradation. Protected areas (risk, live execution, venues, money movement, security, deps) wait for owner "
+        "approval (ops_action approve_deploy). Track with ops_tickets.",
+        {"title": {"type": "string"}, "spec": {"type": "string"}, "priority": {"type": "string", "enum": ["normal", "high"]},
+         "credential_needed": {"type": "string"}}, ["title", "spec"]))
 
     def h_tickets(params, session_id=None, **kw):
         return _out(_call("GET", "/api/ops/tickets", actor=_actor(session_id)))
     ctx.register_tool(name="ops_tickets", toolset="forge_ops", handler=h_tickets, schema=_schema(
-        "ops_tickets", "[FORGE EXEC] Engineering tickets and their status.", {}))
+        "ops_tickets", "[FORGE EXEC] Engineering tickets: status (OPEN/IN_PROGRESS/SUBMITTED/DONE/BLOCKED/HOLD), deploy "
+        "status (QUEUED/AWAITING_OWNER/DEPLOYED/ROLLED_BACK/TESTS_FAILED/REJECTED), engineer notes and deploy log.", {}))
 
     def h_transfer(params, session_id=None, **kw):
         return _out(_call("POST", "/api/ops/transfer/preview", {"amount_usd": params.get("amount_usd")}, _actor(session_id)))

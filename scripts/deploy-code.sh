@@ -9,6 +9,11 @@ SSH="ssh -i $KEY -o BatchMode=yes"
 cd "$(dirname "$0")/.."
 git diff --quiet HEAD -- src tests scripts hermes modal_apps config pyproject.toml uv.lock || {
   echo "uncommitted code changes — commit first (deploys are traceable to a commit)"; exit 1; }
+# production may contain commits shipped by the FORGE Engineer → never overwrite them
+GIT_SSH_COMMAND="$SSH" git fetch -q "$NEW:/srv/forge" HEAD
+git merge-base --is-ancestor FETCH_HEAD HEAD || {
+  echo "production has commits you don't have (FORGE Engineer deploys) — run:"
+  echo "  GIT_SSH_COMMAND=\"$SSH\" git pull --rebase $NEW:/srv/forge HEAD"; exit 1; }
 rsync -rlt --delete --no-owner --no-group -e "$SSH" --rsync-path="sudo rsync" \
   --include=/src/*** --include=/tests/*** --include=/scripts/*** --include=/hermes/*** --include=/modal_apps/*** \
   --include=/config/*** --include=/docs/*** --include=/.git/*** --include=/pyproject.toml --include=/uv.lock \
