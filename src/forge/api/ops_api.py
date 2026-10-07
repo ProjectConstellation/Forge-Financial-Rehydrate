@@ -98,7 +98,7 @@ def status(forge: Any) -> dict[str, Any]:
     t = getattr(forge, "treasury", {}) or {}
     v = db.kv_get("velocity") or {}
     loops = forge.sup.snapshot() if hasattr(forge.sup, "snapshot") else []
-    stale = [x["name"] for x in loops if not x["alive"] or (x["limit_s"] is not None and x["silent_s"] > x["limit_s"])]
+    stale = [x["loop"] for x in loops if not x["alive"] or (x["limit_s"] is not None and x["silent_s"] > x["limit_s"])]
     day0 = time.time() - time.time() % 86400
     from datetime import UTC, datetime
     iso0 = datetime.fromtimestamp(day0, UTC).isoformat()
@@ -373,8 +373,8 @@ def mount_ops(app: FastAPI, forge: Any, token: str) -> None:
             "hermes_specialists": roster,
             "forge_services": {"forge": "trading engine + API + all loops", "forge-hermes": "7 specialist agents (scheduled)",
                                "forge-tunnel": "portal", "forge-ops": "you (EXECUTIVE OPS)"},
-            "engine_loops": {"count": len(loops), "names": sorted(x["name"] for x in loops),
-                             "unhealthy": [x["name"] for x in loops if not x["alive"]]},
+            "engine_loops": {"count": len(loops), "names": sorted(x["loop"] for x in loops),
+                             "unhealthy": [x["loop"] for x in loops if not x["alive"]]},
             "earning_streams": [{"id": s["id"], "live": s.get("live"), "tier": s.get("tier"), "n": s.get("n")}
                                 for s in v.get("streams", [])],
             "rails": db.query("SELECT id, status, executable FROM rail_registry ORDER BY executable DESC, id"),

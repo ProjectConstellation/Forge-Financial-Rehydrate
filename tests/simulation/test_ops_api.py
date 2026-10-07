@@ -21,7 +21,10 @@ def ops(db, monkeypatch, tmp_path):
     monkeypatch.setattr(ops_api, "LOOPBACK", {"127.0.0.1", "::1", "localhost", "testclient"})
     ops_api._hits.clear()
     forge = types.SimpleNamespace(db=db, audit=_Audit(), s=types.SimpleNamespace(mode=types.SimpleNamespace(value="PAPER"), home=tmp_path),
-                                  book="paper", treasury={}, sup=types.SimpleNamespace(snapshot=lambda: []), started=0.0)
+                                  book="paper", treasury={}, sup=types.SimpleNamespace(snapshot=lambda: [   # real Supervisor.snapshot() shape
+                                      {"loop": "crossrail", "alive": True, "silent_s": 5, "limit_s": 600, "restarts": 0},
+                                      {"loop": "velocity", "alive": False, "silent_s": 2000, "limit_s": 900, "restarts": 3}]),
+                                  started=0.0)
     app = FastAPI()
     ops_api.mount_ops(app, forge, "secret-ops-token")
     c = TestClient(app)
@@ -108,3 +111,6 @@ def test_capabilities_roster(ops):
     assert set(roles) == {"governor", "alpha_inventor", "adversary", "critic", "doctor", "rail_hunter", "architect"}
     assert roles["rail_hunter"]["open_directives"] == 1 and roles["governor"]["mission"]
     assert "prime_directive" in cap and "ops_assign" in cap["your_tools"] and "stop_trading" in cap["your_actions"]
+    assert cap["engine_loops"]["unhealthy"] == ["velocity"] and cap["engine_loops"]["count"] == 2
+    st = c.get("/api/ops/status").json()
+    assert st["health"]["stale_loops"] == ["velocity"]
