@@ -800,9 +800,9 @@ class Forge:
                 if llm:
                     keep = [q for q in queue if q["genome"]["id"] not in {g["id"] for g in llm}]
                     self.db.kv_set("brain.candidate_queue", keep)
-                    await self.say("Evolution Arena", f"Evaluating {len(llm)} DeepSeek-designed genomes this cycle")
+                    await self.say("Evolution Arena", f"Evaluating {len(llm)} LLM-designed genomes (Hermes / DeepSeek brain) this cycle")
                 self.workers["research"] = {"what": f"evolving {interval // 60}m strategies ({len(parents)} parents, "
-                                                    f"{len(llm)} DeepSeek designs)", "since": time.time(), "count": 1, "where": "local"}
+                                                    f"{len(llm)} LLM designs)", "since": time.time(), "count": 1, "where": "local"}
                 if self.compute is not None and await self.compute.should_burst(self, interval):
                     results = await asyncio.wait_for(self.compute.burst_search(self, interval, parents, llm), timeout=1200)
                 else:

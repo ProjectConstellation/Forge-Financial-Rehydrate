@@ -55,13 +55,13 @@ case "$MODE" in
     EFF=high
     # name | schedule | gate script | bootstrap
     JOBS="forge-governor|every 1h|gate_governor.py|boot_governor.md
-forge-alpha-inventor|0 * * * *|gate_alpha_inventor.py|boot_alpha_inventor.md
-forge-adversary|30 * * * *|gate_adversary.py|boot_adversary.md
-forge-critic|every 3h|gate_critic.py|boot_critic.md
+forge-alpha-inventor|0,30 * * * *|gate_alpha_inventor.py|boot_alpha_inventor.md
+forge-adversary|15,45 * * * *|gate_adversary.py|boot_adversary.md
+forge-critic|every 2h|gate_critic.py|boot_critic.md
 forge-doctor|every 30m|gate_doctor.py|boot_doctor.md
-forge-rail-hunter|every 3h|gate_rail_hunter.py|boot_rail_hunter.md
+forge-rail-hunter|every 2h|gate_rail_hunter.py|boot_rail_hunter.md
 forge-scout|every 1h|forge_scout.py|boot_scout.md
-forge-architect|every 6h|gate_architect.py|boot_architect.md
+forge-architect|every 3h|gate_architect.py|boot_architect.md
 forge-daily-report|0 12 * * *|gate_report.py|boot_report.md"
     kv "{\"mode\": \"credit\", \"model\": \"claude-opus-5-5\", \"credit_usd\": ${2:-180}, \"hours\": ${3:-72}}" ;;
   deepseek)
