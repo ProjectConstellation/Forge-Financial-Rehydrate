@@ -24,6 +24,8 @@ from collections import deque
 from typing import Any
 
 from forge.opportunities.kalshi import kalshi_fee, parse_market
+from forge.opportunities.kalshi_live import posterior_positive
+from forge.treasury.profit_velocity import cluster_unit_pnls
 
 log = logging.getLogger("forge.settlement_window")
 
@@ -289,15 +291,34 @@ class SettlementWindowEngine:
                             "SELECT close_ts FROM sw_calibration WHERE ticker = ? LIMIT 1", (r["ticker"],))))
 
     def scorecard(self) -> dict[str, Any]:
-        rows = self.f.db.query("SELECT p_model, yes_bid, yes_ask, outcome, secs_to_close FROM sw_calibration WHERE outcome IS NOT NULL "
-                               "ORDER BY id DESC LIMIT 20000")
+        rows = self.f.db.query("SELECT series, ticker, p_model, yes_bid, yes_ask, outcome, secs_to_close FROM sw_calibration "
+                               "WHERE outcome IS NOT NULL ORDER BY id DESC LIMIT 20000")
         out: dict[str, Any] = {"stats": self.stats, "basis_bp": {k: round(v[0] * 1e4, 2) for k, v in self.basis.items()}}
         for lo, hi in ((0, 60), (60, 180), (180, 300)):
             b = [r for r in rows if lo <= r["secs_to_close"] < hi]
             if b:
-                bm = sum((r["p_model"] - r["outcome"]) ** 2 for r in b) / len(b)
-                bk = sum((0.5 * (r["yes_bid"] + r["yes_ask"]) - r["outcome"]) ** 2 for r in b) / len(b)
+                bm, bk = _brier(b)
                 out[f"brier_{lo}_{hi}s"] = {"n": len(b), "model": round(bm, 5), "market_mid": round(bk, 5)}
+        # where the shadow P&L actually comes from: per series and per seconds-to-close bucket (at signal time)
+        sigs = self.f.db.query("SELECT series, underlying, ticker, close_ts, side, minutes, pnl FROM crossrail_signals "
+                               "WHERE kind = 'SETTLE_WINDOW' AND status = 'SETTLED' ORDER BY settled_ts, id")
+        by_series: dict[str, list[dict[str, Any]]] = {}
+        by_bucket: dict[str, list[dict[str, Any]]] = {}
+        for s in sigs:
+            by_series.setdefault(str(s["series"] or "unknown"), []).append(s)
+            by_bucket.setdefault(_secs_bucket(s["minutes"]), []).append(s)
+        out["by_series"] = {k: _pnl_stats(v) for k, v in sorted(by_series.items())}
+        out["by_seconds_to_close"] = {k: _pnl_stats(by_bucket[k]) for k in (*SIGNAL_BUCKETS, "other") if k in by_bucket}
+        # model vs market-mid Brier per series (calibration samples every ≥10 s per market → n_markets is the independent n)
+        cal: dict[str, list[dict[str, Any]]] = {}
+        for r in rows:
+            cal.setdefault(str(r["series"] or "unknown"), []).append(r)
+        brier_by_series = {}
+        for k, b in sorted(cal.items()):
+            bm, bk = _brier(b)
+            brier_by_series[k] = {"n": len(b), "n_markets": len({r["ticker"] for r in b}), "model": round(bm, 5),
+                                  "market_mid": round(bk, 5), "model_minus_market": round(bm - bk, 5)}
+        out["brier_by_series"] = brier_by_series
         return out
 
     # ---------------------------------------------------------------- supervised loops
@@ -328,3 +349,31 @@ def _ts(s: Any) -> float:
         return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
     except Exception:
         return 0.0
+
+
+SIGNAL_BUCKETS = {"0_60s": (0, 60), "60_180s": (60, 180), "180_300s": (180, 300)}
+
+
+def _secs_bucket(minutes: Any) -> str:
+    """Seconds-to-close bucket of a signal (recorded as minutes); outside 0–300 s or unknown → 'other'."""
+    if minutes is None:
+        return "other"
+    secs = round(float(minutes) * 60, 6)
+    return next((k for k, (lo, hi) in SIGNAL_BUCKETS.items() if lo <= secs < hi), "other")
+
+
+def _pnl_stats(sigs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Shadow P&L of settled 1-contract signals; P(mean>0) on independent clusters (same underlying/expiry/side = 1)."""
+    pnls = [float(s["pnl"] or 0) for s in sigs]
+    cl = cluster_unit_pnls(sigs)
+    cm, cp = posterior_positive(cl)
+    return {"n": len(pnls), "wins": sum(1 for x in pnls if x > 0), "pnl": round(sum(pnls), 4),
+            "mean_pnl_per_contract": round(sum(pnls) / len(pnls), 5) if pnls else 0.0,
+            "n_clusters": len(cl), "cluster_mean_pnl": round(cm, 5), "p_mean_positive": round(cp, 4)}
+
+
+def _brier(rows: list[dict[str, Any]]) -> tuple[float, float]:
+    """(model, market-mid) Brier of settled sw_calibration rows."""
+    bm = sum((r["p_model"] - r["outcome"]) ** 2 for r in rows) / len(rows)
+    bk = sum((0.5 * (r["yes_bid"] + r["yes_ask"]) - r["outcome"]) ** 2 for r in rows) / len(rows)
+    return bm, bk
