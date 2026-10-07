@@ -85,6 +85,12 @@ class Arena:
         dup = self.reg.exists_dna(g.dna_hash())
         if dup:
             return dup
+        if passed:
+            same = self.db.scalar("SELECT COUNT(*) FROM strategies WHERE population IN ('SHADOW','CHALLENGER','PRODUCTION') "
+                                  "AND family = ?", (g.family,)) or 0
+            if same >= 6:          # diversity pressure: one family may not monopolize validated capital slots
+                passed = False
+                rationale = {**rationale, "diversity": f"family {g.family} already has {same} validated strategies"}
         state = State.SHADOW if passed else State.EXPERIMENTAL
         g = g.model_copy(update={"origin": g.origin})
         self.reg.upsert(g, state, "passed promotion gate" if passed else "archive elite (stepping stone)",

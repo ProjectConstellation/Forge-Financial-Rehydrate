@@ -439,6 +439,10 @@ class Forge:
                     return
                 # paper explores, live exploits: gather evidence on whether the kill switch is needed for this strategy
                 comps["paper_exploration"] = True
+        # one position per market across all strategies (no doubled bets on one coin)
+        if self.db.scalar("SELECT 1 FROM positions WHERE book = ? AND symbol = ? AND status != 'CLOSED'", (self.book, sym)):
+            self._set_opp(oid, "REJECTED", f"already holding {sym} (one position per market)")
+            return
         if va.adjusted_return <= 0:
             self._set_opp(oid, "REJECTED", va.rationale)
             await self.say("Allocator", f"{sym} {g.family}: WAIT — {va.rationale}", strategy=g.id, opportunity=oid)
