@@ -27,7 +27,7 @@ def _clean(m: dict[str, Any]) -> dict[str, Any]:
 
 def search_on_raw(raw: dict[str, dict[str, Any]], interval: int, parents: list[dict[str, Any]], fees: dict[str, float],
                   budget_s: float, seed: int, generations: int = 60, children: int = 60, top: int = 12,
-                  must_eval: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+                  must_eval: list[dict[str, Any]] | None = None, prior_trials: int = 0) -> dict[str, Any]:
     _limit_threads()
     import time
 
@@ -42,6 +42,7 @@ def search_on_raw(raw: dict[str, dict[str, Any]], interval: int, parents: list[d
     t0 = time.time()
     raw = {s: {k: np.asarray(v, dtype=float) for k, v in b.items()} for s, b in raw.items()}
     ds = Dataset.build(raw, interval, holdout_frac=0.3, n_folds=4)
+    ds.trials = int(prior_trials)          # cumulative hypotheses already tested on this data → stricter deflated Sharpe
     if len(ds.symbols) < 5:
         return {"candidates": [], "evaluated": 0, "seconds": 0.0, "note": "insufficient data", "where": "local"}
     cost = CostModel(maker_fee=fees.get("maker", 0.005), taker_fee=fees.get("taker", 0.009))
@@ -83,7 +84,7 @@ def search_on_raw(raw: dict[str, dict[str, Any]], interval: int, parents: list[d
 
 
 def local_search(market_dir: str, interval: int, parents: list[dict[str, Any]], fees: dict[str, float],
-                 budget_s: float, seed: int, must_eval: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+                 budget_s: float, seed: int, must_eval: list[dict[str, Any]] | None = None, prior_trials: int = 0) -> dict[str, Any]:
     _limit_threads()
     try:
         os.nice(10)
@@ -94,4 +95,4 @@ def local_search(market_dir: str, interval: int, parents: list[dict[str, Any]], 
     store = CandleStore(Path(market_dir))
     raw = {s: store.load(s, interval) for s in store.symbols(interval)}
     raw = {s: b for s, b in raw.items() if b is not None}
-    return search_on_raw(raw, interval, parents, fees, budget_s, seed, must_eval=must_eval)
+    return search_on_raw(raw, interval, parents, fees, budget_s, seed, must_eval=must_eval, prior_trials=prior_trials)

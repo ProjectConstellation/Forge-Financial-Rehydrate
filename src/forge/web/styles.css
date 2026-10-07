@@ -91,3 +91,13 @@ footer{text-align:center;padding:16px}
 .sys.green .meter i{background:linear-gradient(180deg,var(--ok),#0f7a55)}
 @media (max-width:620px){.money-grid{grid-template-columns:1fr 1fr 1fr}.money-grid b{font-size:16px}.systems{grid-template-columns:1fr}}
 .tag.v-THRIVING{border-color:var(--ok);color:var(--ok)}.tag.v-ON_TRACK{border-color:#2f6f57;color:#9fe3c4}.tag.v-DRIFTING{border-color:var(--warn);color:var(--warn)}.tag.v-FAILING{border-color:var(--bad);color:var(--bad)}
+
+.health{display:flex;gap:16px;align-items:center}.ring-wrap{position:relative;width:110px;height:110px;flex:0 0 110px}
+.ring{width:110px;height:110px;transform:rotate(-90deg)}.ring-bg{fill:none;stroke:#1c2333;stroke-width:10}
+.ring-fg{fill:none;stroke:var(--ok);stroke-width:10;stroke-linecap:round;stroke-dasharray:326.7;stroke-dashoffset:326.7;transition:stroke-dashoffset .8s,stroke .8s;filter:drop-shadow(0 0 6px rgba(34,227,154,.5))}
+.ring-txt{position:absolute;inset:0;display:grid;place-items:center;text-align:center}.ring-txt b{font-size:30px;font-weight:900;display:block;line-height:1}.ring-txt small{color:var(--muted);font-size:10px;letter-spacing:.14em}
+.hbody{flex:1;min-width:0}.hstate{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.hstate .pill.EARNING{border-color:var(--ok);color:var(--ok)}.hstate .pill.LEARNING{border-color:var(--blue);color:var(--blue)}
+.hstate .pill.HEALING{border-color:var(--warn);color:var(--warn)}.hparts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 12px}
+.hpart label{font-size:10.5px}.hpart .bar{margin-top:3px}.hpart .bar i{transition:width .8s}
+@media (max-width:620px){.hparts{grid-template-columns:repeat(2,1fr)}.health{align-items:flex-start}}

@@ -21,6 +21,7 @@ from typing import Any
 from forge.brain.deepseek import DeepSeekClient
 from forge.brain.prompts import PROMPT_VERSION, system_prompt
 from forge.brain.tools import TOOLS, ToolRouter
+from forge.core.healing import Circuit
 from forge.persistence.db import dumps
 
 log = logging.getLogger("forge.brain")
@@ -42,6 +43,42 @@ class Brain:
         self.last_escalation = 0.0
         self.last_diag = 0.0
         self.tier = "NORMAL"
+        self.circuit = Circuit("deepseek", threshold=3, base_cooldown_s=300)
+
+    async def _chat(self, *a: Any, **k: Any) -> Any:
+        """Every LLM call goes through the circuit breaker: AI is never a single point of failure (OP-012 layer 4)."""
+        if not self.circuit.allow():
+            raise RuntimeError(f"DeepSeek circuit OPEN (cooling down {self.circuit.cooldown_s:.0f}s) — work queued for retry")
+        try:
+            res = await self.c.chat(*a, **k)
+        except Exception as e:
+            self.circuit.failure(str(e))
+            if self.circuit.state == "OPEN":
+                await self.f.say("Self-Healing", f"DeepSeek unavailable ({str(e)[:80]}) → circuit OPEN; deterministic engine continues, "
+                                                 f"AI work queued; retry in {self.circuit.cooldown_s:.0f}s", level="warn")
+            raise
+        self.circuit.success()
+        return res
+
+    def _queue(self, kind: str, payload: dict[str, Any]) -> None:
+        q = self.f.db.kv_get("brain.pending", []) or []
+        if not any(x["kind"] == kind and x.get("key") == payload.get("key") for x in q):
+            q.append({"kind": kind, "ts": time.time(), **payload})
+        self.f.db.kv_set("brain.pending", q[-30:])
+
+    async def _drain_pending(self) -> None:
+        q = self.f.db.kv_get("brain.pending", []) or []
+        if not q or not self.circuit.allow():
+            return
+        item = q.pop(0)
+        self.f.db.kv_set("brain.pending", q)
+        try:
+            if item["kind"] == "rebuild":
+                await self.rebuild(item["key"], item.get("report", {}), critical=item.get("critical", False), mode=item.get("mode", "rebuild"))
+            elif item["kind"] == "escalate":
+                await self.escalate(self.f, item.get("reason", "queued escalation"), item.get("data", {}))
+        except Exception:
+            self._queue(item["kind"], item)                        # still failing → keep it queued
 
     # ------------------------------------------------------------------ budget / router
     async def refresh_balance(self) -> None:
@@ -116,6 +153,7 @@ class Brain:
     async def _cycle(self, forge: Any) -> None:
         if True:
             try:
+                await self._drain_pending()
                 await self.refresh_balance()
                 if self.tier != "CRITICAL":
                     view = await self.perceive()
@@ -158,7 +196,7 @@ class Brain:
         self._work("Flash perception: reading 30 markets")
         msgs = [{"role": "system", "content": system_prompt("perception")},
                 {"role": "user", "content": "SITUATION PACK:\n" + json.dumps(self._situation(), default=str)}]
-        res = await self.c.chat(msgs, agent="perception", purpose="market_perception", effort="low", json_mode=True,
+        res = await self._chat(msgs, agent="perception", purpose="market_perception", effort="low", json_mode=True,
                                 max_tokens=1500, prompt_version=PROMPT_VERSION)
         try:
             view = res.json()
@@ -193,7 +231,7 @@ class Brain:
         final: dict[str, Any] | None = None
         first_id = None
         for _ in range(max_rounds):
-            res = await self.c.chat(msgs, agent=role, purpose=f"{role}_session", deep=deep, effort=effort, tools=TOOLS,
+            res = await self._chat(msgs, agent=role, purpose=f"{role}_session", deep=deep, effort=effort, tools=TOOLS,
                                     max_tokens=32000 if deep else 8000, strategy_id=strategy_id, prompt_version=PROMPT_VERSION)
             first_id = first_id or res.call_id
             router = router or ToolRouter(self.f, first_id, role)
@@ -203,7 +241,7 @@ class Brain:
                     # thinking consumed the budget: ask for the final answer only (prefix-cached → cheap)
                     msgs.append({"role": "assistant", "content": ""})
                     msgs.append({"role": "user", "content": "Output ONLY the final JSON object for your role now."})
-                    res = await self.c.chat(msgs, agent=role, purpose=f"{role}_finalize", deep=deep, effort="low",
+                    res = await self._chat(msgs, agent=role, purpose=f"{role}_finalize", deep=deep, effort="low",
                                             json_mode=True, max_tokens=12000, strategy_id=strategy_id,
                                             prompt_version=PROMPT_VERSION)
                     total += res.cost_usd
@@ -251,7 +289,11 @@ class Brain:
         if time.time() - getattr(self, key, 0.0) < (900 if mode == "rebuild" else 2700):
             return
         await self.refresh_balance()
+        if not self.circuit.allow():
+            self._queue("rebuild", {"key": sid, "report": report, "critical": critical, "mode": mode})
+            return
         if not self.allow("scientist", 0.12, critical=critical):
+            self._queue("rebuild", {"key": sid, "report": report, "critical": critical, "mode": mode})
             await self.f.say("DeepSeek Brain", f"{mode} of {sid[:18]} queued for evolution (AI budget tier {self.tier}); "
                                                "Modal evolution continues mutating its lineage meanwhile")
             q = self.f.db.kv_get("evolution.near_miss", []) or []
@@ -293,6 +335,9 @@ class Brain:
         if not self.allow("diagnostician", 0.05, critical=True):
             return
         self.last_scientist = 0.0          # critical events also unlock an immediate research session
+        if not self.circuit.allow():
+            self._queue("escalate", {"key": reason, "reason": reason, "data": data})
+            return
         user = f"CRITICAL EVENT: {reason}. Data: {json.dumps(data, default=str)[:6000]}. Diagnose root cause with tools, " \
                "propose repaired/successor genomes (submit_strategy_candidates) and lessons."
         await self._tool_session("diagnostician", user, deep=True, effort="max", max_rounds=6)

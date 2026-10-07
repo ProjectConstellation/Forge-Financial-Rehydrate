@@ -96,7 +96,8 @@ class ExecutionGateway:
             "id": pid, "book": self.book, "venue": intent.venue, "symbol": intent.symbol,
             "strategy_id": intent.strategy_id, "opportunity_id": intent.opportunity_id, "status": "OPENING",
             "opened_at": _now(), "exit_plan": dumps(intent.exit_plan.model_dump() if intent.exit_plan else {}),
-            "meta": dumps({**meta, "entry_cid": req.client_order_id, "ttl_deadline": time.time() + ttl_s,
+            "meta": dumps({**meta, "entry_cid": req.client_order_id, "ttl_deadline": time.time() + ttl_s, "ttl_s": ttl_s,
+                           "quoted_at": time.time(), "notional": str(notional), "reprices": 0,
                            "decision_mid": bbo.mid, "intent_id": intent.id, "entry_style": entry_style})})
         ok = await self._submit(req, intent.id)
         if not ok:
@@ -241,6 +242,28 @@ class ExecutionGateway:
         if p["status"] == "OPENING":
             terminal = entry_o is not None and OrderStatus(entry_o["status"]) in TERMINAL
             expired = time.time() > float(meta.get("ttl_deadline", 0))
+            # smarter order placement: re-quote an unfilled maker entry toward the touch (bounded chase, idempotent ids)
+            if (not expired and trading_state == "RUNNING" and meta.get("entry_style") == "maker" and entry_o is not None
+                    and entry_o["status"] == "OPEN" and qty <= 0 and bbo is not None and rules is not None
+                    and int(meta.get("reprices", 0)) < 3
+                    and time.time() - float(meta.get("quoted_at", 0)) > max(20.0, float(meta.get("ttl_s", 300)) / 3)):
+                cur = Decimal(entry_o["limit_price"])
+                new_px = rules.round_price(d(bbo.bid), "buy")
+                if new_px > cur and (new_px - cur) / cur <= Decimal("0.004") and float(new_px) < bbo.ask:
+                    await self.venue.cancel_order(entry_o["client_order_id"], entry_o["venue_order_id"])
+                    await self._refresh_order(entry_o)
+                    fresh = self.db.query_one("SELECT * FROM orders WHERE client_order_id = ?", (entry_o["client_order_id"],))
+                    if fresh and fresh["status"] == OrderStatus.CANCELLED.value and Decimal(fresh["filled_size"] or "0") == 0:
+                        n = int(meta.get("reprices", 0)) + 1
+                        notional = Decimal(meta.get("notional", "0"))
+                        base = rules.round_base(notional / (new_px * (1 + Decimal(str(self.maker_fee)))))
+                        req = OrderRequest(client_order_id=idempotency_key(meta.get("intent_id", p["id"]), "entry", n),
+                                           venue=self.venue.name, symbol=sym, side="buy", order_type="post_only",
+                                           base_size=base, limit_price=new_px)
+                        if base > 0 and await self._submit(req, meta.get("intent_id")):
+                            meta.update(entry_cid=req.client_order_id, reprices=n, quoted_at=time.time())
+                            self.db.execute("UPDATE positions SET meta = ? WHERE id = ?", (dumps(meta), p["id"]))
+                    return
             if (expired or trading_state != "RUNNING") and entry_o and not terminal:
                 await self.venue.cancel_order(entry_o["client_order_id"], entry_o["venue_order_id"])
                 await self._refresh_order(entry_o)

@@ -106,6 +106,8 @@ class Forge:
         self.workers: dict[str, dict[str, Any]] = {}      # live worker board for the founder portal
         self.last_improvement_ts = 0.0
         self.genomes_total = 0
+        from forge.research.metalabel import SecondOpinion
+        self.second = SecondOpinion(self.db)
         self.genomes_last_cycle = 0
         self.events: deque[dict[str, Any]] = deque(maxlen=500)
         self.tasks: list[asyncio.Task[Any]] = []
@@ -168,6 +170,9 @@ class Forge:
         from forge.evolution.analyst import StrategyAnalyst
         self.analyst = StrategyAnalyst(self)
         B("analyst", self.analyst.run, 600)
+        from forge.core.healing import HealthMonitor
+        self.health = HealthMonitor(self)
+        B("healing", self.health.run, 120, critical=True)
         self.sup.on_restart = self._on_loop_restart
         self.tasks = self.sup.start()
         self.tasks.append(asyncio.create_task(self.sup.watch(self.stop_event), name="supervisor"))
@@ -368,7 +373,10 @@ class Forge:
         if not strategies:
             return
         found = 0
+        signals: dict[str, list[tuple[Genome, State]]] = {}
         for sym in symbols:
+            if self.db.kv_get(f"quarantine.{sym}"):
+                continue                                        # data self-healing: no decisions on suspect data
             ss = eng.state.get(sym)
             if ss is None or not ss.features:
                 continue
@@ -382,12 +390,16 @@ class Forge:
                 if not sig[-1] or time.time() < self.cooldown.get((g.id, sym), 0):
                     continue
                 self.cooldown[(g.id, sym)] = time.time() + max(g.cooldown_bars, 1) * interval
+                signals.setdefault(sym, []).append((g, st))
+        for sym, lst in signals.items():
+            families = {g.family for g, _ in lst}
+            for g, st in lst:
                 found += 1
-                await self._opportunity(g, st, sym, ss, interval)
+                await self._opportunity(g, st, sym, eng.state[sym], interval, consensus=len(families))
         if found:
             self.status("Opportunity Engine", f"{found} signals on last {interval // 60}m close")
 
-    async def _opportunity(self, g: Genome, st: State, sym: str, ss: Any, interval: int) -> None:
+    async def _opportunity(self, g: Genome, st: State, sym: str, ss: Any, interval: int, consensus: int = 1) -> None:
         f = ss.features
         close = float(ss.series.last("close"))
         atr = float(f["atr_14"][-1])
@@ -406,6 +418,16 @@ class Forge:
         cls = f"strategy:{g.family}"
         p_cal, n_cal = self.calib.calibrate(cls, raw_p)
         p_use = p_cal if n_cal >= 20 else 0.5 * raw_p + 0.5 * p_cal
+        # agreement boosting: independent families agreeing on the same market raise confidence (bounded, logged)
+        if consensus > 1:
+            z = math.log(p_use / (1 - p_use)) + 0.2 * min(consensus - 1, 3)
+            p_use = 1 / (1 + math.exp(-z))
+        feat = {k: float(f[k][-1]) for k in ("ret_12", "ret_48", "vol_48", "vol_pct", "rvol_12", "er_24", "z_50", "rs_btc_48",
+                                             "dd_288", "atr_14") if k in f and f[k][-1] == f[k][-1]}
+        feat.update(regime_conf=float(ss.regime_conf), breadth=float(self.breadth.get("up_frac", 0.0)))
+        # second opinion: calibrated evidence with EARNED weight (never an automatic veto)
+        p_strat = p_use
+        p_use, p_meta, meta_w = self.second.opinion(g.family, {**feat, "spread_bps": 0.0}, p_use)
         hold_h = ev.avg_hold_h if ev and ev.avg_hold_h > 0 else g.exit.time_stop_bars * interval / 3600 * 0.5
         eq = float(self.treasury.get("equity_usd") or 0)
         pol = self.capital.policy(max(eq, 0.01))
@@ -417,7 +439,9 @@ class Forge:
         score = va.adjusted_return * 1e4 * (0.5 + p_use) * (1 + va.capital_velocity_score)
         oid = new_id("opp")
         now_ns = time.time_ns()
-        comps = {"p_raw": raw_p, "p_cal": p_cal, "p_used": p_use, "win": win, "loss": loss, "tp": tp, "sl": sl,
+        feat["spread_bps"] = float(spread)
+        comps = {"p_raw": raw_p, "p_cal": p_cal, "p_strategy": p_strat, "p_meta": p_meta, "meta_weight": meta_w,
+                 "consensus": consensus, "feat": feat, "p_used": p_use, "win": win, "loss": loss, "tp": tp, "sl": sl,
                  "hold_h": hold_h, "velocity_per_day": va.velocity_per_day, "hurdle_per_day": va.hurdle_per_h * 24,
                  "opportunity_cost": va.opportunity_cost_frac, "adjusted_return": va.adjusted_return,
                  "velocity_score": va.capital_velocity_score, "half_life_s": half_life_s, "spread_bps": spread,
@@ -460,16 +484,31 @@ class Forge:
         eq = float(self.treasury.get("equity_usd") or 0)
         reserve = self.capital.reserve_usd(eq)
         deployable = max(0.0, float(self.treasury.get("cash_usd") or 0) - reserve)
+        # continuous evidence weighting + correlation discount (no fixed concurrency: capital flows to the best, decorrelated bets)
+        evid = min(1.0, max(0.2, ((ev.p_edge if ev else 0.5) - 0.5) / 0.4))
+        ss = self.bars[interval].state.get(sym)
+        c_new = float(ss.features["corr_btc_96"][-1]) if ss and "corr_btc_96" in ss.features and ss.features["corr_btc_96"][-1] == ss.features["corr_btc_96"][-1] else 0.6
+        rho = 0.0
+        for r in self.db.query("SELECT symbol FROM positions WHERE book = ? AND status != 'CLOSED'", (self.book,)):
+            so = self.bars[interval].state.get(r["symbol"])
+            c_o = float(so.features["corr_btc_96"][-1]) if so and "corr_btc_96" in so.features and so.features["corr_btc_96"][-1] == so.features["corr_btc_96"][-1] else 0.6
+            rho += max(0.0, c_new * c_o)
+        corr_disc = 1.0 / (1.0 + rho)
         sz = size_position(p, win, loss, ev.n if ev else 0, g.sizing.kelly_mult, g.sizing.max_fraction,
-                           pol.max_position_fraction, deployable, st.value, self.breakers.size_multiplier(),
+                           pol.max_position_fraction, deployable * evid * corr_disc, st.value, self.breakers.size_multiplier(),
                            va.capital_velocity_score)
         if sz.notional_usd < 1.0:
             self._set_opp(oid, "REJECTED", f"size ${sz.notional_usd:.2f} below $1 venue minimum — {sz.explanation}")
             return
+        # regime-aware profit capture: downside protection always; in trends exceptional winners run (looser ratchet + ATR trail)
+        atr_now = float(self.bars[interval].state[sym].features["atr_14"][-1])
+        regime_now = self.bars[interval].state[sym].regime
+        trending = regime_now in ("TREND_UP", "BREAKOUT_EXPANSION", "EUPHORIA_BUYING")
+        be_trig = max(g.exit.be_trigger_pct, 1.5 * atr_now)
+        lock_frac = min(g.exit.lock_frac, 0.35) if trending else max(g.exit.lock_frac, 0.55)
         plan = ExitPlan(take_profit_pct=tp, stop_loss_pct=sl, time_stop_s=int(g.exit.time_stop_bars * interval),
-                        be_trigger_pct=g.exit.be_trigger_pct, be_buffer_pct=g.exit.be_buffer_pct, lock_frac=g.exit.lock_frac,
-                        trailing_pct=(g.exit.trail_atr * float(self.bars[interval].state[sym].features["atr_14"][-1]))
-                        if g.exit.trail_atr else None)
+                        be_trigger_pct=be_trig, be_buffer_pct=g.exit.be_buffer_pct, lock_frac=lock_frac,
+                        trailing_pct=(g.exit.trail_atr * atr_now) if g.exit.trail_atr else (3.0 * atr_now if trending else None))
         intent = TradeIntent(id=new_id("int"), ts_ns=time.time_ns(), book=self.book, opportunity_id=oid, strategy_id=g.id,
                              venue="coinbase", symbol=sym, side="buy", purpose=IntentPurpose.ENTRY,
                              requested_notional_usd=d(round(sz.notional_usd, 2)),
@@ -653,7 +692,8 @@ class Forge:
                     results = await asyncio.wait_for(loop.run_in_executor(self.pool, local_search, str(self.s.market_dir), interval,
                                                          [g.model_dump(mode="json") for g in parents],
                                                          {"maker": float(self.fees.maker), "taker": float(self.fees.taker)},
-                                                         240.0, int(time.time()), llm), timeout=900)
+                                                         240.0, int(time.time()), llm,
+                                                         int(self.db.kv_get(f"stats.trials.{interval}", 0) or 0)), timeout=900)
                 await self._absorb(results, interval)
                 self.last_improvement_ts = time.time()
             except Exception as e:
@@ -669,6 +709,7 @@ class Forge:
         self.genomes_last_cycle = int(results.get("evaluated", 0))
         self.genomes_total += self.genomes_last_cycle
         self.db.kv_set("stats.genomes_total", int(self.db.kv_get("stats.genomes_total", 0) or 0) + self.genomes_last_cycle)
+        self.db.kv_set(f"stats.trials.{interval}", int(self.db.kv_get(f"stats.trials.{interval}", 0) or 0) + self.genomes_last_cycle)
         near = self.db.kv_get("evolution.near_miss", []) or []
         for r in results.get("candidates", []):
             g = Genome.model_validate(r["genome"])
@@ -719,6 +760,12 @@ class Forge:
             await asyncio.sleep(600)
             try:
                 await self._score_counterfactuals()
+                if time.time() - self.second.trained_at > 3600:
+                    out = await asyncio.to_thread(self.second.train)
+                    for fam, m in out.items():
+                        await self.say("Learning Engine", f"Second-opinion model ({fam}) retrained on {m['n']} scored opportunities: "
+                                                          f"OOS log-loss {m['oos_logloss_meta']:.3f} vs strategy {m['oos_logloss_base']:.3f} "
+                                                          f"→ earned weight {m['weight']:.2f}")
             except Exception:
                 log.exception("counterfactual scoring failed")
 

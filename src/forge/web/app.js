@@ -118,6 +118,17 @@
     $("doing").textContent = o.doing_now || "—";
     equitySeries.push({t: o.ts, v: b.equity_usd}); if (equitySeries.length > 3000) equitySeries.shift(); drawChart();
     renderSystems(o);
+    const H = o.health || {};
+    if (H.overall != null) {
+      const ring = $("ringfg"), C = 326.7, col = H.overall >= 85 ? "#22e39a" : H.overall >= 60 ? "#ffb547" : "#ff4d6a";
+      ring.style.strokeDashoffset = String(C * (1 - H.overall / 100)); ring.style.stroke = col;
+      $("h_overall").textContent = H.overall; $("h_state").textContent = H.organism || "—"; $("h_state").className = "pill " + (H.organism || "").split(" ")[0];
+      $("h_meta").textContent = `loop lag ${H.lag_ms}ms · ${H.rss_mb}MB · bench ${H.bench} ready · AI ${H.ai_circuit?.state || "—"} · Modal ${H.modal_circuit?.state || "—"}` +
+        (H.quarantined?.length ? ` · quarantined ${H.quarantined.join(", ")}` : "");
+      const names = {system: "System", feed: "Feed", execution: "Execution", strategy: "Strategy", ai: "AI", treasury: "Treasury"};
+      $("h_parts").innerHTML = Object.entries(H.parts || {}).map(([k, v]) => `<div class="hpart"><label>${names[k] || k} · ${v}</label>
+        <div class="bar"><i style="width:${v}%;background:${v >= 85 ? "linear-gradient(90deg,#0f7a55,#22e39a)" : v >= 60 ? "linear-gradient(90deg,#8a5a10,#ffb547)" : "linear-gradient(90deg,#7a1020,#ff4d6a)"}"></i></div></div>`).join("");
+    }
     const e = o.earnings || {};
     $("earn").innerHTML = [["1h", "Past hour"], ["8h", "Past 8 hours"], ["12h", "Past 12 hours"], ["24h", "Past 24 hours"]].map(([k, lab]) => {
       const w = e[k] || {};

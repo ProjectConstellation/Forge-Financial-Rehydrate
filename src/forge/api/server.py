@@ -149,6 +149,7 @@ def snapshot(forge: Any) -> dict[str, Any]:
                        "markets_streaming": len(forge.stream.symbols), "markets_discovered": len(forge.market.products),
                        "opportunities_24h": db.scalar("SELECT COUNT(*) FROM opportunities WHERE ts > strftime('%Y-%m-%dT%H:%M:%S','now','-1 day')") or 0,
                        "paper_trades_open": len(positions)},
+        "health": db.kv_get("health.score") or {},
         "today": {"realized_net_usd": windows_today(db, book), "unrealized_usd": sum((p["live_pnl_usd"] or 0) for p in positions)}})
 
 

@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
+from forge.core.healing import Circuit
 from forge.core.ids import new_id
 from forge.persistence.db import dumps
 
@@ -38,6 +39,7 @@ class ComputeGovernor:
         self.burst_containers = 8
         self.burst_budget_s = 300.0
         self.available = True
+        self.circuit = Circuit("modal", threshold=2, base_cooldown_s=600)
 
     # ------------------------------------------------------------------ budget state
     def month_spend(self) -> float:
@@ -54,8 +56,8 @@ class ComputeGovernor:
 
     async def should_burst(self, forge: Any, interval: int) -> bool:
         """EVI-driven: burst when research value is high (no proven edge yet, demotions, brain escalation) and budget allows."""
-        if not self.available:
-            return False
+        if not self.circuit.allow():
+            return False                                      # OPEN → local research continues; HALF_OPEN → one trial burst
         self.cycles += 1
         state = self.budget_state()
         if state == "RED":
@@ -112,7 +114,8 @@ class ComputeGovernor:
         args = []
         for i in range(n):
             sub = pj[i::n] + pj[: max(0, 6 - len(pj[i::n]))]
-            args.append((interval, sub, fees, self.burst_budget_s, int(t0) + i * 7919, llm or []))
+            prior = int(forge.db.kv_get(f"stats.trials.{interval}", 0) or 0) * 1   # cumulative multiple-testing count
+            args.append((interval, sub, fees, self.burst_budget_s, int(t0) + i * 7919, llm or [], prior))
         results: list[dict[str, Any]] = []
         try:
             async for r in fn.starmap.aio(args, return_exceptions=True):
@@ -122,9 +125,15 @@ class ComputeGovernor:
                     log.warning("modal worker failed: %s", r)
         except Exception as e:
             forge.db.execute("UPDATE compute_jobs SET status='FAILED', ts_end=?, error=? WHERE id=?", (_now(), str(e)[:300], jid))
-            self.available = False
-            await forge.say("Modal Lab", f"Modal burst failed ({e}); falling back to local research", level="warn")
+            self.circuit.failure(str(e))
+            forge.workers["modal"] = {"what": f"circuit {self.circuit.state} — local research fallback", "count": 0, "since": time.time(), "where": "Modal cloud"}
+            await forge.say("Self-Healing", f"Modal burst failed ({str(e)[:100]}) → circuit {self.circuit.state}; local research "
+                                            f"continues; retry in {self.circuit.cooldown_s:.0f}s", level="warn")
             raise
+        if not results:
+            self.circuit.failure("all workers failed")
+            raise RuntimeError("all Modal workers failed")
+        self.circuit.success()
         secs = sum(float(r.get("container_seconds", r.get("seconds", 0))) for r in results)
         cost = self.estimate_cost(1, secs)
         forge.db.execute("UPDATE compute_jobs SET status='DONE', ts_end=?, duration_s=?, est_cost_usd=? WHERE id=?",
@@ -151,11 +160,11 @@ class ComputeGovernor:
         while not forge.stop_event.is_set():
             forge.sup.beat("compute")
             forge.status("Compute Governor", f"Modal {self.budget_state()} · month ${self.month_spend():.2f}/${self.budget:.0f} "
-                                             f"· {'available' if self.available else 'unavailable (local fallback)'}")
+                                             f"· circuit {self.circuit.state}")
             await asyncio.sleep(120)
 
     def summary(self) -> dict[str, Any]:
-        return {"available": self.available, "state": self.budget_state(), "month_usd": self.month_spend(),
+        return {"available": self.circuit.state != "OPEN", "circuit": self.circuit.state, "state": self.budget_state(), "month_usd": self.month_spend(),
                 "budget_usd": self.budget}
 
 

@@ -40,15 +40,15 @@ class RegimePolicy:
 
 
 ANCHORS: dict[str, dict[str, float]] = {
-    "SURVIVAL": dict(reserve_fraction=0.10, max_position_fraction=0.60, max_concurrent_positions=6,
+    "SURVIVAL": dict(reserve_fraction=0.10, max_position_fraction=0.60, max_concurrent_positions=12,
                      target_hold_hours=12, hurdle_multiplier=1.6, research_intensity=1.5,
                      min_liquidity_usd_24h=1_000_000, min_strategy_diversity=1, max_family_fraction=1.0,
                      exploration_capital_fraction=0.05),
-    "GROWTH": dict(reserve_fraction=0.10, max_position_fraction=0.45, max_concurrent_positions=8,
+    "GROWTH": dict(reserve_fraction=0.10, max_position_fraction=0.45, max_concurrent_positions=20,
                    target_hold_hours=36, hurdle_multiplier=1.2, research_intensity=1.25,
                    min_liquidity_usd_24h=2_000_000, min_strategy_diversity=2, max_family_fraction=0.7,
                    exploration_capital_fraction=0.08),
-    "EXPANSION": dict(reserve_fraction=0.15, max_position_fraction=0.30, max_concurrent_positions=12,
+    "EXPANSION": dict(reserve_fraction=0.15, max_position_fraction=0.30, max_concurrent_positions=40,
                       target_hold_hours=120, hurdle_multiplier=1.0, research_intensity=1.0,
                       min_liquidity_usd_24h=5_000_000, min_strategy_diversity=3, max_family_fraction=0.5,
                       exploration_capital_fraction=0.10),
