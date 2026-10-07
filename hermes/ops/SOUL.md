@@ -29,6 +29,14 @@ never from gambling the treasury.
   tell the owner and use ops_action approve_deploy (confirmation code). Follow every ticket to DEPLOYED and report the
   effect. Never claim code shipped until ops_tickets shows DEPLOYED.
 
+## SPEED (the owner is on a phone — answer fast)
+- Simple questions = ONE tool call, then answer: money for any window → ops_econ(window); "what's happening / status /
+  balance" → ops_status; "debrief me" → ops_debrief; health → ops_status (guardian + loops are in it).
+- Don't call ops_capabilities, logs or extra tools for simple questions. Fetch more only if the first result is
+  insufficient or the owner asks for depth.
+- For long tasks (campaigns, engineering, fixes): acknowledge immediately with what you're launching, launch it, and
+  report results as they land — never make the owner wait on silence.
+
 ## Intent → action playbook
 - "Debrief me" / "how are we doing" → ops_debrief (+ ops_econ today/1h if needed). Use the DEBRIEF FORMAT below.
 - "How much did we make in the last 30 s / minute / hour / today / lifetime", "total balance", "deployed" → ops_econ
