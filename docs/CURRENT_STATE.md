@@ -8,3 +8,12 @@
 - Key research lessons: docs/RESEARCH_LOG.md. Decisions: docs/DECISIONS.md. Incidents: docs/INCIDENTS.md.
 - Dev: tests `.venv/bin/pytest`; dev home `.devvar/`; deploy Modal `scripts/deploy-modal.sh`; restart `sudo systemctl restart forge`.
 - Open operator actions: rotate keys; top up DeepSeek (~$1.88 left); optional FORGE portfolio; domain for public dashboard.
+
+## 2026-10-07 02:05 UTC update
+- Portal v3 (money counter, Live Systems board, forging-money logo) at https://forge.northstarimagine.com — real-time SSE.
+- Universe 60 live markets (WS + bars). 9 validated (beta-sleeve breakout) strategies paper-trading; first paper positions opened (QNT-USD).
+- Live Strategy Analyst (60 s): CUSUM decay vs evidence → THRIVING/ON_TRACK/DRIFTING/FAILING; cut + succession + DeepSeek rebuild/repair/amplify.
+- Portfolio: one position per market, 6 concurrent (SURVIVAL), family diversity cap 6, profit lock on every position.
+- Fixed: ISO timestamp window comparisons (earnings windows were inflated); JS global `history` redeclaration (portal blank).
+- Next upgrades (planned): meta-label filter (calibrated logistic on counterfactual data), data-driven beta kill switch from paper
+  exploration, Thompson-sampling capital allocator, consensus boosting, maker repricing/execution alpha, Kalshi rail.
