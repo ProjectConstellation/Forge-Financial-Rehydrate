@@ -510,7 +510,7 @@ class Forge:
         pol = self.capital.policy(max(eq, 0.01))
         free = max(0.0, float(self.treasury.get("cash_usd") or 0) - self.capital.reserve_usd(eq))
         pressure = utilization_pressure(free, free * 0.5 + 1e-9)
-        va = assess(p_use, win, loss, hold_h, self.hurdle.hurdle(pol.hurdle_multiplier), pressure)
+        va = assess(p_use, win, loss, hold_h, self._effective_hurdle(pol), pressure)
         half_life_s = max(interval, g.execution.maker_ttl_bars * interval)
         exp_net_bps = va.expected_return * 1e4
         score = va.adjusted_return * 1e4 * (0.5 + p_use) * (1 + va.capital_velocity_score)
@@ -562,7 +562,7 @@ class Forge:
         if self.book == "paper" and va.adjusted_return <= 0 and p_pre_haircut != p_use:
             # paper explores, live exploits: the haircut must never stop paper from gathering the forward evidence that
             # is the only way to earn the haircut back (deadlock found 2026-10-07: 161/193 paper opportunities rejected)
-            va = assess(p_pre_haircut, win, loss, hold_h, self.hurdle.hurdle(pol.hurdle_multiplier), pressure)
+            va = assess(p_pre_haircut, win, loss, hold_h, self._effective_hurdle(pol), pressure)
             comps["paper_exploration"] = True
         if va.adjusted_return <= 0:
             self._set_opp(oid, "REJECTED", va.rationale)
@@ -570,6 +570,18 @@ class Forge:
             return
         p_trade = p_pre_haircut if (self.book == "paper" and comps.get("paper_exploration")) else p_use
         await self._allocate_and_execute(g, st, sym, oid, p_trade, win, loss, tp, sl, interval, va, spread, ev, pol)
+
+    IDLE_YIELD_PER_H = 0.0375 / 365 / 24         # what an idle dollar earns (USDC rewards, OP-019)
+
+    def _effective_hurdle(self, pol: Any) -> float:
+        """Opportunity cost of capital per hour, utilization-aware: when most capital is idle, the marginal dollar's
+        alternative is the idle yield; as deployment rises toward full, the hurdle rises to the learned/regime rate.
+        (A fixed ~1.5%/day hurdle rejected every multi-day trade while ~70% of capital sat idle — 2026-10-07.)"""
+        eq = float(self.treasury.get("equity_usd") or 0) or 1.0
+        u = float(self.treasury.get("deployed_usd") or 0) / eq
+        full = self.hurdle.hurdle(pol.hurdle_multiplier)
+        w = min(1.0, max(0.0, (u - 0.3) / 0.6))
+        return self.IDLE_YIELD_PER_H + (full - self.IDLE_YIELD_PER_H) * w
 
     def _set_opp(self, oid: str, status: str, reason: str) -> None:
         self.db.execute("UPDATE opportunities SET status = ?, reason = ? WHERE id = ?", (status, reason[:500], oid))
