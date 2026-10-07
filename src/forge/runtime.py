@@ -510,15 +510,21 @@ class Forge:
                 parents = [g for g, _, _ in self.reg.list((State.PRODUCTION, State.CHALLENGER, State.SHADOW, State.EXPERIMENTAL))
                            if g.interval_s == interval]
                 parents = sorted(parents, key=lambda g: -(self.db.scalar("SELECT COALESCE(fitness,-9) FROM strategies WHERE id=?", (g.id,)) or -9))[:30]
+                queue = self.db.kv_get("brain.candidate_queue", []) or []
+                llm = [q["genome"] for q in queue if q["genome"].get("interval_s", interval) == interval][:12]
+                if llm:
+                    keep = [q for q in queue if q["genome"]["id"] not in {g["id"] for g in llm}]
+                    self.db.kv_set("brain.candidate_queue", keep)
+                    await self.say("Evolution Arena", f"Evaluating {len(llm)} DeepSeek-designed genomes this cycle")
                 if self.compute is not None and await self.compute.should_burst(self, interval):
-                    results = await self.compute.burst_search(self, interval, parents)
+                    results = await self.compute.burst_search(self, interval, parents, llm)
                 else:
                     loop = asyncio.get_running_loop()
                     from forge.evolution.worker import local_search
                     results = await loop.run_in_executor(self.pool, local_search, str(self.s.market_dir), interval,
                                                          [g.model_dump(mode="json") for g in parents],
                                                          {"maker": float(self.fees.maker), "taker": float(self.fees.taker)},
-                                                         240.0, int(time.time()))
+                                                         240.0, int(time.time()), llm)
                 await self._absorb(results, interval)
             except Exception as e:
                 log.exception("improvement cycle failed")

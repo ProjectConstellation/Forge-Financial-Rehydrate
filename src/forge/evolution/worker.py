@@ -26,7 +26,8 @@ def _clean(m: dict[str, Any]) -> dict[str, Any]:
 
 
 def search_on_raw(raw: dict[str, dict[str, Any]], interval: int, parents: list[dict[str, Any]], fees: dict[str, float],
-                  budget_s: float, seed: int, generations: int = 60, children: int = 60, top: int = 12) -> dict[str, Any]:
+                  budget_s: float, seed: int, generations: int = 60, children: int = 60, top: int = 12,
+                  must_eval: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     _limit_threads()
     import time
 
@@ -44,7 +45,9 @@ def search_on_raw(raw: dict[str, dict[str, Any]], interval: int, parents: list[d
     if len(ds.symbols) < 5:
         return {"candidates": [], "evaluated": 0, "seconds": 0.0, "note": "insufficient data", "where": "local"}
     cost = CostModel(maker_fee=fees.get("maker", 0.005), taker_fee=fees.get("taker", 0.009))
+    llm = [Genome.model_validate(p).model_copy(update={"interval_s": interval}) for p in (must_eval or [])]
     seeds = [Genome.model_validate(p) for p in parents] or seed_genomes()
+    seeds = llm + seeds
     if len(seeds) < 6:
         extra = [g for g in seed_genomes() if g.id not in {s.id for s in seeds}]
         seeds += extra
@@ -52,6 +55,18 @@ def search_on_raw(raw: dict[str, dict[str, Any]], interval: int, parents: list[d
     res = run_search(seeds, ds, cost, generations=generations, children_per_gen=children, seed=seed,
                      time_budget_s=budget_s * 0.8, log=lambda *_: None)
     adj = adjudicate(res, ds, cost, top=top, seed=seed)
+    done = {r["genome"].id for r in adj}
+    if llm:   # LLM-designed genomes are always adjudicated explicitly (their predictions get scored)
+        from forge.evolution.search import Elite, SearchResult
+        from forge.research.evaluate import evaluate
+        extra = {}
+        for g in llm:
+            if g.id in done:
+                continue
+            ev = evaluate(g, ds, cost, "selection")
+            extra[("llm", g.id, "")] = Elite(g, ev, {"operator": "llm"})
+        if extra:
+            adj += adjudicate(SearchResult(extra, len(extra), 0.0), ds, cost, top=len(extra), seed=seed + 7)
     cands = []
     for r in adj:
         g = r["genome"]
@@ -67,7 +82,7 @@ def search_on_raw(raw: dict[str, dict[str, Any]], interval: int, parents: list[d
 
 
 def local_search(market_dir: str, interval: int, parents: list[dict[str, Any]], fees: dict[str, float],
-                 budget_s: float, seed: int) -> dict[str, Any]:
+                 budget_s: float, seed: int, must_eval: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     _limit_threads()
     try:
         os.nice(10)
@@ -78,4 +93,4 @@ def local_search(market_dir: str, interval: int, parents: list[dict[str, Any]], 
     store = CandleStore(Path(market_dir))
     raw = {s: store.load(s, interval) for s in store.symbols(interval)}
     raw = {s: b for s, b in raw.items() if b is not None}
-    return search_on_raw(raw, interval, parents, fees, budget_s, seed)
+    return search_on_raw(raw, interval, parents, fees, budget_s, seed, must_eval=must_eval)

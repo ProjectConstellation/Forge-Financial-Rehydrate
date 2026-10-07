@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d12">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/static/icon.svg">
+<link rel="apple-touch-icon" href="/static/icon.svg">
+<title>FORGE</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">⚒</span><div><b>FORGE</b><small>Find Opportunities · Reinvest · Grow · Evolve</small></div></div>
+  <div class="hdr-right"><span id="mode" class="badge">…</span><span id="tstate" class="badge">…</span></div>
+</header>
+<main>
+  <section class="hero">
+    <div class="big"><label>Treasury</label><div id="equity" class="num">—</div><div id="regime" class="sub">—</div></div>
+    <div class="big"><label>True net (after every cost)</label><div id="truenet" class="num">—</div><div id="truenet_sub" class="sub">—</div></div>
+  </section>
+  <section class="grid" id="kpis"></section>
+  <section class="panel"><h2>Live agents</h2><div id="agents" class="agents"></div></section>
+  <section class="panel"><h2>Positions</h2><div id="positions"></div></section>
+  <section class="panel"><h2>Opportunity feed</h2><div id="opps"></div></section>
+  <section class="panel"><h2>Strategy population</h2><div id="pop" class="chips"></div><div id="strats"></div></section>
+  <section class="panel"><h2>Live timeline</h2><div id="timeline" class="timeline"></div></section>
+  <section class="panel danger">
+    <h2>Emergency control</h2>
+    <p class="muted">Routine operation needs no approvals. These are protected operator overrides.</p>
+    <button id="stop" class="stop">STOP ALL TRADING</button>
+    <div class="row"><button id="resume" class="ghost">Resume…</button><button id="cashout" class="ghost">Cash out…</button><button id="token" class="ghost">Operator token…</button></div>
+  </section>
+</main>
+<footer id="foot" class="muted">connecting…</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

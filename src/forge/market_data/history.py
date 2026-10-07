@@ -15,8 +15,12 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from typing import TYPE_CHECKING
+
 from forge.market_data.bars import COLS
-from forge.venues.coinbase.rest import CoinbaseRest
+
+if TYPE_CHECKING:
+    from forge.venues.coinbase.rest import CoinbaseRest
 
 log = logging.getLogger("forge.history")
 
@@ -64,7 +68,7 @@ class CandleStore:
         return sorted(p.stem.split("=", 1)[1] for p in d.glob("symbol=*.parquet")) if d.exists() else []
 
 
-async def backfill(rest: CoinbaseRest, store: CandleStore, symbol: str, interval_s: int, days: float,
+async def backfill(rest: "CoinbaseRest", store: CandleStore, symbol: str, interval_s: int, days: float,
                    end: int | None = None) -> int:
     """Fetch missing history (pages of 350 candles). Returns rows now stored."""
     end = end or int(time.time()) // interval_s * interval_s
