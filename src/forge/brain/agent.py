@@ -136,7 +136,7 @@ class Brain:
 
     async def scientist(self, reason: str, focus: list[str] | None = None, critical: bool = False) -> None:
         self.last_scientist = time.time()
-        await self.f.say("DeepSeek Brain", f"Escalating to {self.f.s.deepseek.deep_model} (effort {self.f.s.deepseek.deep_effort}) — {reason}")
+        await self.f.say("DeepSeek Brain", f"Escalating to {self.f.s.deepseek.deep_model} (effort {self.f.s.deepseek.deep_effort if critical else 'high'}) — {reason}")
         user = ("Research mandate: find strategy genomes that clear FORGE's fee hurdle with alpha vs market drift and high "
                 f"capital velocity. Reason for this session: {reason}. Focus hints: {focus or []}. "
                 "Inspect evidence with tools first (system state, strategies incl. EXPERIMENTAL elites, failures, missed "
