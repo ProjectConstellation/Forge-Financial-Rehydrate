@@ -810,7 +810,7 @@ class Forge:
                                "AND sealed_start_ts >= ?", (interval, start - 86400 * 3)) or 0)
         return seen, n
 
-    def _record_trials(self, results: dict[str, Any], interval: int) -> None:
+    def _record_trials(self, results: dict[str, Any], interval: int) -> None:  # noqa: C901
         """P0.5 Research Trial Ledger — one row per adjudicated candidate."""
         import hashlib
         ds = results.get("dataset") or {}
@@ -847,6 +847,7 @@ class Forge:
         self.db.kv_set(f"stats.trials.{interval}", int(self.db.kv_get(f"stats.trials.{interval}", 0) or 0) + self.genomes_last_cycle)
         near = self.db.kv_get("evolution.near_miss", []) or []
         for r in results.get("candidates", []):
+            await asyncio.sleep(0)                       # yield: market data / execution / API never wait on evolution
             g, _fix = repair_genome(dict(r["genome"]))
             if g is None:
                 continue

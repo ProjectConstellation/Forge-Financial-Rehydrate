@@ -3,6 +3,7 @@ research artifacts. There is deliberately NO trade, transfer, risk-limit or emer
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -201,6 +202,12 @@ class ToolRouter:
                                             "title": title[:200], "body": json.dumps({"body": body[:4000], "sources": (sources or [])[:10],
                                                                                       "ev_usd_month": expected_value_usd_month})})
         self.artifacts.append({"kind": "lead", "ref_id": lid})
+        if category.startswith(("report", "operator_action", "incident", "new_rail", "fee_change")):
+            import asyncio
+            agent = "Hermes" if self.role.startswith("hermes") else "DeepSeek Brain"
+            msg = f"[{category}] {title[:120]}" + (f" — {body[:600]}" if category.startswith("report") else "")
+            with contextlib.suppress(RuntimeError):
+                asyncio.get_running_loop().create_task(self.f.say(agent, msg))
         return {"lead_id": lid}
 
     def t_request_research(self, focus: str, interval_s: int | None = None) -> dict[str, Any]:

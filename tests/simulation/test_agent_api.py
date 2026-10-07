@@ -46,3 +46,17 @@ def test_agent_api_scope_and_accounting(db):
     assert a["wake"] and abs(a["spent_24h"] - 0.042) < 1e-9 and a["budget_24h"] > 0
     big = c.get("/api/agent/allow", headers=h, params={"est_usd": 5.0}).json()
     assert not big["wake"]                                                   # cannot exceed its slice of the pace
+
+
+def test_credit_mode_free_and_paced(db):
+    import time as _t
+    c = _app(db)
+    h = {"Authorization": "Bearer tok"}
+    db.kv_set("hermes.mode", {"mode": "credit", "credit_usd": 180, "hours": 72, "start": _t.time() - 3600})
+    u = c.post("/api/agent/usage", headers=h, json={"api_request_id": "o1", "role": "scientist", "model": "claude-opus-5-5",
+                                                    "usage": {"input_tokens": 10000, "output_tokens": 2000,
+                                                              "cache_read_input_tokens": 50000}}).json()
+    assert abs(u["cost_usd"] - (10000 * 5 + 50000 * 0.5 + 2000 * 25) / 1e6) < 1e-9     # list price, measured
+    a = c.get("/api/agent/allow", headers=h, params={"role": "scientist", "est_usd": 0.5}).json()
+    assert a["mode"] == "credit" and a["wake"] and a["hours_left"] > 70
+    assert not c.get("/api/agent/allow", headers=h, params={"est_usd": 50}).json()["wake"]   # paced over the window
