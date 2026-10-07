@@ -244,6 +244,38 @@ class Brain:
                                                f"evaluation; {str((final or {}).get('diagnosis', ''))[:200]}")
         return final
 
+    async def rebuild(self, sid: str, report: dict[str, Any], critical: bool = False, mode: str = "rebuild") -> None:
+        """Analyst-triggered: rebuild a failing algorithm, repair a drifting one, or amplify a thriving one.
+        Successor genomes carry `parents=[sid]` so lineage and attribution flow back to this decision."""
+        key = f"last_{mode}"
+        if time.time() - getattr(self, key, 0.0) < (900 if mode == "rebuild" else 2700):
+            return
+        await self.refresh_balance()
+        if not self.allow("scientist", 0.12, critical=critical):
+            await self.f.say("DeepSeek Brain", f"{mode} of {sid[:18]} queued for evolution (AI budget tier {self.tier}); "
+                                               "Modal evolution continues mutating its lineage meanwhile")
+            q = self.f.db.kv_get("evolution.near_miss", []) or []
+            g = self.f.reg.get(sid)
+            if g is not None:
+                q.insert(0, {"id": sid, "interval": g.interval_s, "p": 0.99, "n": report.get("trades"), "reasons": [mode]})
+                self.f.db.kv_set("evolution.near_miss", q[:20])
+            return
+        setattr(self, key, time.time())
+        g = self.f.reg.get(sid)
+        if g is None:
+            return
+        goal = {"rebuild": "This incumbent is FAILING live versus its validation evidence. Diagnose why (regime change, fee drag, "
+                           "entry timing, exits, overfit) and design 4–8 successor genomes that fix the diagnosed cause.",
+                "repair": "This algorithm is DRIFTING below expectation. Diagnose the drift and design 3–6 targeted repairs.",
+                "amplify": "This algorithm is THRIVING. Keep it earning; design 3–6 upgraded challengers that could earn MORE "
+                           "(better exits/profit locks, regime specialization, wider universe, faster capital velocity)."}[mode]
+        user = (f"{goal}\nIncumbent genome id {sid}: {json.dumps(g.model_dump(mode='json'))[:6000]}\n"
+                f"Live analyst report: {json.dumps(report, default=str)[:3000]}\n"
+                "Use tools for evidence (get_strategy, get_recent_failures, get_missed_opportunities, get_market_state). "
+                f'Every candidate genome MUST include "parents": ["{sid}"]. Submit via submit_strategy_candidates.')
+        self._work(f"V4 Pro {mode}: {g.family} {sid[:14]}")
+        await self._tool_session("scientist", user, deep=True, effort="max" if critical else "high", max_rounds=6, strategy_id=sid)
+
     # ------------------------------------------------------------------ event hooks
     async def on_loss(self, forge: Any, info: dict[str, Any]) -> None:
         if time.time() - self.last_diag < 600 or not self.allow("diagnostician", 0.002):

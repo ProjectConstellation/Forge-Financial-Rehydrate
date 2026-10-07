@@ -208,7 +208,8 @@ def lists(forge: Any) -> dict[str, Any]:
     for r in opps:
         r["components"] = json.loads(r["components"] or "{}")
         r["outcome"] = json.loads(r["outcome"]) if r["outcome"] else None
-    return _j({"opportunities": opps, "strategies": forge.arena.summary(), "rails": catalog(forge.db),
+    from forge.evolution.analyst import report
+    return _j({"opportunities": opps, "strategies": forge.arena.summary(), "rails": catalog(forge.db), "analyst": report(forge.db),
                "agents": forge.agent_status})
 
 

@@ -165,6 +165,9 @@ class Forge:
             B("balance_sentinel", self.sentinel.run, 1200)
         if self.compute is not None:
             B("compute", lambda: self.compute.run(self), 900)
+        from forge.evolution.analyst import StrategyAnalyst
+        self.analyst = StrategyAnalyst(self)
+        B("analyst", self.analyst.run, 600)
         self.sup.on_restart = self._on_loop_restart
         self.tasks = self.sup.start()
         self.tasks.append(asyncio.create_task(self.sup.watch(self.stop_event), name="supervisor"))
@@ -696,7 +699,7 @@ class Forge:
     async def _review_loop(self) -> None:
         while not self.stop_event.is_set():
             self.sup.beat("arena_review")
-            await asyncio.sleep(300)
+            await asyncio.sleep(120)
             try:
                 cost = CostModel(maker_fee=float(self.fees.maker), taker_fee=float(self.fees.taker))
                 regimes = {s: st.regime for s, st in self.bars[300].state.items() if st.features}

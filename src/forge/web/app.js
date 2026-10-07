@@ -146,7 +146,8 @@
   function renderLists(x) {
     const pop = (x.strategies || {}).counts || {};
     $("pop").innerHTML = Object.entries(pop).map(([k, v]) => `<span class="tag ${k}">${k} ${v}</span>`).join("");
-    $("strats").innerHTML = ((x.strategies || {}).active || []).map(a => { const e = a.evidence || {}, f = a.forward || {};
+    const AN = Object.fromEntries(((x.analyst || {}).strategies || []).map(r => [r.id, r]));
+    $("strats").innerHTML = ((x.strategies || {}).active || []).map(a => { const e = a.evidence || {}, f = a.forward || {}, r = AN[a.id] || {};
       return `<div class="item"><div class="h"><b>${esc(a.family)}</b><span class="tag ${a.state}">${a.state}</span></div>
         <div class="muted tiny">${esc(a.id)} · gen ${a.generation} · live-forward ${f.n || 0} trades ${pct(f.mean_net, 2)}</div>
         <div class="bar"><i style="width:${Math.round(100 * (e.p_edge || 0))}%"></i></div>
