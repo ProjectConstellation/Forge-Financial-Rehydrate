@@ -26,7 +26,7 @@ sudo -u forge-eng env UV_NO_CONFIG=1 UV_CACHE_DIR=$EH/.cache/uv UV_PYTHON=/usr/b
 
 # Hermes profile
 install -o forge-eng -g forge-eng -m 600 $F/hermes/eng/SOUL.md $EH/SOUL.md
-[ -f $EH/config.yaml ] || install -o forge-eng -g forge-eng -m 600 $F/hermes/eng/config.yaml $EH/config.yaml
+install -o forge-eng -g forge-eng -m 600 $F/hermes/eng/config.yaml $EH/config.yaml   # managed file
 rm -rf $EH/plugins/hermes-forge-eng; cp -r $F/hermes/plugin/hermes-forge-eng $EH/plugins/
 mkdir -p $EH/scripts; install -m 644 $F/hermes/eng/gate_engineer.py $EH/scripts/gate_engineer.py
 touch $EH/.env; chmod 600 $EH/.env

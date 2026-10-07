@@ -13,7 +13,7 @@ setfacl -m u:forge-ops:--x $F $F/runtime
 
 # profile: identity + config (config only seeded once; SOUL refreshed) + plugin
 install -m 600 $F/hermes/ops/SOUL.md $OH/SOUL.md
-[ -f $OH/config.yaml ] || install -m 600 $F/hermes/ops/config.yaml $OH/config.yaml
+install -m 600 $F/hermes/ops/config.yaml $OH/config.yaml      # managed file: the repo is the source of truth
 rm -rf $OH/plugins/hermes-forge-ops; cp -r $F/hermes/plugin/hermes-forge-ops $OH/plugins/
 # keys: model credentials copied server-side from the research profile (no display); FORGE ops token
 touch $OH/.env; chmod 600 $OH/.env
@@ -35,6 +35,12 @@ chown -R forge-ops:forge-ops $O
 if ! $H/app/venv/bin/python -c "import telegram" 2>/dev/null; then
   sudo -u forge-hermes env UV_NO_CONFIG=1 UV_CACHE_DIR=$H/app/uvcache HOME=$H/home bash -c \
     "cd $H/work && $F/.tools/uv pip install --python $H/app/venv/bin/python --quiet 'python-telegram-bot[webhooks]==22.8'"
+fi
+
+# voice notes: local speech-to-text (faster-whisper, CPU int8; no API key, audio never leaves the server)
+if ! $H/app/venv/bin/python -c "import faster_whisper" 2>/dev/null; then
+  sudo -u forge-hermes env UV_NO_CONFIG=1 UV_CACHE_DIR=$H/app/uvcache HOME=$H/home bash -c \
+    "cd $H/work && $F/.tools/uv pip install --python $H/app/venv/bin/python --quiet faster-whisper" || echo "faster-whisper install failed (voice notes disabled)"
 fi
 
 # polkit: forge-ops may ONLY restart/start the three FORGE units (no stop, no other unit, no other verb)
