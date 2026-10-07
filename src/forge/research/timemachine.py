@@ -219,7 +219,8 @@ def tm_job(market_dir: str, genomes: list[dict[str, Any]], evidence: dict[str, d
         ranking.append({"id": g.id, "family": g.family, "selection_return": a.get("return", -1), "holdout_return": b.get("return", -1),
                         "trades": a.get("trades", 0)})
     ranking.sort(key=lambda r: -r["selection_return"])
-    elite = [r["id"] for r in ranking if r["holdout_return"] > 0][:3]
+    # selection-only choice (validation must not act as a selector — that contaminates it); unseen is reported, not used
+    elite = [r["id"] for r in ranking if r["selection_return"] > 0][:3]
     out["ranking"], out["elite"] = ranking, elite
     eg = [g for g in gs if g.id in elite]
     if eg:
