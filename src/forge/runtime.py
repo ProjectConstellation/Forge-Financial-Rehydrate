@@ -192,6 +192,9 @@ class Forge:
         B("surface", self.surface.run, 3600)
         B("listing_sentinel", self.listings.run, 600)
         B("crossrail", self.crossrail.run, 1200)
+        from forge.opportunities.pegmaker import PegMaker
+        self.pegmaker = PegMaker(self)
+        B("pegmaker", self.pegmaker.run, 300)
         from forge.core.healing import HealthMonitor
         self.health = HealthMonitor(self)
         B("healing", self.health.run, 120, critical=True)

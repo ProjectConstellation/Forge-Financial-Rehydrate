@@ -132,3 +132,13 @@ def test_intelligence_pace_scales_with_money_and_value():
     assert spent.headroom < 0 and spent.cycle_s == 2700 and spent.deep_sessions == 0
     assert dep.deep_sessions >= 2 and dep.cycle_s == 300
     assert pace(0.05, 0.10, 3.0, False, 0.0, 0.0, 0.5).budget_24h == 0.0
+
+
+def test_peg_queue_fill_model():
+    from forge.opportunities.pegmaker import Quote, queue_after_prints
+    q = Quote("buy", 0.9997, 28.0, 100.0, 0.0)
+    assert queue_after_prints(q, [(0.9997, 60.0, "BUY")]) == (0.0, 40.0)            # queue ahead consumed, not us yet
+    f, a = queue_after_prints(Quote("buy", 0.9997, 28.0, 40.0, 0.0), [(0.9997, 50.0, "BUY")])
+    assert abs(f - 10.0) < 1e-9 and a == 0.0                                           # partial fill after the queue
+    assert queue_after_prints(q, [(0.99969, 1.0, "BUY")]) == (28.0, 0.0)             # print through our price → filled
+    assert queue_after_prints(q, [(0.9997, 500.0, "SELL")]) == (0.0, 100.0)          # wrong side does not consume our queue

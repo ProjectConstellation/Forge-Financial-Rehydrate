@@ -215,9 +215,9 @@ class SurfaceRegistry:
                     break
             r.capabilities.update(products=n, watch=watch, sessions="OVERNIGHT/PRE/NORMAL/AFTER (fractional+market only NORMAL)",
                                   settlement="T+1 (equities)", automation="official: Advanced Trade API / Coinbase for Agents CLI")
-        r.blockers = ["account equity eligibility unverified (needs first authorized $1 calibration order or operator confirm)",
-                      "equity commission/spread not yet measured from a real fill",
-                      "no equity strategy validated yet (research + sealed exam first)"]
+        r.capabilities.update(commission="0 (Coinbase: 'Commission-free 24/5 stock trading', live 2026-10-07); spread applies")
+        r.blockers = ["account equity eligibility unverified (operator confirm or one authorized $1 order)",
+                      "no equity strategy validated yet; equity quotes not reliable via public API (data rail first)"]
         r.status, r.executable = "CANDIDATE", False
 
     async def probe_product_types(self) -> dict[str, str]:
@@ -273,14 +273,31 @@ class SurfaceRegistry:
         r.blockers.append("funding rail not authorized (Coinbase key has no transfer permission; OP required)")
         r.status, r.executable = "SHADOW", False
 
+    def membership(self) -> dict[str, Any]:
+        """MembershipEconomicsAdapter (answers §Coinbase One): verified live 2026-10-07 from coinbase.com/one + /usdc."""
+        m = self.f.db.kv_get("membership.coinbase_one") or {}
+        base = {"tier": "basic", "monthly_cost_usd": 4.99, "annual_cost_usd": 49.99, "trial_days": 7,
+                "simple_trade_zero_fee_cap_usd_month": 500, "simple_trade_api": False,
+                "advanced_trade_rebate_pct": 0.0, "advanced_trade_rebate_cap_usd_month": 0.0,
+                "usdc_reward_apy": 0.0375, "usdc_rewards_member_only": True, "staking_boost_pct": 5.0,
+                "incremental_cost_to_forge_usd_month": 0.0,       # operator keeps the membership for its own reasons
+                "source": "coinbase.com/one + coinbase.com/usdc (live 2026-10-07)",
+                "notes": "Zero-fee benefit excludes Coinbase Advanced, DEX and derivatives; spread applies on simple trades."}
+        base.update(m)
+        self.f.db.kv_set("membership.coinbase_one", base)
+        return base
+
     def static_rails(self, account: dict[str, Any]) -> None:
-        y = self._rail("coinbase.usdc_rewards", "Coinbase USDC rewards", "idle-capital yield")
-        apy = self.f.db.kv_get("config.usdc_reward_apy_verified")
+        mem = self.membership()
+        y = self._rail("coinbase.usdc_rewards", "Coinbase USDC rewards (Coinbase One member)", "idle-capital yield")
+        apy = self.f.db.kv_get("config.usdc_reward_apy_verified") or (mem["usdc_reward_apy"] if mem.get("tier") else None)
         y.capabilities.update(convert_api="Advanced Trade convert quote/commit (USD↔USDC)",
                               advertised_apy="3.50–3.75% (Coinbase One pages, 2026-10) — never assumed",
                               verified_apy=apy)
-        y.blockers = [] if apy else ["eligibility/rate not exposed by API: operator confirms rate, or FORGE observes posted rewards"]
-        y.status, y.executable = ("LIVE_ELIGIBLE", True) if apy else ("CANDIDATE", False)
+        y.capabilities.update(membership=mem.get("tier"), member_apy=mem.get("usdc_reward_apy"))
+        y.blockers = ["live USD→USDC idle sweep needs operator 'yes' (ledger/reconciler switch to USDC cash) — "
+                      "FORGE verifies the rate from posted rewards"]
+        y.status, y.executable = ("LIVE_ELIGIBLE", False) if apy else ("CANDIDATE", False)
         o = self._rail("cdp.onchain", "Coinbase CDP (Server Wallet v2, swaps, Aave/Morpho vaults, x402)", "onchain / DeFi")
         o.blockers = ["Coinbase key can_transfer=false (cannot fund a wallet)"] if not account.get("can_transfer") else []
         o.blockers += ["no CDP wallet secret / spend policy authorized by operator"]
@@ -288,6 +305,11 @@ class SurfaceRegistry:
         s = self._rail("coinbase.staking", "Coinbase staking", "staking yield")
         s.blockers = ["no retail staking endpoint in Advanced Trade API (CDP staking/Prime are separate products)"]
         s.status, s.executable = "BLOCKED", False
+        pm = self._rail("coinbase.stable_peg_mm", "Coinbase Advanced Trade (stable pairs)", "peg market-making / idle yield")
+        fee = self.f.db.kv_get("fees.USDT-USD.maker") or {}
+        pm.capabilities.update(pairs=["USDT-USD", "USDT-USDC"], maker_fee=fee.get("rate"), fee_source=fee.get("source"))
+        pm.blockers = ["paper only until shadow round trips prove net-positive (P>0.9) — then eligible on the spot key"]
+        pm.status, pm.executable = "SHADOW", False
         x = self._rail("x402.data", "x402 paid data (Coinbase for Agents)", "intelligence purchase (cost rail)")
         x.blockers = ["spend only when IVOI ≥ 1.5 is demonstrated (answers §5)"]
         x.status, x.executable = "CANDIDATE", False
@@ -344,12 +366,28 @@ class SurfaceRegistry:
                                             evidence=f"{len(rows)} settled shadow signals (net of Kalshi fees)")
             else:
                 k.economics = RailEconomics(evidence="no settled shadow signals yet")
+        for rid, r_ in self.rails.items():                       # generic: any rail with shadow round trips
+            if rid in ("coinbase.spot", "kalshi.events"):
+                continue
+            rows = db.query("SELECT pnl_usd, entry, qty, hold_s FROM shadow_trades WHERE rail = ?", (rid,))
+            if rows:
+                import numpy as np
+                rr = np.array([x["pnl_usd"] / max(x["entry"] * x["qty"], 1e-9) for x in rows])
+                post = edge_posterior(rr)
+                hold = float(np.mean([max(x["hold_s"], 60) for x in rows])) / 86400
+                r_.economics = RailEconomics(expected_return=float(rr.mean()), probability=float(post["p_positive"]),
+                                             cycle_days=max(hold, 1 / 288), liquidity=0.7, capacity_usd=capital,
+                                             evidence=f"{len(rows)} shadow round trips (queue-aware fills, net of fees)")
         y = self.rails.get("coinbase.usdc_rewards")
         if y:
             apy = self.f.db.kv_get("config.usdc_reward_apy_verified")
-            y.economics = RailEconomics(expected_return=float(apy or 0.035) / 365, probability=1.0 if apy else 0.5,
+            mem = self.f.db.kv_get("membership.coinbase_one") or {}
+            rate = float(apy or mem.get("usdc_reward_apy") or 0.0)
+            y.economics = RailEconomics(expected_return=rate / 365, probability=0.95 if (apy or mem.get("tier")) else 0.5,
                                         cycle_days=1.0, capacity_usd=capital,
-                                        evidence="operator-verified" if apy else "advertised only (unverified)")
+                                        evidence=("operator-verified rate" if apy else
+                                                  f"Coinbase One {mem.get('tier', '?')} member, advertised {rate:.2%} APY "
+                                                  "(confirm from first posted reward)"))
 
     def _has_table(self, name: str) -> bool:
         return bool(self.f.db.scalar("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)))

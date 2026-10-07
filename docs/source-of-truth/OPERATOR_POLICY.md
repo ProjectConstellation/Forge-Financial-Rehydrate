@@ -186,3 +186,13 @@ Implemented: daily intelligence budget = max(ROI-driven burn, (balance − $0.10
 hard floor lowered $0.25 → $0.10 (only to avoid mid-session failures that waste spend); LEAN tier below $0.30.
 At $1.82: ≈ $0.57/day (was ≈ $0.24/day). Top-ups automatically raise the pace. The $5 refill alert (OP-011) stays.
 Trading thresholds (readiness gate, ECR, haircut) are NOT changed by this policy.
+
+## OP-015 — 2026-10-07 — Autonomous compute↔money scaling + wider net
+Intelligence/compute spend scales automatically with available credit, measured value-per-$ and earnings (reinvestment);
+top-ups are detected and used without human action. Build as many real, paper-tested earning rails as possible.
+
+## OP-016 — 2026-10-07 — Operator holds Coinbase One Basic ($4.99/mo, 7-day trial, will keep)
+Verified live: zero-fee benefit ($500/mo) EXCLUDES Coinbase Advanced/DEX/derivatives (no API path for FORGE); USDC rewards
+3.75% APY unlimited, members-only → FORGE's idle cash can earn it once swept to USDC; +5% staking boost (no API);
+no Advanced rebates on Basic. Stocks on Coinbase are commission-free (spread applies). Membership cost is the operator's
+personal decision → incremental cost attributed to FORGE = $0; full cost shown separately.
