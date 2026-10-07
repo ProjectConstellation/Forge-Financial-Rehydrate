@@ -532,6 +532,9 @@ class Forge:
                 parents = [g for g, _, _ in self.reg.list((State.PRODUCTION, State.CHALLENGER, State.SHADOW, State.EXPERIMENTAL))
                            if g.interval_s == interval]
                 parents = sorted(parents, key=lambda g: -(self.db.scalar("SELECT COALESCE(fitness,-9) FROM strategies WHERE id=?", (g.id,)) or -9))[:30]
+                near_ids = [x["id"] for x in (self.db.kv_get("evolution.near_miss", []) or []) if x["interval"] == interval]
+                racing = [g for g in (self.reg.get(i) for i in near_ids) if g is not None]
+                parents = racing + [g for g in parents if g.id not in set(near_ids)]     # near-miss racing first
                 queue = self.db.kv_get("brain.candidate_queue", []) or []
                 llm = [q["genome"] for q in queue if q["genome"].get("interval_s", interval) == interval][:12]
                 if llm:
@@ -556,8 +559,13 @@ class Forge:
 
     async def _absorb(self, results: dict[str, Any], interval: int) -> None:
         passed = 0
+        near = self.db.kv_get("evolution.near_miss", []) or []
         for r in results.get("candidates", []):
             g = Genome.model_validate(r["genome"])
+            h = r.get("holdout") or {}
+            if not r["passed"] and (h.get("p_positive") or 0) >= 0.70 and (h.get("mean_net") or 0) > 0:
+                near.append({"id": g.id, "interval": interval, "p": h.get("p_positive"), "n": h.get("n"),
+                             "reasons": r.get("reasons", [])[:3]})
             sid = self.arena.admit(g, r.get("rationale", {}), r["passed"],
                                    {"holdout": r["holdout"], "selection": r["selection"], "fitness": r.get("fitness")})
             if r["passed"]:
@@ -566,6 +574,10 @@ class Forge:
                 await self.say("Evolution Arena", f"NEW SHADOW strategy {sid} ({g.family}, gen {g.generation}): holdout n={h['n']} "
                                                   f"mean {h['mean_net']:+.2%} P={h['p_positive']:.2f} alpha P={h.get('alpha_p_positive', 0):.2f}",
                                strategy=sid)
+        near = sorted({x["id"]: x for x in near}.values(), key=lambda x: -(x["p"] or 0))[:20]
+        self.db.kv_set("evolution.near_miss", near)
+        if near:
+            self.status("Evolution Arena", f"{len(near)} near-miss lineages being raced toward the gate")
         await self.say("Evolution Arena", f"{interval // 60}m cycle: evaluated {results.get('evaluated', 0)} genomes in "
                                           f"{results.get('seconds', 0):.0f}s ({results.get('where', 'local')}); {passed} passed the gate; "
                                           f"best selection fitness {results.get('best_fitness', 0):+.3f}")

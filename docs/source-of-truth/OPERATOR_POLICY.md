@@ -121,3 +121,14 @@ preserving unlimited scalability. Never force trades to satisfy it.
    removed from trading risk to fund North Star Imagine projects such as Ascend). Tiny-capital phase: prioritize compounding; extraction
    policy begins as growth makes it economically sensible (configurable, evolving).
 8. Permanent operating principle — continuously optimize ALPHA · VELOCITY · INTELLIGENCE · EVOLUTION. No profitable algorithm is "finished".
+
+## OP-010 — 2026-10-07 — Spending scales with confidence and earnings (no small-account friction)
+> "Don't mistakenly create friction for this to be a system that only has a little bit of money to work with. As it earns money it has more
+> money to invest and more money to use. ... spending scales based off of its confidence in how it's going to earn money. The idea is the most
+> money the soonest, using the most advanced algorithms to ensure the highest returns possible."
+- Inference and compute are INVESTMENTS allocated by expected value (attribution-ledger ROI per role/model/effort), not fixed small budgets.
+- Spend rate scales up with measured value-per-$ and with realized earnings; scales down only when measured ROI is poor or funds run out.
+- No fixed research timers: escalation is event/EV-driven (near-miss strategies, anomalies, failures, idle capital).
+- Compute concentrates on near-miss candidates (closest to the evidence gate) — "racing" — to reach validated earning edges sooner.
+- Hard limits that remain: cannot spend money that does not exist (DeepSeek balance; Modal monthly ceiling set by operator, raisable),
+  and the evidence gate for capital (OP-004) — confidence must be earned, then capital and intelligence scale with it.

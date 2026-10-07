@@ -55,7 +55,7 @@ class Brain:
             self.tier = "LEAN"
         elif self.balance <= reserve:
             self.tier = "CRITICAL"
-        elif self.balance < 1.5:
+        elif self.balance < reserve * 4:
             self.tier = "LEAN"
         else:
             self.tier = "NORMAL"
@@ -73,12 +73,32 @@ class Brain:
         w = n / (n + 40.0)
         return (1 - w) * prior + w * observed
 
+    def daily_budget(self) -> float:
+        """OP-010: intelligence spend scales with confidence (measured value-per-$) and with earnings.
+        burn fraction of available balance per day: 15% unproven → up to 60% when measured ROI is strong;
+        plus a share of trailing 7-day realized trading profit (self-funding as FORGE earns)."""
+        bal = max(0.0, (self.balance or 0.0) - float(self.f.s.deepseek.min_balance_reserve_usd))
+        roi = max(self.roi(r) for r in ROLE_PRIOR_VALUE_PER_USD)
+        measured = (self.f.db.scalar("SELECT COUNT(DISTINCT call_id) FROM intel_artifacts WHERE valued_at IS NOT NULL") or 0) >= 20
+        burn = 0.15 if not measured else min(0.60, max(0.05, 0.15 * roi))
+        profit7 = float(self.f.db.scalar(
+            "SELECT COALESCE(SUM(CAST(realized_pnl_usd AS REAL) - CAST(fees_usd AS REAL)),0) FROM positions "
+            "WHERE status='CLOSED' AND closed_at > datetime('now','-7 day')") or 0.0)
+        share = float(self.f.s.treasury.ops_profit_share_default)
+        return bal * burn + max(0.0, profit7) * share * 4      # earnings expand the research budget
+
+    def spent_today(self) -> float:
+        return float(self.f.db.scalar("SELECT COALESCE(SUM(CAST(cost_usd AS REAL)),0) FROM inference_calls "
+                                      "WHERE ts > date('now')") or 0.0)
+
     def allow(self, role: str, est_cost: float, critical: bool = False) -> bool:
         if self.tier == "CRITICAL":
             return False
-        if self.tier == "LEAN" and role in ("scientist", "critic") and not critical:
+        if critical:
+            return True
+        if self.spent_today() + est_cost > self.daily_budget():
             return False
-        return self.roi(role) * est_cost >= est_cost or critical      # EVI ≥ cost (value-per-$ ≥ 1)
+        return self.roi(role) >= 1.0                                   # EVI ≥ cost (value-per-$ ≥ 1)
 
     # ------------------------------------------------------------------ main loop
     async def run(self, forge: Any) -> None:
@@ -89,15 +109,19 @@ class Brain:
                 if self.tier != "CRITICAL":
                     view = await self.perceive()
                     want = view.get("escalate") if view else False
-                    due = time.time() - self.last_scientist > (3 * 3600 if self.tier == "NORMAL" else 12 * 3600)
-                    if (want or due) and self.allow("scientist", 0.03, critical=False):
+                    near = len(self.f.db.kv_get("evolution.near_miss", []) or [])
+                    headroom = self.daily_budget() - self.spent_today()
+                    # research when there is a reason (escalation, near-miss lineages to repair) or unused budget headroom
+                    due = (near > 0 or headroom > 0.25) and time.time() - self.last_scientist > 1800
+                    if (want or due) and self.allow("scientist", 0.12, critical=False):
                         await self.scientist(reason=(view or {}).get("escalate_reason") or "scheduled research cycle",
                                              focus=(view or {}).get("research_focus") or [])
                 await self.value_artifacts()
             except Exception as e:
                 log.exception("brain cycle failed")
                 await forge.say("DeepSeek Brain", f"cycle error (engine unaffected): {str(e)[:200]}", level="warn")
-            await asyncio.sleep({"NORMAL": 900, "LEAN": 2700}.get(self.tier, 3600))
+            budget_left = self.daily_budget() - self.spent_today()
+            await asyncio.sleep(600 if budget_left > 0.5 else 900 if self.tier == "NORMAL" else 2700)
 
     def _situation(self) -> dict[str, Any]:
         f = self.f
@@ -268,6 +292,7 @@ class Brain:
         value = {r["role"]: r["v"] for r in db.query("SELECT role, COALESCE(SUM(CAST(value_usd AS REAL)),0) v FROM intel_artifacts GROUP BY role")}
         today = db.scalar("SELECT COALESCE(SUM(CAST(cost_usd AS REAL)),0) FROM inference_calls WHERE ts > date('now')") or 0.0
         return {"available": True, "tier": self.tier, "balance_usd": self.balance, "today_usd": today,
+                "daily_budget_usd": round(self.daily_budget(), 4),
                 "by_role": rows, "attributed_value_usd": value,
                 "roi_estimates": {r: round(self.roi(r), 3) for r in ROLE_PRIOR_VALUE_PER_USD}}
 

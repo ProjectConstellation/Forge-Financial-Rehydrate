@@ -64,6 +64,10 @@ class ComputeGovernor:
         no_edge = not (counts.get("PRODUCTION") or counts.get("CHALLENGER"))
         survival = (forge.treasury.get("regime") or {}).get("name") == "SURVIVAL"
         llm_waiting = bool(forge.db.kv_get("brain.candidate_queue", []))
+        racing = bool(forge.db.kv_get("evolution.near_miss", []))
+        self.burst_containers = 16 if (racing and state == "GREEN") else 8      # concentrate compute near the gate (OP-010)
+        if racing and state in ("GREEN", "YELLOW"):
+            return True
         cadence = {"GREEN": 2, "YELLOW": 4, "ORANGE": 8}[state]
         # value of information is highest while FORGE has no validated edge (SURVIVAL escalates research — OP-008)
         if (no_edge or survival) and state == "GREEN":
