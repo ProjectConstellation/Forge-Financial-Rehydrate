@@ -193,6 +193,9 @@ class Forge:
         B("listing_sentinel", self.listings.run, 600)
         B("crossrail", self.crossrail.run, 1200)
         B("crossrail_fast", self.crossrail.fast_lane, 600)
+        from forge.opportunities.kalshi_live import KalshiLive
+        self.kalshi_live = KalshiLive(self)
+        B("kalshi_live", self.kalshi_live.run, 600)
         from forge.agents.genome import PromptGenomes
         self.prompt_genomes = PromptGenomes(self)
         self.prompt_genomes.seed()

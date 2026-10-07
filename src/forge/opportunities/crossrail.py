@@ -530,7 +530,7 @@ class CrossRailScanner:
         close_ts = max((m.close_ts for m in mks if m.ticker in legs or m.event_ticker == s.ticker), default=0.0)
         from forge.persistence.db import dumps
         d = s.detail
-        db.insert("crossrail_signals", {
+        row_id = db.insert_id("crossrail_signals", {
             "ts": time.time(), "kind": s.kind, "ticker": s.ticker, "event_ticker": ev.get("event_ticker"), "series": series,
             "underlying": pid, "ref_price": ref, "sigma_min": model.sigma_min_now if model else None,
             "minutes": d.get("minutes"), "side": s.side, "price": s.price, "fee": s.fee, "edge": s.edge,
@@ -542,6 +542,12 @@ class CrossRailScanner:
             "detail": dumps({**{k: v for k, v in d.items() if k not in ("p_model", "p_market", "p_stacked")},
                              "basis": self.basis.get(pid, 0.0), "calib_n": self.calib.n,
                              "model_share": self.calib.model_weight_share()})})
+        live = getattr(self.f, "kalshi_live", None)
+        if s.kind == "TAKE_THRESH" and live is not None and live.configured:
+            import asyncio
+            asyncio.get_running_loop().create_task(live.on_signal({
+                "id": row_id, "ts": time.time(), "ticker": s.ticker, "side": s.side, "price": s.price, "fee": s.fee,
+                "close_ts": close_ts}))
         return 1
 
     # ---------------------------------------------------------------- settlement scoring
