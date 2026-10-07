@@ -50,7 +50,7 @@ ACTIONS: dict[str, tuple[str, str]] = {
 }
 ALWAYS_ALLOWED_WHEN_LOCKED = {"stop_trading", "lockdown"}
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}
-READ_AUDIT_SKIP_MIRROR = {"status", "tool", "econ", "debrief", "directives_read", "objectives_read", "audit_read"}
+READ_AUDIT_SKIP_MIRROR = {"capabilities", "status", "tool", "econ", "debrief", "directives_read", "objectives_read", "audit_read"}
 RATE = {"read": (240, 60.0), "write": (30, 600.0), "confirm": (12, 3600.0)}     # (max calls, window seconds)
 _hits: dict[str, list[float]] = {}
 
@@ -346,6 +346,52 @@ def mount_ops(app: FastAPI, forge: Any, token: str) -> None:
         check(request, "read", "audit_read")
         return db.query("SELECT id, ts, actor, channel, action, substr(args, 1, 300) args, outcome, substr(detail, 1, 300) detail "
                         "FROM ops_audit ORDER BY id DESC LIMIT ?", (min(limit, 200),))
+
+    @app.get("/api/ops/capabilities")
+    async def ops_capabilities(request: Request) -> Any:
+        """Live roster: every agent, service, loop, rail, budget and power the EXECUTIVE OPS agent commands."""
+        actor = check(request, "read", "capabilities")
+        from forge.agents.roles import ROLES as ROLE_GENOMES
+        loops = forge.sup.snapshot() if hasattr(forge.sup, "snapshot") else []
+        roster = []
+        for role in [r for r in ROLES if r != "all"]:
+            last = db.query_one("SELECT MAX(ts) ts, COUNT(*) n FROM role_reports WHERE role = ? AND ts >= ?",
+                                (role, time.time() - 86400)) or {}
+            g = db.query_one("SELECT version, status FROM prompt_genomes WHERE role = ? AND status = 'CHAMPION' "
+                             "ORDER BY version DESC LIMIT 1", (role,)) or {}
+            spec = (ROLE_GENOMES.get(role) or {}) if isinstance(ROLE_GENOMES, dict) else {}
+            roster.append({"role": role, "mission": str(spec.get("mission", ""))[:220], "reports_24h": last.get("n"),
+                           "last_report_utc": time.strftime("%H:%M", time.gmtime(last["ts"])) if last.get("ts") else None,
+                           "genome_version": g.get("version"),
+                           "open_directives": db.scalar("SELECT COUNT(*) FROM ops_directives WHERE status='OPEN' AND role=?",
+                                                        (role,))})
+        comp = getattr(forge, "compute", None)
+        v = db.kv_get("velocity") or {}
+        out = {
+            "prime_directive": "Keep FORGE succeeding and operating at all times; grow true-net income and the treasury "
+                               "as fast as evidence allows (exponential, compounding); delegate to the right specialist.",
+            "hermes_specialists": roster,
+            "forge_services": {"forge": "trading engine + API + all loops", "forge-hermes": "7 specialist agents (scheduled)",
+                               "forge-tunnel": "portal", "forge-ops": "you (EXECUTIVE OPS)"},
+            "engine_loops": {"count": len(loops), "names": sorted(x["name"] for x in loops),
+                             "unhealthy": [x["name"] for x in loops if not x["alive"]]},
+            "earning_streams": [{"id": s["id"], "live": s.get("live"), "tier": s.get("tier"), "n": s.get("n")}
+                                for s in v.get("streams", [])],
+            "rails": db.query("SELECT id, status, executable FROM rail_registry ORDER BY executable DESC, id"),
+            "budgets": {"modal": comp.summary() if comp else None, "deepseek": db.kv_get("deepseek.sentinel"),
+                        "hermes_mode": db.kv_get("hermes.mode")},
+            "your_actions": {k: {"class": c, "description": d} for k, (c, d) in ACTIONS.items()},
+            "your_tools": ["ops_status", "ops_debrief", "ops_econ", "ops_capabilities", "ops_objective", "ops_objectives",
+                           "ops_assign", "ops_directives", "ops_action", "ops_confirm", "ops_restart", "ops_logs", "ops_host",
+                           "ops_ticket", "ops_tickets", "ops_transfer_preview", "ops_transfer_confirm", "ops_audit"]
+                          + [f"ops_{t}" for t in READ_TOOLS],
+            "engineering": {"open_tickets": db.scalar("SELECT COUNT(*) FROM eng_tickets WHERE status IN ('OPEN','IN_PROGRESS')"),
+                            "note": "code changes / new engines / adapters are built by the engineering channel from tickets"},
+            "treasury": v.get("treasury"), "regime": (v.get("regime") or {}).get("regime"),
+            "target_usd_per_h": v.get("target_usd_per_h"),
+        }
+        audit(actor, "capabilities", None, "OK")
+        return out
 
     @app.get("/api/ops/econ")
     async def ops_econ(request: Request, window: str = "1h") -> Any:

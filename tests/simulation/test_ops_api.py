@@ -98,3 +98,13 @@ def test_directive_reaches_brief_and_report_closes_it(ops):
 def test_read_tool_whitelist(ops):
     c, _, _ = ops
     assert c.post("/api/ops/tool", json={"name": "submit_strategy_candidates", "args": {}}).status_code == 403
+
+
+def test_capabilities_roster(ops):
+    c, db, _ = ops
+    c.post("/api/ops/directive", json={"role": "rail_hunter", "instruction": "find a faster rail"})
+    cap = c.get("/api/ops/capabilities").json()
+    roles = {r["role"]: r for r in cap["hermes_specialists"]}
+    assert set(roles) == {"governor", "alpha_inventor", "adversary", "critic", "doctor", "rail_hunter", "architect"}
+    assert roles["rail_hunter"]["open_directives"] == 1 and roles["governor"]["mission"]
+    assert "prime_directive" in cap and "ops_assign" in cap["your_tools"] and "stop_trading" in cap["your_actions"]

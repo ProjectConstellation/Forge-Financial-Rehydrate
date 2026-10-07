@@ -188,6 +188,14 @@ def register(ctx):
         "chat. Never guess or reuse codes.", {"pending_id": {"type": "string"}, "code": {"type": "string"}},
         ["pending_id", "code"]))
 
+    def h_caps(params, session_id=None, **kw):
+        return _out(_call("GET", "/api/ops/capabilities", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_capabilities", toolset="forge_ops", handler=h_caps, schema=_schema(
+        "ops_capabilities", "[FORGE EXEC] Your live command roster: every Hermes specialist (mission, activity, open "
+        "directives), FORGE services and engine loops, earning streams and rails, budgets (Modal, DeepSeek, Hermes "
+        "mode), your actions and tools, engineering queue, treasury and target. Call it before planning any multi-step "
+        "objective so you delegate to the right specialist.", {}))
+
     # ---------------------------------------------------------------- executive economics + campaigns + transfers
     def h_econ(params, session_id=None, **kw):
         w = urllib.parse.quote(str(params.get("window", "1h")))
