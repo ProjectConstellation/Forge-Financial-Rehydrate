@@ -128,7 +128,7 @@ def simulate(g: Genome, symbol: str, bars: dict[str, np.ndarray], f: dict[str, n
             if trail is not None:
                 stop = max(stop, hi_since * (1 - trail))
             fav = hi_since / entry - 1
-            if g.exit.be_trigger_pct is not None and fav >= g.exit.be_trigger_pct:
+            if g.exit.be_trigger_pct is not None and g.exit.be_trigger_pct < 0.5 and fav >= g.exit.be_trigger_pct:
                 stop = max(stop, entry * (1 + g.exit.be_buffer_pct))
                 if g.exit.lock_frac is not None:
                     stop = max(stop, entry * (1 + g.exit.lock_frac * fav))

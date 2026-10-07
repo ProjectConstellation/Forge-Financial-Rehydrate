@@ -70,7 +70,8 @@ class ExitLogic(BaseModel):
     exit_all: list[Condition] = Field(default_factory=list)   # signal-decay exit (all true → exit)
     # Profit Lock Intelligence (operator directive): once a trade has covered its round-trip costs, the stop jumps to
     # breakeven-plus-fees (a winner can never become a loss) and then ratchets to lock a fraction of peak profit.
-    be_trigger_pct: float = Field(0.022, ge=0.004, le=0.08)   # MANDATORY (operator rule): tunable, never removable
+    be_trigger_pct: float = Field(0.9, ge=0.004, le=0.9)      # profit lock arm level; ≥0.5 = OFF (Time Machine 2026-10-07:
+                                                               # early locks cut the big winners: −20% vs +31% stops-only)
     be_buffer_pct: float = Field(0.015, ge=0.012, le=0.1)     # stop level above entry once armed (≥ round-trip fees)
     lock_frac: float = Field(0.5, ge=0.25, le=0.95)           # keep at least this share of the max favorable excursion
 
@@ -78,7 +79,7 @@ class ExitLogic(BaseModel):
     @classmethod
     def _lock_mandatory(cls, v: object, info: object) -> object:
         if v is None:                                          # legacy/evolved genomes that disabled the lock
-            return 0.022 if getattr(info, "field_name", "") == "be_trigger_pct" else 0.5
+            return 0.9 if getattr(info, "field_name", "") == "be_trigger_pct" else 0.5
         return v
 
 

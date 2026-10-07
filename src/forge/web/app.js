@@ -138,6 +138,15 @@
       <span class="${sgn(p.live_pnl_usd)}">${usd(p.live_pnl_usd, 4)} · ${pct(p.live_pnl_pct, 2)}</span></div>
       <div class="muted tiny">${esc(p.status)} · cost ${usd(p.cost_usd)} · now ${usd(p.value_usd)} · ${esc(p.strategy)}</div></div>`).join("")
       || `<div class="muted">No open positions this moment — validated strategies enter automatically on their next signal.</div>`;
+    const TL = o.testing || {}, HO = TL.holdout || {};
+    const k2 = (l, v, c = "") => `<div class="kpi"><label>${esc(l)}</label><div class="v ${c}">${v}</div></div>`;
+    if (HO.final_usd != null) {
+      $("lab").innerHTML = [k2("Replay result", `${usd(TL.capital)} → ${usd(HO.final_usd)}`, sgn(HO.net_usd)), k2("Return (unseen days)", pct(HO.return, 1), sgn(HO.return)),
+        k2("Per-day compounding", pct(HO.daily_compound_rate, 2), sgn(HO.daily_compound_rate)), k2("Profit factor", (HO.profit_factor ?? 0).toFixed(2)),
+        k2("Max drawdown", pct(HO.max_drawdown, 1)), k2("Profitable days", HO.positive_days != null ? (100 * HO.positive_days).toFixed(0) + "%" : "—"),
+        k2("Trades replayed", HO.trades), k2("Win rate", HO.win_rate != null ? (100 * HO.win_rate).toFixed(0) + "%" : "—")].join("");
+      $("lab_note").textContent = `${TL.strategies} strategies × ${TL.markets} markets · ${(HO.days || 0).toFixed(0)} unseen days · replayed in ${(TL.seconds || 0).toFixed(0)}s · ${new Date((TL.ts || 0) * 1000).toLocaleTimeString()}`;
+    } else { $("lab").innerHTML = ""; $("lab_note").textContent = "First full-system replay runs within minutes of startup."; }
     const I = o.intelligence || {}, C = o.compute || {}, S = o.deepseek_sentinel || {};
     const kpi = (l, v, c = "") => `<div class="kpi"><label>${esc(l)}</label><div class="v ${c}">${v}</div></div>`;
     $("kpis").innerHTML = [kpi("Lifetime true net", usd(e.lifetime_true_net_usd, 4), sgn(e.lifetime_true_net_usd)), kpi("Return on capital", pct(b.roi, 2), sgn(b.roi)),

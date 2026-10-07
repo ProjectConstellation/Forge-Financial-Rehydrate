@@ -88,7 +88,7 @@ def _apply(op: str, g: Genome, rng: np.random.Generator, ds: Any, scale: float) 
         elif key == "trail_atr":
             ex[key] = None if (old and rng.random() < 0.3) else float(np.clip(_jitter_val(old or 2.0, rng, scale), 0.3, 15))
         elif key == "be_trigger_pct":
-            ex[key] = float(np.clip(_jitter_val(old or 0.022, rng, scale), 0.006, 0.08))
+            ex[key] = 0.9 if rng.random() < 0.3 else float(np.clip(_jitter_val(old if old and old < 0.5 else 0.05, rng, scale), 0.006, 0.3))
         elif key == "lock_frac":
             ex[key] = float(np.clip((old or 0.5) + rng.normal(0, 0.12), 0.25, 0.95))
         elif key == "tp_min_pct":

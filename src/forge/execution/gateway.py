@@ -294,7 +294,7 @@ class ExecutionGateway:
             if plan.trailing_pct:
                 stop = max(stop, hw * (1 - plan.trailing_pct))
             fav = hw / entry_px - 1 if entry_px > 0 else 0.0
-            if plan.be_trigger_pct is not None and fav >= plan.be_trigger_pct:      # Profit Lock Intelligence
+            if plan.be_trigger_pct is not None and plan.be_trigger_pct < 0.5 and fav >= plan.be_trigger_pct:   # evolved profit lock
                 stop = max(stop, entry_px * (1 + plan.be_buffer_pct))
                 if plan.lock_frac is not None:
                     stop = max(stop, entry_px * (1 + plan.lock_frac * fav))

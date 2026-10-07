@@ -170,6 +170,7 @@ class Forge:
         from forge.evolution.analyst import StrategyAnalyst
         self.analyst = StrategyAnalyst(self)
         B("analyst", self.analyst.run, 600)
+        B("time_machine", self._time_machine_loop, 3 * 3600)
         from forge.core.healing import HealthMonitor
         self.health = HealthMonitor(self)
         B("healing", self.health.run, 120, critical=True)
@@ -504,11 +505,11 @@ class Forge:
         atr_now = float(self.bars[interval].state[sym].features["atr_14"][-1])
         regime_now = self.bars[interval].state[sym].regime
         trending = regime_now in ("TREND_UP", "BREAKOUT_EXPANSION", "EUPHORIA_BUYING")
-        be_trig = max(g.exit.be_trigger_pct, 1.5 * atr_now)
-        lock_frac = min(g.exit.lock_frac, 0.35) if trending else max(g.exit.lock_frac, 0.55)
+        be_trig = g.exit.be_trigger_pct if g.exit.be_trigger_pct >= 0.5 else max(g.exit.be_trigger_pct, 1.5 * atr_now)
+        lock_frac = (min(g.exit.lock_frac, 0.35) if trending else g.exit.lock_frac) if be_trig < 0.5 else g.exit.lock_frac
         plan = ExitPlan(take_profit_pct=tp, stop_loss_pct=sl, time_stop_s=int(g.exit.time_stop_bars * interval),
                         be_trigger_pct=be_trig, be_buffer_pct=g.exit.be_buffer_pct, lock_frac=lock_frac,
-                        trailing_pct=(g.exit.trail_atr * atr_now) if g.exit.trail_atr else (3.0 * atr_now if trending else None))
+                        trailing_pct=(g.exit.trail_atr * atr_now) if g.exit.trail_atr else None)
         intent = TradeIntent(id=new_id("int"), ts_ns=time.time_ns(), book=self.book, opportunity_id=oid, strategy_id=g.id,
                              venue="coinbase", symbol=sym, side="buy", purpose=IntentPurpose.ENTRY,
                              requested_notional_usd=d(round(sz.notional_usd, 2)),
@@ -736,6 +737,47 @@ class Forge:
         await self.say("Evolution Arena", f"{interval // 60}m cycle: evaluated {results.get('evaluated', 0)} genomes in "
                                           f"{results.get('seconds', 0):.0f}s ({results.get('where', 'local')}); {passed} passed the gate; "
                                           f"best selection fitness {results.get('best_fitness', 0):+.3f}")
+
+    async def _time_machine_loop(self) -> None:
+        """Hourly full-portfolio replay of the validated system on unseen history (testing at machine speed)."""
+        import json as _json
+        from concurrent.futures import ProcessPoolExecutor as _PPE
+
+        from forge.research.timemachine import tm_job
+        pool = _PPE(max_workers=1)
+        await asyncio.sleep(120)
+        while not self.stop_event.is_set():
+            self.sup.beat("time_machine")
+            try:
+                rows = self.db.query("SELECT s.id, s.genome, m.metrics FROM strategies s JOIN strategy_metrics m "
+                                     "ON m.strategy_id = s.id AND m.scope = 'holdout' WHERE s.population IN ('SHADOW','CHALLENGER','PRODUCTION')")
+                gs, ev = [], {}
+                for r in rows:
+                    g = _json.loads(r["genome"])
+                    m = _json.loads(r["metrics"])
+                    gs.append(g)
+                    ev[g["id"]] = {"p_win": m.get("win_rate", 0.45), "avg_win": m.get("avg_win", 0.03),
+                                   "avg_loss": m.get("avg_loss", -0.03), "p_edge": m.get("p_positive", 0.6), "score": m.get("mean_net", 0)}
+                if gs:
+                    self.workers["time_machine"] = {"what": f"replaying {len(gs)} validated strategies × all markets through history",
+                                                    "count": 1, "since": time.time(), "where": "local (low priority)"}
+                    eq = float(self.treasury.get("equity_usd") or 28.27)
+                    rep = await asyncio.wait_for(asyncio.get_running_loop().run_in_executor(
+                        pool, tm_job, str(self.s.market_dir), gs, ev, eq,
+                        {"maker": float(self.fees.maker), "taker": float(self.fees.taker)}), timeout=1200)
+                    self.db.kv_set("timemachine.report", rep)
+                    h = rep.get("holdout") or {}
+                    if h:
+                        await self.say("Time Machine", f"Portfolio replay on {h.get('days', 0):.0f} unseen days: ${rep['capital']:.2f} → "
+                                                       f"${h['final_usd']:.2f} ({h['return']:+.1%}) · {h['trades']} trades · PF "
+                                                       f"{(h.get('profit_factor') or 0):.2f} · max DD {h['max_drawdown']:.1%} · "
+                                                       f"{(h.get('positive_days') or 0):.0%} profitable days")
+                    self.workers["time_machine"] = {"what": "idle until next hourly replay", "count": 0, "since": time.time(), "where": "-"}
+            except Exception as e:
+                log.exception("time machine failed")
+                await self.say("Time Machine", f"replay error (engine unaffected): {str(e)[:160]}", level="warn")
+            self.sup.beat("time_machine")
+            await asyncio.sleep(3600)
 
     async def _review_loop(self) -> None:
         while not self.stop_event.is_set():
