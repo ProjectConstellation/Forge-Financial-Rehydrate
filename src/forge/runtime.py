@@ -153,9 +153,9 @@ class Forge:
         await self._discover()
         await self._init_treasury()
         self._init_execution()
-        for eng in self.bars.values():
-            eng.load_history(self.universe)
-            eng.recompute(self.universe)
+        for eng in self.bars.values():                      # heavy parquet + feature work off the event loop
+            await asyncio.to_thread(eng.load_history, self.universe)
+            await asyncio.to_thread(eng.recompute, self.universe)
         self.stream.set_symbols(self.universe[: self.s.venues.coinbase.ws_symbols_max])
         self.pool = ProcessPoolExecutor(max_workers=1)     # research worker (≤1 core; Modal for bursts)
         B = self.sup.add
