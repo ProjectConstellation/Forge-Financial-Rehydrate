@@ -208,7 +208,7 @@ class HealthMonitor:
     def score(self) -> dict[str, Any]:
         f = self.f
         loops = f.sup.snapshot()
-        alive = sum(1 for x in loops if x["alive"] and x["silent_s"] <= x["limit_s"]) / max(1, len(loops))
+        alive = sum(1 for x in loops if x["alive"] and (x["limit_s"] is None or x["silent_s"] <= x["limit_s"])) / max(1, len(loops))
         restarts_recent = sum(x["restarts"] for x in loops)
         system = 100 * alive - min(20, restarts_recent * 2) - (15 if self.lag_ms > 250 else 0) - (15 if self.rss_mb > 1300 else 0) \
             - (30 if not self.db_ok else 0)

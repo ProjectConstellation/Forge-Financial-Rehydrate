@@ -1,8 +1,8 @@
-// FORGE PWA service worker: installable app shell; live data and authenticated pages always come from the network.
-const C = "forge-v4"; const SHELL = ["/static/styles.css", "/static/app.js", "/static/login.js", "/static/icon.svg", "/manifest.webmanifest"];
-self.addEventListener("install", (e) => { self.skipWaiting(); e.waitUntil(caches.open(C).then((c) => c.addAll(SHELL))); });
-self.addEventListener("activate", (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== C).map((k) => caches.delete(k))))));
-self.addEventListener("fetch", (e) => { const u = new URL(e.request.url);
-  if (e.request.method !== "GET" || !u.pathname.startsWith("/static/")) return;     // never cache pages, API, auth or SSE
-  e.respondWith(fetch(e.request).then((r) => { const cp = r.clone(); caches.open(C).then((c) => c.put(e.request, cp)); return r; })
-    .catch(() => caches.match(e.request))); });
+// FORGE PWA service worker v5: NEVER caches app code or data (stale JS caused a blank dashboard once).
+// Purges every older cache on activation and takes control immediately.
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (e) => e.waitUntil((async () => {
+  for (const k of await caches.keys()) await caches.delete(k);
+  await self.clients.claim();
+})()));
+self.addEventListener("fetch", () => {});   // network only (installability requires a fetch handler)

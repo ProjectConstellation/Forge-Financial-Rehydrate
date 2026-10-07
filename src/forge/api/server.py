@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -43,8 +43,25 @@ def operator_token(home: Path) -> str:
     return p.read_text().strip()
 
 
+def _clean(x: Any) -> Any:
+    """Browser-safe JSON: NaN/±Infinity → null (they are not valid JSON and break JSON.parse in every browser)."""
+    if isinstance(x, float):
+        return x if x == x and x not in (float("inf"), float("-inf")) else None
+    if isinstance(x, Decimal):
+        return _clean(float(x))
+    if isinstance(x, dict):
+        return {str(k): _clean(v) for k, v in x.items()}
+    if isinstance(x, list | tuple | set):
+        return [_clean(v) for v in x]
+    return x if isinstance(x, str | int | bool) or x is None else str(x)
+
+
 def _j(x: Any) -> Any:
-    return json.loads(json.dumps(x, default=lambda o: float(o) if isinstance(o, Decimal) else str(o)))
+    return _clean(x)
+
+
+def jdump(x: Any) -> str:
+    return json.dumps(_clean(x), allow_nan=False)
 
 
 def _ip(req: Request) -> str:
@@ -236,8 +253,11 @@ def build_app(forge: Any) -> FastAPI:
                 return JSONResponse({"detail": "login required"}, status_code=401)
             return RedirectResponse("/login", status_code=303)
         resp = await call_next(request)
+        if path.startswith("/static/") or path in ("/sw.js", "/manifest.webmanifest"):
+            resp.headers["Cache-Control"] = "no-store, max-age=0"     # never let Cloudflare/browser serve stale app code
+            resp.headers["CDN-Cache-Control"] = "no-store"
         resp.headers.update({"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",
-                             "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:",
+                             "Content-Security-Policy": "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:",
                              "Strict-Transport-Security": "max-age=31536000", "Permissions-Policy": "geolocation=(), camera=()"})
         return resp
 
@@ -251,10 +271,13 @@ def build_app(forge: Any) -> FastAPI:
             raise HTTPException(403, "invalid CSRF token")
         return f"founder:{s['u']}"
 
+    def _html_login() -> HTMLResponse:
+        return _html("login.html")
+
     # ------------------------------------------------------------------ auth
     @app.get("/login")
-    async def login_page() -> FileResponse:
-        return FileResponse(WEB / "login.html", headers={"Cache-Control": "no-store"})
+    async def login_page() -> HTMLResponse:
+        return _html_login()
 
     @app.post("/auth/login")
     async def login(body: LoginBody, request: Request) -> JSONResponse:
@@ -291,7 +314,7 @@ def build_app(forge: Any) -> FastAPI:
     @app.get("/ready")
     async def ready() -> JSONResponse:
         snap = forge.sup.snapshot()
-        loops_ok = bool(snap) and all(x["alive"] and x["silent_s"] <= x["limit_s"] for x in snap if x["critical"])
+        loops_ok = bool(snap) and all(x["alive"] and (x["limit_s"] is None or x["silent_s"] <= x["limit_s"]) for x in snap if x["critical"])
         feed = forge.stream.quality.healthy(time.time_ns(), 30_000)
         body = {"ready": loops_ok and feed, "loops": len(snap), "loops_ok": loops_ok, "market_feed": feed,
                 "restarts": sum(x["restarts"] for x in snap)}
@@ -345,14 +368,14 @@ def build_app(forge: Any) -> FastAPI:
             last_ev = len(forge.events)
             k = 0
             while not await request.is_disconnected():
-                yield f"event: snapshot\ndata: {json.dumps(snapshot(forge))}\n\n"
+                yield f"event: snapshot\ndata: {jdump(snapshot(forge))}\n\n"
                 if k % 5 == 0:
-                    yield f"event: lists\ndata: {json.dumps(lists(forge))}\n\n"
+                    yield f"event: lists\ndata: {jdump(lists(forge))}\n\n"
                 evs = list(forge.events)
                 if len(evs) < last_ev:
                     last_ev = 0
                 for ev in evs[last_ev:]:
-                    yield f"event: timeline\ndata: {json.dumps(_j(ev))}\n\n"
+                    yield f"event: timeline\ndata: {jdump(ev)}\n\n"
                 last_ev = len(evs)
                 k += 1
                 await asyncio.sleep(1.0)
@@ -390,9 +413,20 @@ def build_app(forge: Any) -> FastAPI:
     # ------------------------------------------------------------------ PWA
     app.mount("/static", StaticFiles(directory=WEB), name="static")
 
+    import hashlib as _h
+    def _ver() -> str:
+        return _h.sha256(b"".join((WEB / f).read_bytes() for f in ("app.js", "styles.css", "login.js", "icon.svg"))).hexdigest()[:12]
+    ASSET_VER = _ver()
+
+    def _html(name: str) -> HTMLResponse:
+        html = (WEB / name).read_text()
+        for f in ("app.js", "styles.css", "login.js", "icon.svg"):
+            html = html.replace(f"/static/{f}\"", f"/static/{f}?v={ASSET_VER}\"")
+        return HTMLResponse(html, headers={"Cache-Control": "no-store, max-age=0"})
+
     @app.get("/")
-    async def index() -> FileResponse:
-        return FileResponse(WEB / "index.html", headers={"Cache-Control": "no-store"})
+    async def index() -> HTMLResponse:
+        return _html("index.html")
 
     @app.get("/manifest.webmanifest")
     async def manifest() -> FileResponse:
@@ -400,7 +434,8 @@ def build_app(forge: Any) -> FastAPI:
 
     @app.get("/sw.js")
     async def sw() -> FileResponse:
-        return FileResponse(WEB / "sw.js", media_type="application/javascript")
+        return FileResponse(WEB / "sw.js", media_type="application/javascript",
+                            headers={"Cache-Control": "no-store, max-age=0", "Service-Worker-Allowed": "/"})
 
     return app
 

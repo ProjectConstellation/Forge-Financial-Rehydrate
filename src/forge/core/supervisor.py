@@ -106,5 +106,5 @@ class Supervisor:
     def snapshot(self) -> list[dict[str, object]]:
         now = time.time()
         return [{"loop": s.name, "alive": bool(s.task and not s.task.done()), "silent_s": round(now - s.last_beat),
-                 "limit_s": s.max_silence_s, "restarts": s.restarts, "critical": s.critical, "last_error": s.last_error}
+                 "limit_s": s.max_silence_s if s.max_silence_s != float("inf") else None, "restarts": s.restarts, "critical": s.critical, "last_error": s.last_error}
                 for s in self.loops.values()]

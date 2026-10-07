@@ -70,7 +70,7 @@
   }
   function renderSystems(o) {
     const L = o.lights || {}, T = o.throughput || {}, W = Object.fromEntries((o.workers || []).map(w => [w.name, w]));
-    const loops = o.loops || [], alive = loops.filter(l => l.alive && l.silent_s <= l.limit_s).length;
+    const loops = o.loops || [], alive = loops.filter(l => l.alive && (l.limit_s == null || l.silent_s <= l.limit_s)).length;
     const restarts = loops.reduce((a, l) => a + (l.restarts || 0), 0);
     const pop = o.population || {}, validated = (pop.PRODUCTION || 0) + (pop.CHALLENGER || 0) + (o.book === "paper" ? (pop.SHADOW || 0) : 0);
     const rate = msgRate.length ? msgRate[msgRate.length - 1] : 0;
@@ -103,7 +103,7 @@
     lastSnapAt = Date.now();
     $("livepill").className = "livepill on"; $("livetxt").textContent = "LIVE";
     const live = o.mode === "LIVE";
-    $("modeb").textContent = live ? "LIVE · REAL MONEY" : `${o.mode} · ${(o.book || "").toUpperCase()}`;
+    $("modeb").textContent = live ? "LIVE · REAL MONEY" : o.mode === "PAPER" ? "PAPER TRADING" : o.mode;
     $("modeb").className = "pill" + (live ? " live" : "");
     if (prevMsgs != null && o.ts > prevTs) { msgRate.push(Math.max(0, ((o.throughput?.feed_messages || 0) - prevMsgs) / (o.ts - prevTs))); if (msgRate.length > 120) msgRate.shift(); }
     prevMsgs = o.throughput?.feed_messages || 0; prevTs = o.ts;
@@ -145,7 +145,7 @@
       kpi("Exchange fees", usd(e.fees_usd, 4)), kpi("AI (DeepSeek)", usd(e.ai_usd, 4)), kpi("Compute (Modal)", usd(e.compute_usd, 4)),
       kpi("DeepSeek balance", usd(I.balance_usd ?? S.balance)), kpi("AI budget today", `${usd(I.today_usd, 3)} / ${usd(I.daily_budget_usd, 2)}`),
       kpi("Modal month", `${usd(C.month_usd)} / ${usd(C.budget_usd, 0)}`), kpi("Fee tier", `${esc(o.fees?.tier)} ${pct(o.fees?.maker, 2)}/${pct(o.fees?.taker, 2)}`)].join("");
-    $("loops").innerHTML = (o.loops || []).map(l => `<span class="chip ${l.alive && l.silent_s <= l.limit_s ? "ok" : "bad"}" title="${esc(l.last_error)}">${esc(l.loop)}${l.restarts ? " ↻" + l.restarts : ""}</span>`).join("");
+    $("loops").innerHTML = (o.loops || []).map(l => `<span class="chip ${l.alive && (l.limit_s == null || l.silent_s <= l.limit_s) ? "ok" : "bad"}" title="${esc(l.last_error)}">${esc(l.loop)}${l.restarts ? " ↻" + l.restarts : ""}</span>`).join("");
     const br = o.breadth || {}, fd = o.feed || {};
     $("pulse").innerHTML = [kpi("Breadth (uptrend)", pct(br.up_frac, 0)), kpi("BTC regime", esc(br.btc_regime || "—")), kpi("Capital regime", esc(o.regime || "—")),
       kpi("Feed reconnects", fd.reconnects ?? 0), kpi("Markets streaming", o.throughput?.markets_streaming ?? "—"), kpi("Opportunities 24h", o.throughput?.opportunities_24h ?? 0)].join("");
