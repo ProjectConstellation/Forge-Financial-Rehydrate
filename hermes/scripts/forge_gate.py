@@ -12,7 +12,7 @@ a = gate(role, est)
 if a is None:
     skip()
     sys.exit(0)
-d = call(f"/api/agent/digest?since={last or now() - 3600}")
+d = call(f"/api/agent/digest?since={last or now() - 3600}&role={role}")
 due = now() - last >= quiet_h * 3600 or a.get("mode") == "credit"   # free credit: every scheduled tick works
 if not d.get("meaningful") and not due:
     skip()

@@ -239,6 +239,8 @@ def build_app(forge: Any) -> FastAPI:
     auth = PortalAuth(forge.s.home)
     from forge.api.agent_api import agent_token, mount
     mount(app, forge, agent_token(forge.s.home))
+    from forge.api.ops_api import mount_ops, ops_token
+    mount_ops(app, forge, ops_token(forge.s.home))
 
     def who(req: Request) -> dict | None:
         authz = req.headers.get("authorization", "")

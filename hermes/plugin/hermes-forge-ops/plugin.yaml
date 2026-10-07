@@ -1,0 +1,3 @@
+name: hermes-forge-ops
+version: "1.0"
+description: FORGE OPS COMMANDER tools — live status, diagnostics, logs, safe restarts, directives to Hermes roles, whitelisted actions with out-of-band owner confirmation. FORGE only; no shell, no secrets.

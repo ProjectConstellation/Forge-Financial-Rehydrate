@@ -147,6 +147,12 @@ class PromptGenomes:
             self.db.insert("prompt_runs", {"ts": time.time(), "role": role, "prompt_id": genome["id"], "session_id": session_id,
                                            "snapshot_id": snap_id, "paired_run_id": paired, "report_status": "NONE"})
         world = json.loads(self.db.scalar("SELECT payload FROM world_snapshots WHERE id = ?", (snap_id,)) or "{}")
+        dirs = self.directives_for(role)
+        if dirs:      # operator instructions via the OPS Commander — live, not part of the replayed snapshot
+            world["OPS_DIRECTIVES_FROM_OPERATOR"] = {
+                "how_to_answer": "Address each directive within your role and decision rights (the constitution still "
+                                 "binds). In submit_role_report include directives=[{id, status: DONE|BLOCKED, result}].",
+                "open": dirs}
         panels = self.open_panels_for(role)
         text = render(role, json.loads(genome["sections"]), genome["id"], world, self.memory(role), panels)
         return {"prompt_id": genome["id"], "role": role, "replay_of_run": paired, "snapshot_id": snap_id, "brief": text}
@@ -173,6 +179,10 @@ class PromptGenomes:
                 "your_budget": self._hermes_budget(), "hermes_mode": (db.kv_get("hermes.mode") or {}).get("mode"),
                 "evaluation_queue": len(db.kv_get("brain.candidate_queue", []) or []),
                 "profit_velocity": self._velocity_headline()}
+
+    def directives_for(self, role: str) -> list[dict[str, Any]]:
+        return self.db.query("SELECT id, priority, instruction, ts FROM ops_directives WHERE status = 'OPEN' AND role IN (?, 'all') "
+                             "ORDER BY priority = 'high' DESC, id", (role,))
 
     def _velocity_headline(self) -> dict[str, Any]:
         """The master KPI every role optimises: true-net $/h vs target, binding constraint, top levers (tool:
@@ -241,8 +251,22 @@ class PromptGenomes:
         run = self.db.query_one("SELECT * FROM prompt_runs WHERE session_id = ? ORDER BY id DESC LIMIT 1", (session_id,))
         pid = (run or {}).get("prompt_id") or report.get("prompt_id")
         status = "SILENT" if str(report.get("status", "")).upper() == "SILENT" else "ACTED"
-        self.db.insert("role_reports", {"ts": time.time(), "role": role, "prompt_id": pid, "session_id": session_id,
-                                        "status": status, "report": json.dumps(report, default=str)[:20000]})
+        rid = self.db.insert_id("role_reports", {"ts": time.time(), "role": role, "prompt_id": pid, "session_id": session_id,
+                                                 "status": status, "report": json.dumps(report, default=str)[:20000]})
+        for d in (report.get("directives") or [])[:20]:
+            try:
+                did = int(d.get("id"))
+            except (TypeError, ValueError, AttributeError):
+                continue
+            done = str(d.get("status", "DONE")).upper() in ("DONE", "COMPLETE", "COMPLETED")
+            res = json.dumps({"role": role, "status": str(d.get("status", "DONE"))[:20], "result": d.get("result")},
+                             default=str)[:4000]
+            if done:
+                self.db.execute("UPDATE ops_directives SET status = 'DONE', result = ?, done_ts = ?, report_id = ? WHERE id = ? "
+                                "AND status = 'OPEN' AND role IN (?, 'all')", (res, time.time(), rid, did, role))
+            else:
+                self.db.execute("UPDATE ops_directives SET result = ?, report_id = ? WHERE id = ? AND status = 'OPEN'",
+                                (res, rid, did))
         n_pred = 0
         preds = list(report.get("predictions") or [])
         for v in report.get("verdicts") or []:              # adversary verdicts double as survive-forecasts

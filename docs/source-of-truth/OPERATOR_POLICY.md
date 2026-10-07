@@ -235,3 +235,15 @@ law), drawdown-probability, Kelly-tier and liquidity constraints; capital utiliz
 dollar, opportunity cost, scaling curve ($28→$1000), and ranked levers (marginal $/h of capital, proof, flow). Target =
 max($1/h, ratchet ×1.25 after each 24 h at/above target, proven frontier).
 - OP-022 erratum (2026-10-07 16:40 UTC): the engine lives in `src/forge/treasury/profit_velocity.py` (`velocity.py` remains the OP-008 utilization hurdle / opportunity-cost module).
+
+## OP-023 — 2026-10-07 — FORGE OPS COMMANDER (owner's remote operations agent)
+Operator: a dedicated Hermes agent as the human-facing operations commander (SRE / AI-ops director / chief of staff),
+reachable remotely with owner-only authenticated access, full audit, rate limits, prompt-injection protection, FORGE scope
+only; executes authorised FORGE operations ("fix/restart/improve/deploy"), delegates to the 7 Hermes roles, explicit
+confirmation for destructive / irreversible operations.
+Implemented: separate Hermes profile + Linux user `forge-ops` + sandboxed `forge-ops.service` (FORGE secrets, DB and the
+research profile invisible); Telegram (outbound long-polling, owner user-ID allowlist); tool surface = plugin
+`hermes-forge-ops` only (shell/file/code/browser/delegation toolsets disabled); FORGE OPS API (`/api/ops/*`, own token,
+loopback, audited, rate-limited); directives → role briefs → role reports; SAFE actions run, CONFIRM actions need a
+one-time code delivered out-of-band to the owner's Telegram (never visible to the model); polkit allows only
+restart/start of forge, forge-hermes, forge-tunnel. Code changes/deploys remain with the engineering channel.

@@ -108,6 +108,8 @@ class KalshiLive:
             return 0, "no Kalshi credentials (KALSHI_API_KEY_ID + private key file)"
         if not self.enabled:
             return 0, "KALSHI_LIVE=off"
+        if self.f.db.kv_get("ops.kalshi_live") == "off":
+            return 0, "Kalshi live disabled by OPS Commander"
         if tstate.trading_state(self.f.db) != "RUNNING":
             return 0, "FORGE STOP ALL active"
         if time.time() < self.paused_until:

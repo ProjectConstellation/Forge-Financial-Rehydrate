@@ -62,6 +62,10 @@ class ComputeGovernor:
         state = self.budget_state()
         if state == "RED":
             return False
+        boost = forge.db.kv_get("ops.compute_boost") or {}
+        if float(boost.get("until") or 0) > time.time() and state in ("GREEN", "YELLOW"):
+            self.burst_containers = 16 if state == "GREEN" else 8
+            return True                                       # OPS Commander compute boost (budget caps still apply)
         counts = forge.reg.counts()
         no_edge = not (counts.get("PRODUCTION") or counts.get("CHALLENGER"))
         survival = (forge.treasury.get("regime") or {}).get("name") == "SURVIVAL"

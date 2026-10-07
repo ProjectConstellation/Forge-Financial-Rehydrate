@@ -93,7 +93,7 @@ def hermes_allowance(forge: Any) -> dict[str, Any]:
             "hermes_value_per_usd": h_roi, "forge_value_per_usd": f_roi, "balance": b.balance, "pace": p.reason}
 
 
-def digest(forge: Any, since: float) -> dict[str, Any]:
+def digest(forge: Any, since: float, role: str | None = None) -> dict[str, Any]:
     """Compact change feed so Hermes pre-run scripts wake the LLM only when something economically meaningful happened."""
     from datetime import UTC, datetime
     iso = datetime.fromtimestamp(since, UTC).isoformat()
@@ -105,12 +105,51 @@ def digest(forge: Any, since: float) -> dict[str, Any]:
                   "LIMIT 20", (iso,)) if db.scalar("SELECT 1 FROM sqlite_master WHERE name='strategy_events'") else []
     settled = db.scalar("SELECT COUNT(*) FROM crossrail_signals WHERE status='SETTLED' AND settled_ts >= ?", (since,)) or 0
     sc = db.kv_get("crossrail.scorecard") or {}
+    directives = db.query("SELECT id, role, priority, instruction FROM ops_directives WHERE status = 'OPEN' AND role IN (?, 'all')",
+                          (role,)) if role else []
     return {"since": since, "now": time.time(), "listing_events": ev, "warnings": tr, "strategy_events": st,
+            "ops_directives": directives,
             "crossrail_settled_since": settled,
             "crossrail": {k: sc.get(k) for k in ("calibration_n", "brier_model", "brier_market", "brier_stacked",
                                                  "model_weight_share", "signals")},
             "treasury": {k: forge.treasury.get(k) for k in ("equity_usd", "true_net_usd", "daily_pnl_usd")},
-            "meaningful": bool(ev or tr or st or settled >= 10)}
+            "meaningful": bool(ev or tr or st or settled >= 10 or directives)}
+
+
+def record_usage(forge: Any, b: dict[str, Any], role_override: str | None = None) -> dict[str, Any]:
+    import hashlib
+    rid = "hermes_" + hashlib.sha1(str(b.get("api_request_id") or secrets.token_hex(8)).encode()).hexdigest()[:24]
+    if forge.db.scalar("SELECT 1 FROM inference_calls WHERE id = ?", (rid,)):
+        return {"ok": True, "duplicate": True}
+    u = b.get("usage") or {}
+    cache = int(u.get("prompt_cache_hit_tokens") or u.get("cache_read_input_tokens") or u.get("cache_read_tokens")
+                or u.get("cached_tokens") or 0)
+    if u.get("prompt_tokens") is not None:                 # OpenAI/DeepSeek shape: prompt includes cached
+        prompt = int(u["prompt_tokens"])
+    else:                                                  # Anthropic shape: input excludes cache reads
+        prompt = int(u.get("input_tokens") or 0) + (cache if "cache_read_input_tokens" in u else 0)
+    usage_n = {"prompt_tokens": prompt, "completion_tokens": int(u.get("completion_tokens") or u.get("output_tokens") or 0),
+               "prompt_cache_hit_tokens": cache}
+    model = str(b.get("model") or "deepseek-flash")
+    from forge.agents.genome import canonical_role
+    role = role_override or canonical_role(str(b.get("role") or "governor"))
+    brain = getattr(forge, "brain", None)
+    ext = EXTERNAL_PRICES.get(model) or (forge.db.kv_get("hermes.prices") or {}).get(model)
+    if ext:      # list-price cost for value measurement; free operator credit → NOT a treasury expense
+        cost = ((usage_n["prompt_tokens"] - usage_n["prompt_cache_hit_tokens"]) * ext["in"]
+                + usage_n["prompt_cache_hit_tokens"] * ext["cache"] + usage_n["completion_tokens"] * ext["out"]) / 1e6
+    else:
+        cost = brain.c.cost(model if model in forge.s.deepseek.prices else "deepseek-flash", usage_n) if brain else 0.0
+    forge.db.insert("inference_calls", {
+        "id": rid, "ts": _now(), "agent": f"hermes_{role}", "purpose": str(b.get("purpose") or "hermes")[:80],
+        "model": model, "effort": b.get("effort"), "prompt_version": f"session:{str(b.get('session_id') or 'na')[:60]}",
+        "input_tokens": usage_n["prompt_tokens"], "cached_tokens": usage_n["prompt_cache_hit_tokens"],
+        "output_tokens": usage_n["completion_tokens"], "cost_usd": f"{cost:.8f}", "latency_ms": int(b.get("latency_ms") or 0),
+        "tool_calls": None, "result_class": "hermes", "strategy_id": None, "opportunity_id": None, "error": None})
+    if cost > 0 and not ext:
+        forge.ledger.record_opex(forge.book if forge.book in ("live", "paper") else "paper", "INFERENCE",
+                                 Decimal(f"{cost:.8f}"), rid, memo=f"hermes {role}")
+    return {"ok": True, "cost_usd": cost}
 
 
 def mount(app: FastAPI, forge: Any, token: str) -> None:
@@ -147,40 +186,7 @@ def mount(app: FastAPI, forge: Any, token: str) -> None:
     @app.post("/api/agent/usage")
     async def usage(request: Request) -> Any:
         check(request)
-        b = await request.json()
-        import hashlib
-        rid = "hermes_" + hashlib.sha1(str(b.get("api_request_id") or secrets.token_hex(8)).encode()).hexdigest()[:24]
-        if forge.db.scalar("SELECT 1 FROM inference_calls WHERE id = ?", (rid,)):
-            return {"ok": True, "duplicate": True}
-        u = b.get("usage") or {}
-        cache = int(u.get("prompt_cache_hit_tokens") or u.get("cache_read_input_tokens") or u.get("cache_read_tokens")
-                    or u.get("cached_tokens") or 0)
-        if u.get("prompt_tokens") is not None:                 # OpenAI/DeepSeek shape: prompt includes cached
-            prompt = int(u["prompt_tokens"])
-        else:                                                  # Anthropic shape: input excludes cache reads
-            prompt = int(u.get("input_tokens") or 0) + (cache if "cache_read_input_tokens" in u else 0)
-        usage_n = {"prompt_tokens": prompt, "completion_tokens": int(u.get("completion_tokens") or u.get("output_tokens") or 0),
-                   "prompt_cache_hit_tokens": cache}
-        model = str(b.get("model") or "deepseek-flash")
-        from forge.agents.genome import canonical_role
-        role = canonical_role(str(b.get("role") or "governor"))
-        brain = getattr(forge, "brain", None)
-        ext = EXTERNAL_PRICES.get(model) or (forge.db.kv_get("hermes.prices") or {}).get(model)
-        if ext:      # list-price cost for value measurement; free operator credit → NOT a treasury expense
-            cost = ((usage_n["prompt_tokens"] - usage_n["prompt_cache_hit_tokens"]) * ext["in"]
-                    + usage_n["prompt_cache_hit_tokens"] * ext["cache"] + usage_n["completion_tokens"] * ext["out"]) / 1e6
-        else:
-            cost = brain.c.cost(model if model in forge.s.deepseek.prices else "deepseek-flash", usage_n) if brain else 0.0
-        forge.db.insert("inference_calls", {
-            "id": rid, "ts": _now(), "agent": f"hermes_{role}", "purpose": str(b.get("purpose") or "hermes")[:80],
-            "model": model, "effort": b.get("effort"), "prompt_version": f"session:{str(b.get('session_id') or 'na')[:60]}",
-            "input_tokens": usage_n["prompt_tokens"], "cached_tokens": usage_n["prompt_cache_hit_tokens"],
-            "output_tokens": usage_n["completion_tokens"], "cost_usd": f"{cost:.8f}", "latency_ms": int(b.get("latency_ms") or 0),
-            "tool_calls": None, "result_class": "hermes", "strategy_id": None, "opportunity_id": None, "error": None})
-        if cost > 0 and not ext:
-            forge.ledger.record_opex(forge.book if forge.book in ("live", "paper") else "paper", "INFERENCE",
-                                     Decimal(f"{cost:.8f}"), rid, memo=f"hermes {role}")
-        return {"ok": True, "cost_usd": cost}
+        return record_usage(forge, await request.json())
 
     @app.get("/api/agent/allow")
     async def allow(request: Request, role: str = "governor", est_usd: float = 0.01) -> Any:
@@ -192,9 +198,9 @@ def mount(app: FastAPI, forge: Any, token: str) -> None:
         return a
 
     @app.get("/api/agent/digest")
-    async def dig(request: Request, since: float = 0.0) -> Any:
+    async def dig(request: Request, since: float = 0.0, role: str = "") -> Any:
         check(request)
-        return digest(forge, since or time.time() - 3600)
+        return digest(forge, since or time.time() - 3600, role or None)
 
 
 def _now() -> str:
