@@ -99,9 +99,10 @@ class LiveMarket(MarketSink):
     def on_candle(self, c: Candle) -> None:
         pass
 
-    def on_feed_reset(self) -> None:
-        for bk in self.books.values():
-            bk.invalidate()
+    def on_feed_reset(self, symbols: list[str] | None = None) -> None:
+        for s, bk in self.books.items():
+            if symbols is None or s in symbols:
+                bk.invalidate()
 
     # views
     def get_bbo(self, s: str) -> BestBidAsk | None:

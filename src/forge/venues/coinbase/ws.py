@@ -52,7 +52,7 @@ class MarketSink:
     def on_book_snapshot(self, symbol: str, levels: list[tuple[str, float, float]], ts_ns: int) -> None: ...
     def on_book_update(self, symbol: str, levels: list[tuple[str, float, float]], ts_ns: int) -> None: ...
     def on_candle(self, c: Candle) -> None: ...
-    def on_feed_reset(self) -> None: ...
+    def on_feed_reset(self, symbols: list[str] | None = None) -> None: ...
 
 
 class CoinbaseMarketStream:
@@ -80,28 +80,54 @@ class CoinbaseMarketStream:
     def stop(self) -> None:
         self._stop.set()
 
+    L2_SHARD = 25            # measured 2026-10-07: Coinbase rejects > 30 level2 products per session ("too many L2 streams")
+
     def _channels(self) -> list[str]:
         ch = ["heartbeats", "ticker", "market_trades"]
         if self.signer is not None:
             ch.append("candles")
-        if self.level2:
-            ch.append("level2")
         return ch
 
+    def _plan(self) -> list[tuple[str, list[str], list[str]]]:
+        """Sessions: one main (ticker/trades/candles for all symbols) + level2 shards of ≤ L2_SHARD symbols each."""
+        plan = [("main", self.symbols, self._channels())]
+        if self.level2:
+            for i in range(0, len(self.symbols), self.L2_SHARD):
+                plan.append((f"l2-{i // self.L2_SHARD}", self.symbols[i:i + self.L2_SHARD], ["heartbeats", "level2"]))
+        return plan
+
     async def run(self) -> None:
+        while not self._stop.is_set():
+            self._resubscribe.clear()
+            tasks = [asyncio.create_task(self._session_loop(name, syms, ch)) for name, syms, ch in self._plan()]
+            stop_t = asyncio.create_task(self._stop.wait())
+            resub_t = asyncio.create_task(self._resubscribe.wait())
+            try:
+                await asyncio.wait([stop_t, resub_t], return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                for t in (*tasks, stop_t, resub_t):
+                    t.cancel()
+                for t in tasks:
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await t
+            self.sink.on_feed_reset()
+
+    async def _session_loop(self, name: str, symbols: list[str], channels: list[str]) -> None:
         backoff = 1.0
+        main = name == "main"
         while not self._stop.is_set():
             try:
-                await self._session()
+                await self._session(symbols, channels, main)
                 backoff = 1.0
             except asyncio.CancelledError:
                 raise
             except Exception as e:  # network errors, protocol errors
-                log.warning("coinbase ws session ended: %s: %s", type(e).__name__, e)
+                log.warning("coinbase ws session %s ended: %s: %s", name, type(e).__name__, e)
             finally:
-                if self.quality.connected:
+                if main and self.quality.connected:
                     self.quality.connected = False
-                self.sink.on_feed_reset()
+                if "level2" in channels:
+                    self.sink.on_feed_reset(symbols)
             if self._stop.is_set():
                 break
             self.quality.reconnects += 1
@@ -109,31 +135,34 @@ class CoinbaseMarketStream:
             backoff *= 2
             await asyncio.sleep(delay)
 
-    async def _session(self) -> None:
-        self._resubscribe.clear()
+    async def _session(self, symbols: list[str], channels: list[str], main: bool) -> None:
+        if not symbols:
+            await asyncio.sleep(3600)
+            return
         async with websockets.connect(self.url, max_size=2 ** 25, open_timeout=15,
                                       ping_interval=20, ping_timeout=20, close_timeout=5) as ws:
-            self._last_seq = -1
-            for ch in self._channels():
-                msg: dict[str, object] = {"type": "subscribe", "product_ids": self.symbols, "channel": ch}
+            seq = [-1]                                       # per-connection sequence state
+            for ch in channels:
+                msg: dict[str, object] = {"type": "subscribe", "product_ids": symbols, "channel": ch}
                 if self.signer is not None:
                     msg["jwt"] = self.signer.ws_jwt()
                 await ws.send(json.dumps(msg))
                 await asyncio.sleep(0.25)
-            self.quality.connected = True
-            self.quality.connected_since_ns = time.time_ns()
-            if self.on_status:
-                self.on_status("connected")
-            while not self._stop.is_set() and not self._resubscribe.is_set():
+            if main:
+                self.quality.connected = True
+                self.quality.connected_since_ns = time.time_ns()
+                if self.on_status:
+                    self.on_status("connected")
+            while not self._stop.is_set():
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=self.silence_timeout_s)
                 except TimeoutError:
                     log.warning("coinbase ws silent for %.0fs — reconnecting", self.silence_timeout_s)
                     return
-                if not self._handle(raw):
+                if not self._handle(raw, seq):
                     return
 
-    def _handle(self, raw: str | bytes) -> bool:
+    def _handle(self, raw: str | bytes, seq_state: list[int] | None = None) -> bool:
         """Process one message. Returns False to force a reconnect (sequence gap)."""
         now = time.time_ns()
         q = self.quality
@@ -144,14 +173,17 @@ class CoinbaseMarketStream:
         except ValueError:
             q.parse_errors += 1
             return True
+        st = seq_state if seq_state is not None else [self._last_seq]
         seq = m.get("sequence_num")
         if isinstance(seq, int):
-            if self._last_seq >= 0 and seq != self._last_seq + 1:
+            if st[0] >= 0 and seq != st[0] + 1:
                 q.sequence_gaps += 1
-                log.warning("sequence gap %s -> %s; invalidating books", self._last_seq, seq)
-                self._last_seq = seq
+                log.warning("sequence gap %s -> %s; invalidating books", st[0], seq)
+                st[0] = seq
                 return False
-            self._last_seq = seq
+            st[0] = seq
+        if seq_state is None:
+            self._last_seq = st[0]
         ch = m.get("channel")
         try:
             if ch == "ticker":
