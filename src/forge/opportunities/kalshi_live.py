@@ -31,6 +31,7 @@ from typing import Any
 log = logging.getLogger("forge.kalshi_live")
 
 KIND = "TAKE_THRESH"
+LIVE_KINDS = ("TAKE_THRESH", "SETTLE_WINDOW")     # each signal kind is gated by ITS OWN out-of-sample cluster evidence
 # (min independent clusters, min P(mean>0), min mean $/contract, max contracts/signal; 0 = sized by the velocity frontier)
 LADDER = ((40, 0.99, 0.02, 0), (20, 0.95, 0.03, 3), (10, 0.90, 0.02, 2), (10, 0.80, 0.0, 1))
 FRONTIER_MAX = 50
@@ -88,11 +89,11 @@ class KalshiLive:
         return self.client is not None
 
     # ------------------------------------------------------------------ evidence + risk
-    def oos_pnls(self) -> list[float]:
+    def oos_pnls(self, kind: str = KIND) -> list[float]:
         # the TAKE_THRESH kind only exists since its pre-registration → every settled signal is out-of-sample
         from forge.treasury.profit_velocity import cluster_unit_pnls
         rows = self.f.db.query("SELECT ticker, underlying, close_ts, side, pnl FROM crossrail_signals WHERE kind = ? AND "
-                               "status = 'SETTLED' ORDER BY settled_ts", (KIND,))
+                               "status = 'SETTLED' ORDER BY settled_ts", (kind,))
         return cluster_unit_pnls(rows)          # one value per independent cluster (correlation-safe evidence)
 
     def realized(self, since: float) -> float:
@@ -102,7 +103,7 @@ class KalshiLive:
     def open_cost(self) -> float:
         return float(self.f.db.scalar("SELECT COALESCE(SUM(cost),0) FROM kalshi_live_orders WHERE status = 'FILLED'") or 0.0)
 
-    def decision(self) -> tuple[int, str]:
+    def decision(self, kind: str = KIND) -> tuple[int, str]:
         from forge.core import state as tstate
         if not self.configured:
             return 0, "no Kalshi credentials (KALSHI_API_KEY_ID + private key file)"
@@ -128,7 +129,9 @@ class KalshiLive:
         if diffs and cusum(diffs) < -CUSUM_H:
             self.paused_until = time.time() + 3 * 3600
             return 0, "live/shadow CUSUM divergence: paused 3 h for diagnosis"
-        return ladder_contracts(self.oos_pnls())
+        if kind not in LIVE_KINDS:
+            return 0, f"{kind} is not a live-eligible signal kind"
+        return ladder_contracts(self.oos_pnls(kind))
 
     def regime(self) -> dict[str, Any]:
         from forge.treasury import regime as treg
@@ -140,25 +143,26 @@ class KalshiLive:
         st = self.f.db.kv_get("treasury.regime") or {}
         return treg.regime_for(float(tr), max(float(st.get("hwm", 0)), float(tr)))
 
-    def frontier_units(self) -> float | None:
+    def frontier_units(self, kind: str = KIND) -> float | None:
         """Contracts per signal the profit-velocity frontier allocates to this stream (live-now scenario)."""
         v = self.f.db.kv_get("velocity") or {}
         for st in ((v.get("frontier") or {}).get("live_now") or {}).get("streams", []):
-            if st.get("stream") == f"kalshi.{KIND}":
+            if st.get("stream") == f"kalshi.{kind}":
                 return float(st.get("units") or 0)
         return None
 
     # ------------------------------------------------------------------ execution
     async def on_signal(self, sig: dict[str, Any]) -> None:
         """Called for every freshly recorded TAKE_THRESH signal."""
-        n, why = self.decision()
-        self.status = {"ts": time.time(), "decision": n, "why": why, "configured": self.configured}
+        kind = str(sig.get("kind") or KIND)
+        n, why = self.decision(kind)
+        self.status = {**(self.status or {}), "ts": time.time(), "decision": n, "why": why, "configured": self.configured}
         if n <= 0 or self.client is None:
             return
         if time.time() - float(sig["ts"]) > 60:
             return
         price, cost_each = float(sig["price"]), float(sig["price"]) + float(sig["fee"])
-        fu = self.frontier_units()
+        fu = self.frontier_units(kind)
         if fu is not None and fu >= 1:
             n = min(n, int(fu))                         # confidence-weighted size from the velocity frontier
         reg = self.regime()
@@ -225,8 +229,8 @@ class KalshiLive:
                 self.status = {"ts": time.time(), "decision": n, "why": why, "configured": self.configured,
                                "balance_usd": bal, "open_cost": self.open_cost(),
                                "realized_today": self.realized(time.time() - (time.time() % 86400)),
-                               "oos": dict(zip(("mean", "p_positive"), posterior_positive(self.oos_pnls()), strict=True))
-                               | {"n": len(self.oos_pnls())}}
+                               "oos": {k: dict(zip(("mean", "p_positive"), posterior_positive(self.oos_pnls(k)), strict=True))
+                                       | {"n": len(self.oos_pnls(k)), "decision": self.decision(k)[1]} for k in LIVE_KINDS}}
                 self.f.db.kv_set("kalshi.live", self.status)
             except Exception as e:
                 log.warning("kalshi live loop: %s", e)

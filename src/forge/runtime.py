@@ -199,6 +199,10 @@ class Forge:
         from forge.treasury.profit_velocity import VelocityEngine
         self.velocity = VelocityEngine(self)
         B("velocity", self.velocity.run, 900)
+        from forge.opportunities.settlement_window import SettlementWindowEngine
+        self.settlement_window = SettlementWindowEngine(self)
+        B("sw_sampler", self.settlement_window.sampler, 60)
+        B("settlement_window", self.settlement_window.run, 300)
         from forge.ops.econ import EconSampler
         B("econ", EconSampler(self).run, 120)
         from forge.agents.genome import PromptGenomes
