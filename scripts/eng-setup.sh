@@ -5,12 +5,12 @@
 set -euo pipefail
 F=/srv/forge; H=$F/runtime/hermes; E=$F/runtime/eng; EH=$E/home; R=$E/repo
 id forge-eng >/dev/null 2>&1 || useradd --system -U -d $EH -s /usr/sbin/nologin -c "FORGE Engineer (sandboxed)" forge-eng
-mkdir -p $EH/forge $EH/plugins $F/runtime/deploy
+mkdir -p $EH/forge $EH/plugins $F/runtime/deploy; chown -R forge-eng:forge-eng $EH
 setfacl -m u:forge-eng:--x $F $F/runtime
 chmod 755 $E 2>/dev/null || true
 
 # git: allow the three repos explicitly (different owners) — nothing else
-for d in $F $R $F/runtime/deploy/stage; do git config --system --get-all safe.directory | grep -qx "$d" || git config --system --add safe.directory "$d"; done
+for d in $F $F/.git $R $R/.git $F/runtime/deploy/stage $F/runtime/deploy/stage/.git; do git config --system --get-all safe.directory | grep -qx "$d" || git config --system --add safe.directory "$d"; done
 
 # engineer repo (own clone; remote prod = production, read-only to forge-eng)
 install -d -o forge-eng -g forge-eng -m 755 $R
