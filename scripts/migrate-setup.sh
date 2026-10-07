@@ -79,5 +79,15 @@ cat > /etc/systemd/system/forge-hermes.service.d/memory.conf <<'X'
 [Service]
 MemoryMax=1200M
 X
+# Hermes sandbox: other-project paths only exist on the old host → optional (-); FORGE secrets/DB stay hidden
+cat > /etc/systemd/system/forge-hermes.service.d/paths.conf <<'X'
+[Service]
+InaccessiblePaths=
+InaccessiblePaths=/etc/forge /srv/forge/var -/srv/forge/.devvar -/srv/northstar -/opt/northstar
+X
+# IPv4-only egress: the Coinbase CDP key allows exactly one IPv4 address (104.237.131.109); IPv6 egress → HTTP 401
+printf "net.ipv6.conf.all.disable_ipv6=1\nnet.ipv6.conf.default.disable_ipv6=1\nnet.ipv6.conf.lo.disable_ipv6=0\n" \
+  > /etc/sysctl.d/91-forge-ipv4.conf
+sysctl -q -p /etc/sysctl.d/91-forge-ipv4.conf
 systemctl daemon-reload
 echo "setup complete (units installed, NOT enabled/started)"

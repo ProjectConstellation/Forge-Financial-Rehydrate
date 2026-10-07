@@ -8,6 +8,9 @@ KEY=/home/NorthStarImagine/.ssh/forge_migrate_ed25519
 SSH="ssh -i $KEY -o UserKnownHostsFile=/home/NorthStarImagine/.ssh/known_hosts -o BatchMode=yes"
 R=(rsync -aHAX --delete --info=stats1 -e "$SSH" --rsync-path="sudo rsync")
 
+if [ -f /srv/forge/.cutover-complete ] && [ "${FORGE_FORCE_SYNC:-}" != "1" ]; then
+  echo "REFUSING: cutover completed $(cat /srv/forge/.cutover-complete) — the NEW host owns live state; syncing would overwrite it"; exit 1
+fi
 if [ "${1:-}" = "final" ] && systemctl is-active -q forge.service; then
   echo "refusing final sync while forge.service is running here (stop it first)"; exit 1
 fi

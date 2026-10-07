@@ -32,4 +32,5 @@ for i in $(seq 1 30); do
 done
 $SSH "systemctl is-active $UNITS; free -h | sed -n 2p"
 curl -s -o /dev/null -m 15 -w "portal https://forge.northstarimagine.com → HTTP %{http_code}\n" https://forge.northstarimagine.com/
+date -u +%FT%TZ > /srv/forge/.cutover-complete
 echo "cutover complete ($(date -u +%T)). Rollback: sudo scripts/migrate-cutover.sh rollback"
