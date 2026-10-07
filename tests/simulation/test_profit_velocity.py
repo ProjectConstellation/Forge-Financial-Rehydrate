@@ -2,7 +2,7 @@
 import math
 
 from forge.treasury import regime as treg
-from forge.treasury.velocity import Stream, cluster_unit_pnls, clusters_from_signals, frontier
+from forge.treasury.profit_velocity import Stream, cluster_unit_pnls, clusters_from_signals, frontier
 
 
 def _st(**kw):

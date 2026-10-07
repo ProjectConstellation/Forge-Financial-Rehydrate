@@ -90,7 +90,7 @@ class KalshiLive:
     # ------------------------------------------------------------------ evidence + risk
     def oos_pnls(self) -> list[float]:
         # the TAKE_THRESH kind only exists since its pre-registration → every settled signal is out-of-sample
-        from forge.treasury.velocity import cluster_unit_pnls
+        from forge.treasury.profit_velocity import cluster_unit_pnls
         rows = self.f.db.query("SELECT ticker, underlying, close_ts, side, pnl FROM crossrail_signals WHERE kind = ? AND "
                                "status = 'SETTLED' ORDER BY settled_ts", (KIND,))
         return cluster_unit_pnls(rows)          # one value per independent cluster (correlation-safe evidence)

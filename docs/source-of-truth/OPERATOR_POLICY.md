@@ -234,3 +234,4 @@ intelligence − membership), expected $/h frontier (live-now / proven-LCB / pot
 law), drawdown-probability, Kelly-tier and liquidity constraints; capital utilization, recycle time, profit per deployed
 dollar, opportunity cost, scaling curve ($28→$1000), and ranked levers (marginal $/h of capital, proof, flow). Target =
 max($1/h, ratchet ×1.25 after each 24 h at/above target, proven frontier).
+- OP-022 erratum (2026-10-07 16:40 UTC): the engine lives in `src/forge/treasury/profit_velocity.py` (`velocity.py` remains the OP-008 utilization hurdle / opportunity-cost module).
