@@ -24,6 +24,7 @@ Only rails with legitimate APIs and authorized credentials can ever be EXECUTABL
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -277,15 +278,39 @@ class SurfaceRegistry:
         """MembershipEconomicsAdapter (answers §Coinbase One): verified live 2026-10-07 from coinbase.com/one + /usdc."""
         m = self.f.db.kv_get("membership.coinbase_one") or {}
         base = {"tier": "basic", "monthly_cost_usd": 4.99, "annual_cost_usd": 49.99, "trial_days": 7,
+                "trial_start": "2026-10-07", "first_charge": "2026-10-14", "billed_from": "coinbase_balance",
                 "simple_trade_zero_fee_cap_usd_month": 500, "simple_trade_api": False,
                 "advanced_trade_rebate_pct": 0.0, "advanced_trade_rebate_cap_usd_month": 0.0,
                 "usdc_reward_apy": 0.0375, "usdc_rewards_member_only": True, "staking_boost_pct": 5.0,
-                "incremental_cost_to_forge_usd_month": 0.0,       # operator keeps the membership for its own reasons
+                "incremental_cost_to_forge_usd_month": 4.99,      # OP-016 update: deducted from the Coinbase balance → FORGE cost
                 "source": "coinbase.com/one + coinbase.com/usdc (live 2026-10-07)",
                 "notes": "Zero-fee benefit excludes Coinbase Advanced, DEX and derivatives; spread applies on simple trades."}
         base.update(m)
         self.f.db.kv_set("membership.coinbase_one", base)
         return base
+
+    def bill_membership(self) -> None:
+        """Book the Coinbase One fee as true operating cost on each monthly billing date (idempotent per month).
+        Wallet truth stays authoritative: if Coinbase bills a card instead, the live reconciler corrects cash."""
+        from decimal import Decimal
+        mem = self.f.db.kv_get("membership.coinbase_one") or {}
+        first = mem.get("first_charge")
+        if not first or not mem.get("monthly_cost_usd"):
+            return
+        today = datetime.now(UTC).date()
+        start = datetime.fromisoformat(first).date()
+        if today < start:
+            return
+        months = (today.year - start.year) * 12 + (today.month - start.month) + (1 if today.day >= start.day else 0)
+        for k in range(months):
+            y, m = start.year + (start.month - 1 + k) // 12, (start.month - 1 + k) % 12 + 1
+            ref = f"coinbase_one:{y:04d}-{m:02d}"
+            for book in {self.f.book if self.f.book in ("live", "paper") else "paper"}:
+                with contextlib.suppress(Exception):
+                    if self.f.ledger.record_opex(book, "MEMBERSHIP", Decimal(str(mem["monthly_cost_usd"])), ref,
+                                                 memo="Coinbase One Basic monthly fee (OP-016)"):
+                        self.f.db.insert("listing_events", {"ts": _now(), "product_id": "COINBASE_ONE", "product_type": "membership",
+                                                            "event": "MEMBERSHIP_FEE_BOOKED", "before": None, "after": ref})
 
     def static_rails(self, account: dict[str, Any]) -> None:
         mem = self.membership()
@@ -310,6 +335,14 @@ class SurfaceRegistry:
         pm.capabilities.update(pairs=["USDT-USD", "USDT-USDC"], maker_fee=fee.get("rate"), fee_source=fee.get("source"))
         pm.blockers = ["paper only until shadow round trips prove net-positive (P>0.9) — then eligible on the spot key"]
         pm.status, pm.executable = "SHADOW", False
+        tr = self._rail("coinbase.stable_triangle", "Coinbase Advanced Trade (USDT-USD ⇄ USDT-USDC, free USD⇄USDC convert)",
+                        "near-riskless stable arbitrage")
+        tr.capabilities.update(fees=(self.f.db.kv_get("fees.stable") or {}).get("fees"))
+        tr.blockers = ["paper only until shadow cycles prove net-positive after measured taker fees"]
+        tr.status, tr.executable = "SHADOW", False
+        ld = self._rail("coinbase.listing_discovery", "Coinbase Advanced Trade (new listings)", "event-driven spot")
+        ld.blockers = ["paper only: rare events; needs ≥ 20 settled listings with positive net expectancy"]
+        ld.status, ld.executable = "SHADOW", False
         x = self._rail("x402.data", "x402 paid data (Coinbase for Agents)", "intelligence purchase (cost rail)")
         x.blockers = ["spend only when IVOI ≥ 1.5 is demonstrated (answers §5)"]
         x.status, x.executable = "CANDIDATE", False
@@ -442,7 +475,12 @@ class SurfaceRegistry:
             if s > 0:
                 unlock.append({"rail": r.id, "usd_per_day_if_unblocked": s * min(eq, r.economics.capacity_usd or eq),
                                "blockers": r.blockers, "evidence": r.economics.evidence})
+        self.bill_membership()
+        mem = self.f.db.kv_get("membership.coinbase_one") or {}
+        fixed_day = float(mem.get("incremental_cost_to_forge_usd_month") or 0) * 12 / 365
         rep = {"ts": time.time(), "capital": eq, "hurdle_per_day": hurdle, "now": now_plan, "if_unblocked": unlocked,
+               "fixed_costs_usd_per_day": {"coinbase_one": fixed_day},
+               "net_expected_usd_per_day": now_plan["expected_usd_per_day"] - fixed_day,
                "unlock_value": sorted(unlock, key=lambda x: -x["usd_per_day_if_unblocked"]),
                "rails": {r.id: {"status": r.status, "executable": r.executable, "blockers": r.blockers,
                                 "score_per_day": r.economics.score_per_day(eq, hurdle), "evidence": r.economics.evidence}
@@ -502,6 +540,7 @@ class ListingSentinel:
                                         bool(p.get("cancel_only")))
                 types[p["product_id"]] = t
         evs = self.diff(self.snap, new)
+        await self._listing_shadow(evs, types)
         for pid, kind, before, after in evs:
             self.f.db.insert("listing_events", {"ts": _now(), "product_id": pid, "product_type": types.get(pid),
                                                 "event": kind, "before": json.dumps(before), "after": json.dumps(after)})
@@ -511,6 +550,40 @@ class ListingSentinel:
         if len(new) > 50:
             self.snap = new
         return len(evs)
+
+    async def _listing_shadow(self, evs: list[tuple[str, str, Any, Any]], types: dict[str, str]) -> None:
+        """LISTING_DISCOVERY_V1 shadow: taker entry at the first traded price after a listing/re-enable, exits at
+        +1h/+4h/+24h net of taker fees both ways → shadow_trades (rail coinbase.listing_discovery). No blind buying live."""
+        pend = self.f.db.kv_get("listing.shadow") or []
+        for pid, kind, _, _ in evs:
+            if kind in ("NEW_PRODUCT", "TRADING_ENABLED") and types.get(pid) == "SPOT" and pid.endswith("-USD"):
+                pend.append({"pid": pid, "t0": time.time(), "px0": None, "done": []})
+        now = time.time()
+        fee = float(getattr(getattr(self.f, "fees", None), "taker", 0.009) or 0.009)
+        keep = []
+        for p in pend[-200:]:
+            try:
+                px = float((await self.f.rest.product(p["pid"])).get("price") or 0)
+            except Exception:
+                px = 0.0
+            if p["px0"] is None:
+                if px > 0:
+                    p["px0"], p["t_entry"] = px, now
+                elif now - p["t0"] > 6 * 3600:
+                    continue
+                keep.append(p)
+                continue
+            for h in (1, 4, 24):
+                if h not in p["done"] and now - p["t_entry"] >= h * 3600 and px > 0:
+                    entry, exit_ = p["px0"] * (1 + fee), px * (1 - fee)
+                    self.f.db.insert("shadow_trades", {"ts": now, "rail": "coinbase.listing_discovery", "symbol": p["pid"],
+                                                       "side": f"hold_{h}h", "qty": 1.0 / entry, "entry": entry, "exit": exit_,
+                                                       "fee_usd": fee * 2 / entry, "pnl_usd": exit_ / entry - 1.0,
+                                                       "hold_s": h * 3600.0, "detail": None})
+                    p["done"].append(h)
+            if len(p["done"]) < 3:
+                keep.append(p)
+        self.f.db.kv_set("listing.shadow", keep)
 
     async def run(self) -> None:
         import asyncio

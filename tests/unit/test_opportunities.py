@@ -142,3 +142,17 @@ def test_peg_queue_fill_model():
     assert abs(f - 10.0) < 1e-9 and a == 0.0                                           # partial fill after the queue
     assert queue_after_prints(q, [(0.99969, 1.0, "BUY")]) == (28.0, 0.0)             # print through our price → filled
     assert queue_after_prints(q, [(0.9997, 500.0, "SELL")]) == (0.0, 100.0)          # wrong side does not consume our queue
+
+
+def test_triangle_shadow_records_only_after_fees():
+    import types
+    from forge.opportunities.pegmaker import PegMaker
+    rows = []
+    f = types.SimpleNamespace(db=types.SimpleNamespace(insert=lambda t, r: rows.append(r), kv_set=lambda *a: None),
+                              treasury={"equity_usd": 28.0})
+    pm = PegMaker(f, capital_usd=14.0)
+    pm.triangle({"USDT-USD": (0.99970, 1000, 0.99971, 1000), "USDT-USDC": (0.99950, 1000, 0.99955, 1000)})   # 1.5 bp gap > 1.1 bp fees
+    assert rows and rows[0]["pnl_usd"] > 0 and rows[0]["symbol"] == "USDT-USDC>USDT-USD"
+    rows.clear(); pm.tri_last = 0
+    pm.triangle({"USDT-USD": (0.99970, 1000, 0.99971, 1000), "USDT-USDC": (0.99969, 1000, 0.99970, 1000)})
+    assert not rows                                                   # 0 gap → no fake profit

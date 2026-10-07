@@ -192,6 +192,7 @@ class Forge:
         B("surface", self.surface.run, 3600)
         B("listing_sentinel", self.listings.run, 600)
         B("crossrail", self.crossrail.run, 1200)
+        B("crossrail_fast", self.crossrail.fast_lane, 600)
         from forge.opportunities.pegmaker import PegMaker
         self.pegmaker = PegMaker(self)
         B("pegmaker", self.pegmaker.run, 300)

@@ -214,7 +214,7 @@ class Ledger:
     # ---- operating costs / income -----------------------------------------------------------------
     def record_opex(self, book: str, category: str, amount_usd: Decimal, ref_id: str,
                     strategy_id: str | None = None, memo: str | None = None) -> bool:
-        assert category in ("INFERENCE", "COMPUTE", "DATA")
+        assert category in ("INFERENCE", "COMPUTE", "DATA", "MEMBERSHIP")
         k = idempotency_key("opex", book, category, ref_id)
         return self._post([{"book": book, "account": f"OPEX:{category}", "kind": f"{category}_COST",
                             "amount_usd": amount_usd, "strategy_id": strategy_id, "ref_id": ref_id,

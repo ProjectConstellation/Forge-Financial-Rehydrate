@@ -80,9 +80,12 @@ class PegMaker:
         self.f = forge
         self.books = {s: PegBook(s, 0.00001 if s == "USDT-USD" else 0.0001) for s in symbols}
         self.capital = capital_usd
-        self.maker_fee = 0.00005
+        self.maker_fee = 0.00005                                  # legacy default (USDT-USD)
+        self.fees: dict[str, tuple[float, float]] = {"USDT-USD": (0.00005, 0.0001), "USDT-USDC": (0.0, 0.00001)}
         self.last_fee_probe = 0.0
+        self.tri_last = 0.0
         self.theta_bp = 0.5                                       # minimum discount to fair before we bid
+        self.tops: dict[str, tuple[float, float, float, float]] = {}
 
     # ---------------------------------------------------------------- helpers
     def _cap(self) -> float:
@@ -90,19 +93,49 @@ class PegMaker:
         return max(eq / len(self.books), 1.0)
 
     async def _fees(self) -> None:
+        """Measured per pair from Coinbase order PREVIEWS (read-only; commission is returned even without funds)."""
         if time.time() - self.last_fee_probe < 6 * 3600:
             return
         self.last_fee_probe = time.time()
-        try:
-            body = {"product_id": "USDT-USD", "side": "BUY", "order_configuration": {"limit_limit_gtc": {
-                "base_size": "10", "limit_price": "0.99", "post_only": True}}}
-            pv = await self.f.rest.preview_order(body)
-            total = float(pv.get("commission_total") or 0)
-            if total > 0:
-                self.maker_fee = total / 9.9
-                self.f.db.kv_set("fees.USDT-USD.maker", {"rate": self.maker_fee, "ts": time.time(), "source": "order preview"})
-        except Exception as e:
-            log.debug("fee probe failed: %s", e)
+        for sym in self.books:
+            out = []
+            for cfg in ({"limit_limit_gtc": {"base_size": "10", "limit_price": "0.99", "post_only": True}},
+                        {"market_market_ioc": {"quote_size": "10"}}):
+                try:
+                    pv = await self.f.rest.preview_order({"product_id": sym, "side": "BUY", "order_configuration": cfg})
+                    c = float(pv.get("commission_total") or 0)
+                    out.append(c / (9.9 if "limit_limit_gtc" in cfg else 10.0))
+                except Exception as e:
+                    log.debug("fee probe %s failed: %s", sym, e)
+                    out.append(None)
+            if out[0] is not None and out[1] is not None:
+                self.fees[sym] = (out[0], out[1])
+        self.maker_fee = self.fees.get("USDT-USD", (self.maker_fee, 0))[0]
+        self.f.db.kv_set("fees.stable", {"fees": self.fees, "ts": time.time(), "source": "order preview"})
+        self.f.db.kv_set("fees.USDT-USD.maker", {"rate": self.maker_fee, "ts": time.time(), "source": "order preview"})
+
+    def _mfee(self, sym: str) -> float:
+        return self.fees.get(sym, (self.maker_fee, 0.0))[0]
+
+    def triangle(self, tops: dict[str, tuple[float, float, float, float]]) -> None:
+        """USD ⇄ USDC convert is 1:1 and free → USDT-USD and USDT-USDC must agree. Taker-taker cycle when the gap beats
+        both taker fees + a 0.2 bp safety buffer (sizes bounded by displayed top-of-book and paper capital)."""
+        a, b = tops.get("USDT-USD"), tops.get("USDT-USDC")
+        if not a or not b or time.time() - self.tri_last < 30:
+            return
+        cap = self._cap() * len(self.books)
+        for buy_sym, sell_sym, ask, ask_sz, bid, bid_sz in (("USDT-USDC", "USDT-USD", b[2], b[3], a[0], a[1]),
+                                                            ("USDT-USD", "USDT-USDC", a[2], a[3], b[0], b[1])):
+            fb, fs = self.fees.get(buy_sym, (0, 0.0001))[1], self.fees.get(sell_sym, (0, 0.0001))[1]
+            edge = bid * (1 - fs) - ask * (1 + fb)
+            if edge / ask > 0.00002:
+                qty = min(ask_sz, bid_sz, cap / ask)
+                pnl = edge * qty
+                self.tri_last = time.time()
+                self.f.db.insert("shadow_trades", {"ts": time.time(), "rail": "coinbase.stable_triangle", "symbol": f"{buy_sym}>{sell_sym}",
+                                                   "side": "round_trip", "qty": qty, "entry": ask, "exit": bid,
+                                                   "fee_usd": qty * (ask * fb + bid * fs), "pnl_usd": pnl, "hold_s": 2.0,
+                                                   "detail": None})
 
     async def _snapshot(self, b: PegBook) -> tuple[float, float, float, float, list[tuple[float, float, str]]] | None:
         rest = self.f.rest
@@ -129,6 +162,7 @@ class PegMaker:
         if snap is None:
             return
         bb, bsz, ba, asz, prints = snap
+        self.tops[b.symbol] = (bb, bsz, ba, asz)
         mid = 0.5 * (bb + ba)
         now = time.time()
         a = 1 - math.exp(math.log(0.5) * self.POLL_S / self.FAIR_HALFLIFE_S)
@@ -165,7 +199,7 @@ class PegMaker:
             b.bid = None
         if b.inv_qty > 0:
             avg = b.inv_cost / b.inv_qty
-            min_px = avg * (1 + self.maker_fee) + b.tick
+            min_px = avg * (1 + 2 * self._mfee(b.symbol)) + b.tick
             stale = now - b.inv_ts > self.MAX_HOLD_S
             px = max(ba, math.ceil(min_px / b.tick) * b.tick) if not stale else ba
             if b.ask is None or abs(b.ask.price - px) > 1e-12:
@@ -175,7 +209,7 @@ class PegMaker:
         b.stats["mark_usd"] = b.inv_qty * bb - b.inv_cost
 
     def _fill(self, b: PegBook, q: Quote, qty: float, now: float) -> None:
-        fee = q.price * qty * self.maker_fee
+        fee = q.price * qty * self._mfee(b.symbol)
         b.stats["fills"] += 1
         b.stats["fees_usd"] += fee
         if q.side == "buy":
@@ -203,7 +237,8 @@ class PegMaker:
                 await self._fees()
                 for b in self.books.values():
                     await asyncio.wait_for(self.step(b), timeout=20)
-                self.f.db.kv_set("pegmaker.state", {"ts": time.time(), "maker_fee": self.maker_fee, "books": {
+                self.triangle(self.tops)
+                self.f.db.kv_set("pegmaker.state", {"ts": time.time(), "fees": self.fees, "books": {
                     s: {"fair": b.fair, "inv_qty": b.inv_qty, "halted": b.halted, **b.stats,
                         "bid": b.bid.price if b.bid else None, "ask": b.ask.price if b.ask else None,
                         "queue_ahead": b.bid.queue_ahead if b.bid else None} for s, b in self.books.items()}})

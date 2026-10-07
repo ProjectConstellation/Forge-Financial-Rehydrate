@@ -299,7 +299,7 @@ class CrossRailScanner:
                                                   "ts": time.time()})
 
     # ---------------------------------------------------------------- scan
-    async def scan_once(self) -> dict[str, Any]:
+    async def scan_once(self, only: set[str] | None = None) -> dict[str, Any]:
         if time.time() - self.last_series > self.SERIES_REFRESH_S or not self.mapping:
             await self.refresh_series()
         if time.time() - self.last_calib_fit > self.CALIB_REFIT_S:
@@ -307,6 +307,8 @@ class CrossRailScanner:
         now = time.time()
         n_mk = n_sig = 0
         for series, pid in list(self.mapping.items()):
+            if only is not None and series not in only:
+                continue
             meta = self.series_meta.get(series, {})
             ft, mult = str(meta.get("fee_type") or "quadratic"), float(meta.get("fee_multiplier") or 1.0)
             ref = self._ref_price(pid)
@@ -491,6 +493,20 @@ class CrossRailScanner:
                                 "wins": r["w"], "avg_expected_edge": r["e"], "expired_quotes": r["x"]}
         out["signals"] = kinds
         return out
+
+    async def fast_lane(self) -> None:
+        """15-minute contracts re-priced every 15 s against the live Coinbase WebSocket price: when Coinbase moves, Kalshi
+        quotes can lag — stale quotes are exactly where a fast fair-value model earns (taker signals, settled honestly)."""
+        import asyncio
+        while not self.f.stop_event.is_set():
+            self.f.sup.beat("crossrail_fast")
+            fast = {t for t, m in self.series_meta.items() if m.get("frequency") == "fifteen_min"}
+            if fast:
+                try:
+                    await asyncio.wait_for(self.scan_once(only=fast), timeout=60)
+                except Exception as e:
+                    log.debug("fast lane: %s", e)
+            await asyncio.sleep(15)
 
     async def run(self) -> None:
         import asyncio
