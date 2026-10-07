@@ -199,6 +199,8 @@ class Forge:
         from forge.treasury.profit_velocity import VelocityEngine
         self.velocity = VelocityEngine(self)
         B("velocity", self.velocity.run, 900)
+        from forge.ops.econ import EconSampler
+        B("econ", EconSampler(self).run, 120)
         from forge.agents.genome import PromptGenomes
         self.prompt_genomes = PromptGenomes(self)
         self.prompt_genomes.seed()

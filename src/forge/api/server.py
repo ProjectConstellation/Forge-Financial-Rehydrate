@@ -251,8 +251,8 @@ def build_app(forge: Any) -> FastAPI:
     @app.middleware("http")
     async def gate(request: Request, call_next):  # type: ignore[no-untyped-def]
         path = request.url.path
-        if path.startswith("/api/agent/"):
-            if _external(request):                                # agent API is loopback-only (never via the tunnel)
+        if path.startswith(("/api/agent/", "/api/ops/")):
+            if _external(request):                                # agent + OPS APIs are loopback-only (never via the tunnel)
                 return JSONResponse({"detail": "not found"}, status_code=404)
             return await call_next(request)                       # route enforces the agent token
         if path in ("/ready", "/metrics") and not _external(request):

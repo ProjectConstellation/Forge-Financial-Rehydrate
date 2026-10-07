@@ -188,6 +188,68 @@ def register(ctx):
         "chat. Never guess or reuse codes.", {"pending_id": {"type": "string"}, "code": {"type": "string"}},
         ["pending_id", "code"]))
 
+    # ---------------------------------------------------------------- executive economics + campaigns + transfers
+    def h_econ(params, session_id=None, **kw):
+        w = urllib.parse.quote(str(params.get("window", "1h")))
+        return _out(_call("GET", f"/api/ops/econ?window={w}", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_econ", toolset="forge_ops", handler=h_econ, schema=_schema(
+        "ops_econ", "[FORGE EXEC] Money for ANY window: 30s, 1m, 15m, 1h, 4h, today, 24h, 7d, lifetime (or 90s / 3h / "
+        "2d). Returns LIVE true net + $/h (real wallets), PAPER realized/unrealized, costs (fees, inference, compute), "
+        "deployed capital, by strategy and by rail. Use for 'how much did we make in the last X', 'total balance'.",
+        {"window": {"type": "string"}}))
+
+    def h_debrief(params, session_id=None, **kw):
+        return _out(_call("GET", "/api/ops/debrief", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_debrief", toolset="forge_ops", handler=h_debrief, schema=_schema(
+        "ops_debrief", "[FORGE EXEC] Everything needed for 'Debrief me': FORGE TODAY numbers, what worked, what didn't, "
+        "what FORGE is doing (objectives, focus, diagnosis), next best levers. Format it as the executive debrief.", {}))
+
+    def h_objective(params, session_id=None, **kw):
+        return _out(_call("POST", "/api/ops/action", {"action": "launch_objective", "params": {
+            "kind": params.get("kind", "grow_profit"), "objective": params.get("objective", "")}}, _actor(session_id)))
+    ctx.register_tool(name="ops_objective", toolset="forge_ops", handler=h_objective, schema=_schema(
+        "ops_objective", "[FORGE EXEC] Turn an owner goal into a coordinated campaign across the specialist roles: "
+        "grow_profit ('make more money', 're-strategize', 'upgrade the algorithms'), integrate_platform ('add <platform>'), "
+        "fix ('fix what's broken'), custom. Combine with ops_action compute_boost / research_focus when justified.",
+        {"kind": {"type": "string", "enum": ["grow_profit", "integrate_platform", "fix", "custom"]},
+         "objective": {"type": "string"}}, ["kind", "objective"]))
+
+    def h_objectives(params, session_id=None, **kw):
+        return _out(_call("GET", f"/api/ops/objectives?status_={urllib.parse.quote(params.get('status', 'ALL'))}",
+                          actor=_actor(session_id)))
+    ctx.register_tool(name="ops_objectives", toolset="forge_ops", handler=h_objectives, schema=_schema(
+        "ops_objectives", "[FORGE EXEC] Executive objectives with per-role progress and results.",
+        {"status": {"type": "string", "enum": ["ALL", "ACTIVE", "COMPLETE"]}}))
+
+    def h_ticket(params, session_id=None, **kw):
+        return _out(_call("POST", "/api/ops/action", {"action": "file_ticket", "params": params}, _actor(session_id)))
+    ctx.register_tool(name="ops_ticket", toolset="forge_ops", handler=h_ticket, schema=_schema(
+        "ops_ticket", "[FORGE EXEC] File an engineering ticket when a goal needs code (new platform adapter, algorithm "
+        "change, bug fix). Include the credential type needed, if any.",
+        {"title": {"type": "string"}, "spec": {"type": "string"}, "credential_needed": {"type": "string"}}, ["title"]))
+
+    def h_tickets(params, session_id=None, **kw):
+        return _out(_call("GET", "/api/ops/tickets", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_tickets", toolset="forge_ops", handler=h_tickets, schema=_schema(
+        "ops_tickets", "[FORGE EXEC] Engineering tickets and their status.", {}))
+
+    def h_transfer(params, session_id=None, **kw):
+        return _out(_call("POST", "/api/ops/transfer/preview", {"amount_usd": params.get("amount_usd")}, _actor(session_id)))
+    ctx.register_tool(name="ops_transfer_preview", toolset="forge_ops", handler=h_transfer, schema=_schema(
+        "ops_transfer_preview", "[FORGE EXEC] Step 1 of 'transfer $X to me': preview amount, destination (owner's own "
+        "pre-registered Coinbase portfolio), fee, treasury before/after and blockers. Show it to the owner verbatim.",
+        {"amount_usd": {"type": "number"}}, ["amount_usd"]))
+
+    def h_transfer_confirm(params, session_id=None, **kw):
+        return _out(_call("POST", "/api/ops/transfer/confirm", {"transfer_id": params.get("transfer_id"),
+                                                                "phrase": params.get("phrase"), "code": params.get("code")},
+                          _actor(session_id)))
+    ctx.register_tool(name="ops_transfer_confirm", toolset="forge_ops", handler=h_transfer_confirm, schema=_schema(
+        "ops_transfer_confirm", "[FORGE EXEC] Step 2: ONLY after the owner typed 'CONFIRM TRANSFER $<amount> <6-digit "
+        "authenticator code>'. Pass the phrase part and the code exactly as typed. Never fill these in yourself.",
+        {"transfer_id": {"type": "string"}, "phrase": {"type": "string"}, "code": {"type": "string"}},
+        ["transfer_id", "phrase", "code"]))
+
     # ---------------------------------------------------------------- host operations (FORGE units only)
     def h_restart(params, session_id=None, **kw):
         unit = UNITS.get(str(params.get("unit", "")))

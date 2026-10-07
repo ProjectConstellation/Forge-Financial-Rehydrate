@@ -42,8 +42,15 @@ ACTIONS: dict[str, tuple[str, str]] = {
     "kalshi_live_off": ("SAFE", "disable Kalshi live execution (shadow continues)"),
     "kalshi_live_on": ("CONFIRM", "re-enable Kalshi live execution (still gated by the evidence ladder + breakers)"),
     "cancel_directive": ("SAFE", "cancel an open directive: params {id}"),
+    "launch_objective": ("SAFE", "executive objective → coordinated multi-role campaign: params {kind: grow_profit | "
+                                 "integrate_platform | fix | custom, objective}"),
+    "file_ticket": ("SAFE", "engineering ticket for code changes / new adapters: params {title, spec, credential_needed}"),
+    "lockdown": ("SAFE", "FREEZE remote control: only status reads and stop_trading work until unlocked"),
+    "unlock": ("CONFIRM", "lift a lockdown"),
 }
+ALWAYS_ALLOWED_WHEN_LOCKED = {"stop_trading", "lockdown"}
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+READ_AUDIT_SKIP_MIRROR = {"status", "tool", "econ", "debrief", "directives_read", "objectives_read", "audit_read"}
 RATE = {"read": (240, 60.0), "write": (30, 600.0), "confirm": (12, 3600.0)}     # (max calls, window seconds)
 _hits: dict[str, list[float]] = {}
 
@@ -133,14 +140,37 @@ def status(forge: Any) -> dict[str, Any]:
 def mount_ops(app: FastAPI, forge: Any, token: str) -> None:
     db = forge.db
 
+    from forge.ops import totp
+
     def audit(actor: str, action: str, args: Any, outcome: str, detail: Any = None, channel: str = "ops") -> None:
         db.insert("ops_audit", {"ts": time.time(), "actor": actor[:80], "channel": channel[:40], "action": action[:80],
                                 "args": json.dumps(args, default=str)[:4000], "outcome": outcome,
                                 "detail": json.dumps(detail, default=str)[:4000] if detail is not None else None})
+        if action not in READ_AUDIT_SKIP_MIRROR or outcome not in ("OK",):
+            try:      # tamper-evident mirror: hash-chained audit journal (forge verify-audit)
+                forge.audit.append("OPS", {"actor": actor, "channel": channel, "action": action, "outcome": outcome,
+                                           "args": json.dumps(args, default=str)[:600]}, actor=f"ops:{actor}"[:60])
+            except Exception:
+                pass
+
+    def locked() -> bool:
+        return bool((db.kv_get("ops.locked") or {}).get("locked"))
+
+    def second_factor(code: str, pending: dict[str, Any] | None) -> tuple[bool, str]:
+        """TOTP when configured (strong, channel-independent); else the one-time out-of-band code of the pending action."""
+        home = forge.s.home
+        if totp.configured(home):
+            return totp.verify(home, db, code)
+        if pending is None:
+            return False, "authenticator (2FA) not configured — run forge-exec-2fa on the server"
+        ok = hmac.compare_digest(hashlib.sha256(f"{pending['id']}:{code}".encode()).hexdigest(), pending["code_hash"])
+        return ok, "ok" if ok else "wrong confirmation code"
 
     def check(req: Request, cls: str, action: str) -> str:
         host = req.client.host if req.client else ""
         a = req.headers.get("authorization", "")
+        if "cf-connecting-ip" in req.headers or "x-forwarded-for" in req.headers:
+            raise HTTPException(404, "not found")                     # never reachable through the portal tunnel
         if host not in LOOPBACK or not (a.startswith("Bearer ") and
                                                                  hmac.compare_digest(a[7:].strip(), token)):
             raise HTTPException(401, "ops token required (loopback only)")
@@ -173,6 +203,19 @@ def mount_ops(app: FastAPI, forge: Any, token: str) -> None:
         if action in ("kalshi_live_off", "kalshi_live_on"):
             db.kv_set("ops.kalshi_live", "off" if action.endswith("off") else "on")
             return {"kalshi_live": db.kv_get("ops.kalshi_live")}
+        if action == "launch_objective":
+            from forge.ops.executive import launch_objective
+            return launch_objective(db, str(p.get("kind") or "grow_profit"), str(p.get("objective") or ""), f"ops:{actor}")
+        if action == "file_ticket":
+            from forge.ops.executive import file_ticket
+            return file_ticket(db, str(p.get("title") or "untitled"), str(p.get("spec") or ""), p.get("credential_needed"),
+                               f"ops:{actor}")
+        if action == "lockdown":
+            db.kv_set("ops.locked", {"locked": True, "ts": time.time(), "by": actor})
+            return {"locked": True, "note": "remote control frozen: reads + stop_trading only; unlock needs 2FA"}
+        if action == "unlock":
+            db.kv_set("ops.locked", {"locked": False, "ts": time.time(), "by": actor})
+            return {"locked": False}
         if action == "cancel_directive":
             db.execute("UPDATE ops_directives SET status = 'CANCELLED', done_ts = ? WHERE id = ? AND status = 'OPEN'",
                        (time.time(), int(p.get("id") or 0)))
@@ -235,6 +278,9 @@ def mount_ops(app: FastAPI, forge: Any, token: str) -> None:
             audit(actor, action, p, "DENIED", "unknown action")
             raise HTTPException(403, f"unknown action; allowed: {sorted(ACTIONS)}")
         cls = ACTIONS[action][0]
+        if locked() and action not in ALWAYS_ALLOWED_WHEN_LOCKED and action != "unlock":
+            audit(actor, action, p, "DENIED", "lockdown active")
+            raise HTTPException(423, "FORGE remote control is in LOCKDOWN — only status and stop_trading; unlock needs 2FA")
         if cls == "CONFIRM":
             code = f"{secrets.randbelow(10**6):06d}"
             pid = secrets.token_hex(4)
@@ -242,7 +288,11 @@ def mount_ops(app: FastAPI, forge: Any, token: str) -> None:
                                       "code_hash": hashlib.sha256(f"{pid}:{code}".encode()).hexdigest(),
                                       "expires_ts": time.time() + 600, "status": "PENDING"})
             audit(actor, action, p, "PENDING_CONFIRMATION", {"pending_id": pid})
-            return {"status": "CONFIRMATION_REQUIRED", "pending_id": pid, "expires_in_s": 600,
+            if totp.configured(forge.s.home):
+                return {"status": "CONFIRMATION_REQUIRED", "pending_id": pid, "expires_in_s": 600, "factor": "authenticator",
+                        "description": ACTIONS[action][1],
+                        "instructions": f"Owner replies: CONFIRM {pid} <6-digit code from the FORGE authenticator entry>"}
+            return {"status": "CONFIRMATION_REQUIRED", "pending_id": pid, "expires_in_s": 600, "factor": "out_of_band_code",
                     "description": ACTIONS[action][1], "owner_code": code}      # stripped by the OPS plugin
         try:
             res = execute(action, p, actor)
@@ -260,15 +310,17 @@ def mount_ops(app: FastAPI, forge: Any, token: str) -> None:
         row = db.query_one("SELECT * FROM ops_pending WHERE id = ?", (pid,))
         if not row or row["status"] != "PENDING":
             raise HTTPException(404, "no pending action with that id")
+        if locked() and row["action"] != "unlock":
+            raise HTTPException(423, "LOCKDOWN — only 'unlock' can be confirmed")
         if time.time() > row["expires_ts"] or row["attempts"] >= 3:
             db.execute("UPDATE ops_pending SET status = 'EXPIRED', decided_ts = ? WHERE id = ?", (time.time(), pid))
             audit(actor, f"confirm:{row['action']}", {"pending_id": pid}, "DENIED", "expired / too many attempts")
             raise HTTPException(410, "confirmation expired or too many attempts — request the action again")
-        ok = hmac.compare_digest(hashlib.sha256(f"{pid}:{code}".encode()).hexdigest(), row["code_hash"])
+        ok, why = second_factor(code, row)
         if not ok:
             db.execute("UPDATE ops_pending SET attempts = attempts + 1 WHERE id = ?", (pid,))
-            audit(actor, f"confirm:{row['action']}", {"pending_id": pid}, "DENIED", "wrong code")
-            raise HTTPException(403, "wrong confirmation code")
+            audit(actor, f"confirm:{row['action']}", {"pending_id": pid}, "DENIED", why)
+            raise HTTPException(403, why)
         try:
             res = execute(row["action"], json.loads(row["params"] or "{}"), actor)
         except Exception as e:
@@ -294,6 +346,84 @@ def mount_ops(app: FastAPI, forge: Any, token: str) -> None:
         check(request, "read", "audit_read")
         return db.query("SELECT id, ts, actor, channel, action, substr(args, 1, 300) args, outcome, substr(detail, 1, 300) detail "
                         "FROM ops_audit ORDER BY id DESC LIMIT ?", (min(limit, 200),))
+
+    @app.get("/api/ops/econ")
+    async def ops_econ(request: Request, window: str = "1h") -> Any:
+        actor = check(request, "read", "econ")
+        from forge.ops.econ import window as econ_window
+        try:
+            out = econ_window(forge, window)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        audit(actor, "econ", {"window": window}, "OK")
+        return out
+
+    @app.get("/api/ops/debrief")
+    async def ops_debrief(request: Request) -> Any:
+        actor = check(request, "read", "debrief")
+        from forge.ops.executive import debrief
+        out = debrief(forge)
+        audit(actor, "debrief", None, "OK")
+        return out
+
+    @app.get("/api/ops/objectives")
+    async def ops_objectives(request: Request, status_: str = "ALL") -> Any:
+        check(request, "read", "objectives_read")
+        from forge.ops.executive import objectives
+        return objectives(db, status_)
+
+    @app.get("/api/ops/tickets")
+    async def ops_tickets(request: Request) -> Any:
+        check(request, "read", "tickets")
+        return db.query("SELECT * FROM eng_tickets ORDER BY id DESC LIMIT 20")
+
+    @app.post("/api/ops/transfer/preview")
+    async def ops_transfer_preview(request: Request) -> Any:
+        actor = check(request, "write", "transfer_preview")
+        if locked():
+            raise HTTPException(423, "LOCKDOWN — transfers disabled")
+        b = await request.json()
+        from forge.ops.executive import transfer_preview
+        out = await transfer_preview(forge, float(b.get("amount_usd") or 0))
+        audit(actor, "transfer_preview", {"amount_usd": b.get("amount_usd")}, out["status"], out)
+        return out
+
+    @app.post("/api/ops/transfer/confirm")
+    async def ops_transfer_confirm(request: Request) -> Any:
+        """Owner's final confirmation: exact phrase 'CONFIRM TRANSFER $<amount>' + authenticator code (2FA mandatory)."""
+        import re as _re
+        actor = check(request, "confirm", "transfer_confirm")
+        if locked():
+            raise HTTPException(423, "LOCKDOWN — transfers disabled")
+        b = await request.json()
+        tid, phrase, code = str(b.get("transfer_id", "")), str(b.get("phrase", "")), str(b.get("code", ""))
+        t = db.query_one("SELECT * FROM ops_transfers WHERE id = ?", (tid,))
+        if not t or t["status"] != "PREVIEWED":
+            raise HTTPException(404, "no previewed transfer with that id")
+        m = _re.fullmatch(r"\s*CONFIRM TRANSFER \$?([0-9]+(?:\.[0-9]{1,2})?)\s*", phrase, flags=_re.I)
+        if not m or abs(float(m.group(1)) - float(t["amount_usd"])) > 0.004:
+            audit(actor, "transfer_confirm", {"transfer_id": tid}, "DENIED", "phrase mismatch")
+            raise HTTPException(403, f"confirmation phrase must be exactly: CONFIRM TRANSFER ${float(t['amount_usd']):.2f}")
+        if not totp.configured(forge.s.home):
+            raise HTTPException(403, "transfers require the authenticator second factor (server: forge-exec-2fa)")
+        ok, why = totp.verify(forge.s.home, db, code)
+        if not ok:
+            audit(actor, "transfer_confirm", {"transfer_id": tid}, "DENIED", why)
+            raise HTTPException(403, why)
+        from forge.ops.executive import transfer_execute
+        try:
+            out = await transfer_execute(forge, tid)
+        except Exception as e:
+            audit(actor, "transfer_execute", {"transfer_id": tid}, "ERROR", str(e)[:300])
+            raise HTTPException(400, str(e)[:300]) from e
+        audit(actor, "transfer_execute", {"transfer_id": tid, "amount_usd": t["amount_usd"]}, "OK", out)
+        return out
+
+    @app.get("/api/ops/transfers")
+    async def ops_transfers(request: Request) -> Any:
+        check(request, "read", "transfers")
+        return db.query("SELECT id, ts, amount_usd, destination, status, treasury_before, treasury_after FROM ops_transfers "
+                        "ORDER BY ts DESC LIMIT 20")
 
     @app.post("/api/ops/usage")
     async def ops_usage(request: Request) -> Any:

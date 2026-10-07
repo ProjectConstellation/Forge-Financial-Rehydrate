@@ -247,3 +247,15 @@ research profile invisible); Telegram (outbound long-polling, owner user-ID allo
 loopback, audited, rate-limited); directives → role briefs → role reports; SAFE actions run, CONFIRM actions need a
 one-time code delivered out-of-band to the owner's Telegram (never visible to the model); polkit allows only
 restart/start of forge, forge-hermes, forge-tunnel. Code changes/deploys remain with the engineering channel.
+
+## OP-024 — 2026-10-07 — FORGE EXECUTIVE OPS (upgrade of OP-023; owner's private natural-language control plane)
+Operator: one private executive agent (assistant + CTO + quant CIO + chief of staff + ops commander) for debriefs, money
+questions for any window, executive objectives ("make more money", "add <platform>", "fix it"), delegation to all roles,
+owner transfers with one explicit confirmation, owner-only high-security mobile access, emergency revocation.
+Implemented (same agent, upgraded): econ telemetry (10-s marks; windows 30 s … lifetime; LIVE vs PAPER; by strategy/rail;
+costs), debrief, objective playbooks (grow_profit / integrate_platform / fix / custom → multi-role directives + engineering
+tickets), credential intake `forge-exec-secret` (server-side, hidden input), transfers = FORGE portfolio → owner's own
+Coinbase portfolio via official move_funds (preview → "CONFIRM TRANSFER $X" + authenticator code → execute → audit;
+blocked while the key has can_transfer=false — unchanged until the owner authorises), TOTP 2FA with replay protection,
+LOCKDOWN mode, hash-chained audit mirror, `forge-exec-revoke`. Channel: Signal recommended (E2E, UUID-bound); Telegram
+supported (user-ID + private-chat bound).
