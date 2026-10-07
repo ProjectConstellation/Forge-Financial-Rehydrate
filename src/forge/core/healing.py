@@ -19,6 +19,7 @@ import math
 import os
 import time
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -68,6 +69,24 @@ class Circuit:
     def snapshot(self) -> dict[str, Any]:
         return {"name": self.name, "state": self.state, "failures": self.failures, "total_failures": self.total_failures,
                 "total_success": self.total_success, "cooldown_s": round(self.cooldown_s), "last_error": self.last_error}
+
+
+def find_bad_prints(close: Any, window: int = 50) -> list[int]:
+    """Indices (absolute) of isolated single-bar spikes that fully revert on the next bar (bad ticks)."""
+    import numpy as np
+    c = np.asarray(close, dtype=float)
+    if len(c) < 10:
+        return []
+    start = max(1, len(c) - window)
+    r = np.diff(np.log(np.maximum(c, 1e-12)))
+    med = float(np.median(np.abs(r[start - 1:]))) or 1e-6
+    big = max(0.25, 40 * med)
+    out = []
+    for i in range(start, len(c) - 1):                 # spike at bar i: r[i-1] = into it, r[i] = out of it
+        a, b = r[i - 1], r[i]
+        if abs(a) > big and np.sign(b) == -np.sign(a) and abs(b) > 0.6 * abs(a):
+            out.append(i)
+    return out
 
 
 def bar_integrity(series_arrays: dict[str, Any], interval_s: int | None = None, now_s: float | None = None,
@@ -165,16 +184,56 @@ class HealthMonitor:
                 bbo = self.f.market.get_bbo(sym)
                 issues = bar_integrity(st.series.arrays(), interval, time.time(), bbo.mid if bbo else None)
                 key = f"{sym}@{interval}"
+                if issues and any(i.startswith("bad print") for i in issues):
+                    fixed = await self._repair_bad_prints(eng, sym, st)
+                    if fixed:
+                        issues = bar_integrity(st.series.arrays(), interval, time.time(), bbo.mid if bbo else None)
                 if issues and key not in self.quarantined:
                     self.quarantined[key] = {"since": time.time(), "issues": issues}
                     self.f.db.kv_set(f"quarantine.{sym}", {"issues": issues, "interval": interval, "since": time.time()})
                     await self.f.say("Self-Healing", f"DATA QUARANTINE {sym} ({interval // 60}m): {'; '.join(issues)} → trading paused "
-                                                     "on this market; refetching authoritative bars", level="warn")
-                    eng.state.pop(sym, None)                    # drop corrupted cache; next refresh rebuilds from REST/store
+                                                     "on this market until the data is consistent", level="warn")
+                    # state is NOT dropped: reloading from the store re-imported the same bad bar (quarantine loop,
+                    # found by Hermes 2026-10-07); repairs happen in place, fresh bars arrive via the normal refresh
                 elif not issues and key in self.quarantined:
                     self.quarantined.pop(key, None)
                     self.f.db.kv_set(f"quarantine.{sym}", None)
                     await self.f.say("Self-Healing", f"{sym} data healed → market re-enabled")
+
+    async def _repair_bad_prints(self, eng: Any, sym: str, st: Any) -> int:
+        """Refetch the affected window from Coinbase (authoritative); if the isolated reverting spike is still there it is a
+        bad tick → flatten that bar to the previous close in memory AND in the store (logged). Returns bars repaired."""
+        import asyncio as _a
+
+        import numpy as np
+        arr = st.series.arrays()
+        bad = find_bad_prints(arr["close"])
+        if not bad:
+            return 0
+        n0 = len(arr["ts"])
+        try:
+            t0, t1 = int(arr["ts"][bad[0] - 2]), int(arr["ts"][min(bad[-1] + 2, n0 - 1)]) + eng.interval_s
+            rows = await self.f.rest.candles(sym, t0, t1, eng.interval_s)
+            for r in rows:
+                ts = int(r["start"])
+                j = int(np.searchsorted(arr["ts"], ts))
+                if j < n0 and int(arr["ts"][j]) == ts:
+                    for col, k in (("open", "open"), ("high", "high"), ("low", "low"), ("close", "close")):
+                        st.series._a[col][j] = float(r[k])
+        except Exception:
+            pass
+        still = find_bad_prints(st.series.arrays()["close"])
+        for i in still:
+            prev = float(st.series._a["close"][i - 1])
+            self.f.db.insert("listing_events", {"ts": datetime.now(UTC).isoformat(), "product_id": sym, "product_type": "BARS",
+                                                "event": "BAD_TICK_REPAIRED",
+                                                "before": f"{float(st.series._a['close'][i]):.10g}@{int(st.series._a['ts'][i])}",
+                                                "after": f"{prev:.10g}"})
+            st.series.repair_bar(i, prev)
+        if still:
+            await _a.to_thread(eng.store.merge, sym, eng.interval_s, st.series.arrays())
+            eng.recompute([sym])
+        return len(still) + (len(bad) - len(still))
 
     async def _heal_paper_truth(self) -> None:
         """Paper wallet-truth: ledger vs paper venue; on mismatch rebuild the venue state from the ledger (authoritative)."""

@@ -117,3 +117,17 @@ def test_sealed_exam_rules():
     assert sealed_exam(good, 1)[0]
     assert not sealed_exam(NS(metrics={"n": 3, "mean_net": 0.05, "p_positive": 0.9}, trades=[]), 1)[0]
     assert not sealed_exam(NS(metrics={"n": 20, "mean_net": -0.001, "p_positive": 0.4}, trades=[]), 1)[0]
+
+
+def test_bad_print_detector_and_repair():
+    from forge.core.healing import bar_integrity, find_bad_prints
+    from forge.market_data.bars import BarSeries
+    b = _bars(400)
+    c = b["close"].copy()
+    c[380] = c[379] * 0.36                                  # isolated −102% (log) spike that reverts next bar
+    b["close"], b["low"] = c, np.minimum(b["low"], c)
+    assert find_bad_prints(c) == [380]
+    s = BarSeries.from_arrays(300, b)
+    assert any(i.startswith("bad print") for i in bar_integrity(s.arrays()))
+    s.repair_bar(380, float(c[379]))
+    assert find_bad_prints(s.arrays()["close"]) == [] and not any(i.startswith("bad print") for i in bar_integrity(s.arrays()))

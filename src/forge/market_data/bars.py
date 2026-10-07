@@ -58,6 +58,12 @@ class BarSeries:
     def arrays(self) -> dict[str, np.ndarray]:
         return {c: self._a[c][: self.n] for c in COLS}
 
+    def repair_bar(self, i: int, price: float) -> None:
+        """Bad-tick filter: flatten bar i to `price` (o=h=l=c), keep volume. Only for confirmed isolated reverting spikes."""
+        if 0 <= i < self.n:
+            for col in ("open", "high", "low", "close"):
+                self._a[col][i] = price
+
     def last(self, col: str) -> float:
         return float(self._a[col][self.n - 1]) if self.n else float("nan")
 

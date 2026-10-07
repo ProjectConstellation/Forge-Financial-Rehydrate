@@ -23,8 +23,8 @@ case "${1:-status}" in
     ensure forge-scout       "every 1h"  forge_scout.py   high scout.md
     ensure forge-governor    "every 1h"  gate_governor.py high governor.md
     ensure forge-scientist   "every 1h"  gate_scientist.py high scientist.md
-    ensure forge-scientist-b "every 90m" gate_scientist.py high scientist_b.md
-    ensure forge-rail-hunter "every 3h"  gate_governor.py high rail_hunter.md
+    ensure forge-scientist-b "every 90m" gate_scientist_b.py high scientist_b.md
+    ensure forge-rail-hunter "every 3h"  gate_rail_hunter.py high rail_hunter.md
     ensure forge-critic      "every 4h"  gate_critic.py   high critic.md
     ensure forge-doctor      "every 30m" gate_doctor.py   high doctor.md
     for j in forge-scientist-b forge-rail-hunter; do resume $j; done

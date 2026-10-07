@@ -7,11 +7,17 @@ hc() { sudo -u forge-hermes env HOME=$HH HERMES_HOME=$HH $H/app/venv/bin/hermes 
 # 1) plugin + gate scripts + agent token (token copied 0600; Hermes never sees exchange keys)
 sudo rsync -a --delete /srv/forge/hermes/plugin/hermes-forge/ $HH/plugins/hermes-forge/
 sudo rsync -a /srv/forge/hermes/scripts/ $HH/scripts/
-for r in governor scientist critic doctor; do
-  printf 'import runpy, sys\nsys.argv = ["forge_gate.py", "%s", "%s", "%s"]\nrunpy.run_path(__file__.rsplit("/", 1)[0] + "/forge_gate.py", run_name="__main__")\n' \
-    "$r" "$( [ $r = scientist ] && echo 0.03 || echo 0.01 )" "$( case $r in governor) echo 6;; scientist) echo 8;; critic) echo 24;; doctor) echo 9999;; esac )" \
-    | sudo tee $HH/scripts/gate_$r.py >/dev/null
-done
+gate() { # file role est quiet_h key
+  printf 'import runpy, sys\nsys.path.insert(0, __file__.rsplit("/", 1)[0])\nsys.argv = ["forge_gate.py", "%s", "%s", "%s", "%s"]\nrunpy.run_path(__file__.rsplit("/", 1)[0] + "/forge_gate.py", run_name="__main__")\n' \
+    "$2" "$3" "$4" "$5" | sudo tee $HH/scripts/$1 >/dev/null
+}
+gate gate_governor.py    governor  0.01 6    governor
+gate gate_scientist.py   scientist 0.03 8    scientist_a
+gate gate_scientist_b.py scientist 0.03 8    scientist_b
+gate gate_critic.py      critic    0.01 24   critic
+gate gate_doctor.py      doctor    0.01 9999 doctor
+gate gate_rail_hunter.py scout     0.01 12   rail_hunter
+gate gate_architect.py   governor  0.03 12   architect
 sudo install -m 600 -o forge-hermes -g forge-hermes /srv/forge/var/run/agent_token $HH/forge/agent_token
 sudo chown -R forge-hermes:forge-hermes $HH
 hc plugins enable hermes-forge >/dev/null 2>&1 || true

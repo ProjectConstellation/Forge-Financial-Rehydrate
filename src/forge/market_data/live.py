@@ -173,14 +173,15 @@ class BarEngine:
 
     async def refresh(self, symbols: list[str]) -> list[str]:
         """Fetch the latest complete bars; returns symbols that got a new closed bar."""
-        self.load_history(symbols)
+        missing = [s for s in symbols if s not in self.state]
+        if missing:                                     # parquet reads never run on the event loop
+            await asyncio.to_thread(self.load_history, missing)
         now = int(time.time())
         last_complete = now // self.interval_s * self.interval_s - self.interval_s
         updated = []
         for s in symbols:
             st = self.state.get(s)
-            if st is None:                                   # removed concurrently (data healing rebuild) → reload, next pass
-                self.load_history([s])
+            if st is None:                                   # removed concurrently → reloaded (off-loop) on the next pass
                 continue
             have = int(st.series.last("ts")) if len(st.series) else 0
             if have >= last_complete:

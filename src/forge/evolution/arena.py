@@ -109,10 +109,28 @@ class Arena:
         return g.id
 
     def _trim(self) -> None:
+        """Population cap without killing newcomers (Hermes finding 2026-10-07: stale fitness from older datasets retired
+        every fresh champion within seconds). Young strategies (< 12 h) are protected up to half the cap; the rest compete
+        on fitness decayed by age (fitness values from different data windows are not comparable)."""
+        now = datetime.now(UTC)
         for st, cap in ((State.SHADOW, self.policy.max_shadow), (State.EXPERIMENTAL, self.policy.max_experimental)):
-            rows = self.db.query("SELECT id FROM strategies WHERE population = ? ORDER BY COALESCE(fitness,-99) DESC", (st.value,))
-            for r in rows[cap:]:
-                self.reg.transition(r["id"], State.RETIRED, f"population cap ({st.value} > {cap}); lineage retained")
+            rows = self.db.query("SELECT id, fitness, created_at FROM strategies WHERE population = ?", (st.value,))
+            if len(rows) <= cap:
+                continue
+
+            def age_d(r: dict[str, Any]) -> float:
+                try:
+                    return (now - datetime.fromisoformat(r["created_at"])).total_seconds() / 86400
+                except (TypeError, ValueError):
+                    return 99.0
+            young = sorted((r for r in rows if age_d(r) < 0.5), key=lambda r: -(r["fitness"] if r["fitness"] is not None else -99))
+            keep = {r["id"] for r in young[: cap // 2]}
+            rest = sorted((r for r in rows if r["id"] not in keep),
+                          key=lambda r: -((r["fitness"] if r["fitness"] is not None else -99) - 0.05 * age_d(r)))
+            keep |= {r["id"] for r in rest[: cap - len(keep)]}
+            for r in rows:
+                if r["id"] not in keep:
+                    self.reg.transition(r["id"], State.RETIRED, f"population cap ({st.value} > {cap}); lineage retained")
 
     # ---------------------------------------------------------------- evidence
     def forward_trades(self, g: Genome, bar_state: dict[str, Any], cost: CostModel) -> list[Any]:
