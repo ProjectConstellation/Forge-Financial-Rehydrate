@@ -122,3 +122,42 @@ class SystemOneTriage:
 def make_provider() -> SystemOneProvider | None:
     key = os.environ.get("TYPESAFE_API_KEY", "").strip()
     return TypeSafeJev(key) if key else None
+
+
+class JevRouterFailover:
+    """OpenRouter `typesafe/jev-router` — used ONLY as an independent failover path when the direct DeepSeek circuit is open
+    (measured 2026-10-07: routes to deepseek-v4.1-flash via Together, 3–8 s, $0.001–0.003/call → no triage advantage, but
+    genuine provider diversity). Key: OPENROUTER_API_KEY_JEV (operator-scoped to Jev usage only)."""
+
+    name = "openrouter-jev-router"
+
+    def __init__(self, api_key: str, transport: httpx.AsyncBaseTransport | None = None) -> None:
+        self.circuit = Circuit("jev-router", threshold=3, base_cooldown_s=600)
+        self._c = httpx.AsyncClient(base_url="https://openrouter.ai/api/v1", timeout=60, transport=transport,
+                                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                                             "HTTP-Referer": "https://forge.northstarimagine.com", "X-Title": "FORGE"})
+
+    async def chat_json(self, system: str, user: str, max_tokens: int = 3000) -> dict[str, Any]:
+        if not self.circuit.allow():
+            raise RuntimeError("Jev Router circuit OPEN")
+        t0 = time.perf_counter()
+        try:
+            r = await self._c.post("/chat/completions", content=json.dumps({
+                "model": "typesafe/jev-router", "usage": {"include": True}, "max_tokens": max_tokens,
+                "response_format": {"type": "json_object"},
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}))
+            r.raise_for_status()
+            d = r.json()
+        except Exception as e:
+            self.circuit.failure(str(e))
+            raise
+        self.circuit.success()
+        txt = (d["choices"][0]["message"].get("content") or "").strip()
+        s, e = txt.find("{"), txt.rfind("}")
+        return {"json": json.loads(txt[s:e + 1]) if s >= 0 and e > s else {}, "routed_model": d.get("model"),
+                "cost_usd": float((d.get("usage") or {}).get("cost") or 0.0), "latency_ms": (time.perf_counter() - t0) * 1000}
+
+
+def make_failover() -> JevRouterFailover | None:
+    key = os.environ.get("OPENROUTER_API_KEY_JEV", "").strip()
+    return JevRouterFailover(key) if key else None

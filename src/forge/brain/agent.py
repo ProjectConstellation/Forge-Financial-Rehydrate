@@ -204,6 +204,24 @@ class Brain:
                 self.f.status("DeepSeek Brain", f"System One triage: routine ({tri['latency_ms']:.0f} ms) — Flash call skipped")
                 return {"escalate": False}
         self._work("Flash perception: reading the market")
+        fo = getattr(self.f, "jev_failover", None)
+        if not self.circuit.allow() and fo is not None:
+            # INTELLIGENCE SELF-HEALING: direct DeepSeek is down → independent path via OpenRouter Jev Router
+            try:
+                res = await fo.chat_json(system_prompt("perception"), "SITUATION PACK:\n" + json.dumps(self._situation(), default=str))
+            except Exception as e:
+                await self.f.say("Self-Healing", f"DeepSeek AND Jev failover unavailable ({str(e)[:80]}) — deterministic engine continues",
+                                 level="warn")
+                return None
+            from decimal import Decimal
+            cid = f"jevfo_{int(time.time() * 1000)}"
+            self.f.ledger.record_opex(self.f.book if self.f.book in ("live", "paper") else "paper", "INFERENCE",
+                                      Decimal(f"{res['cost_usd']:.8f}"), cid, memo=f"jev-router failover → {res['routed_model']}")
+            self._artifact(cid, "perception", f"jev-router:{res['routed_model']}", "failover_perception", None, None,
+                           {"latency_ms": res["latency_ms"], "cost": res["cost_usd"]})
+            await self.f.say("Self-Healing", f"DeepSeek circuit open → perception served by Jev Router failover "
+                                             f"({res['routed_model']}, {res['latency_ms']:.0f} ms, ${res['cost_usd']:.4f})")
+            return res["json"]
         msgs = [{"role": "system", "content": system_prompt("perception")},
                 {"role": "user", "content": "SITUATION PACK:\n" + json.dumps(self._situation(), default=str)}]
         res = await self._chat(msgs, agent="perception", purpose="market_perception", effort="low", json_mode=True,
@@ -404,8 +422,10 @@ class Brain:
 
 def attach_brain(forge: Any) -> None:
     from forge.brain.systemone import SystemOneTriage, make_provider
+    from forge.brain.systemone import make_failover
     prov = make_provider()
     forge.systemone = SystemOneTriage(forge, prov) if prov is not None else None
+    forge.jev_failover = make_failover()
     key = forge.s.secrets.deepseek_api_key
     if key is None:
         raise RuntimeError("DEEPSEEK_API_KEY not configured (CONFIG_REQUIRED)")
