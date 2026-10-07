@@ -1,0 +1,10 @@
+# Security
+- **Isolation**: own root `/srv/forge`, service user `forge`, own port 127.0.0.1:8470, own systemd unit `forge.service`, own Modal environment `forge`. No access to other projects.
+- **Secrets**: only in `/etc/forge/forge.env` (root:forge 0640) + root-only backup `/etc/forge/backup/`. Loaded as `SecretStr`; scrubbed from logs/audit; never sent to the browser or the LLM. Keys pasted in chat on 2026-10-06 → **rotate** (OPERATOR_ACTIONS #1).
+- **Coinbase key**: View + Trade only, IP-allowlisted to the server, ECDSA. `can_transfer=false` verified at every start. No transfer code path exists.
+- **LLM containment**: DeepSeek acts only through typed tools; no trade/transfer/risk/stop tools; external text wrapped as `<untrusted_data>`; generated strategies are declarative genomes validated by schema and judged by the deterministic evaluator.
+- **Protected core** (evolution cannot modify): `forge.risk.governor`, `forge.risk.breakers`, `forge.core.state`, `forge.execution.gateway`, `forge.ledger.ledger`, `forge.config`, `forge.venues.coinbase.auth`.
+- **Dashboard**: localhost only; controls require the operator token (constant-time compare); CSP/no-frame headers. Public exposure requires domain + TLS + reverse proxy (operator action).
+- **Audit**: append-only hash-chained JSONL (`forge verify-audit`); ledger table has DB triggers forbidding UPDATE/DELETE.
+- **systemd hardening**: NoNewPrivileges, ProtectSystem=strict, ProtectHome, PrivateTmp, CPUQuota=300%, MemoryMax=2G.
+- Threats modeled: leaked keys (no transfer perm, IP allowlist), prompt injection (tool-only, untrusted wrapping), duplicate orders (client_order_id + venue dedup + DB unique), stale data (freshness gates), clock drift (NTP), book drift vs wallet (reconciliation breaker).
