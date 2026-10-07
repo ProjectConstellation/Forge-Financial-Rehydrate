@@ -116,3 +116,19 @@ def test_genome_schema_drift_is_repaired_not_fatal():
     assert g is not None and g.exit.lock_frac == 0.25 and g.exit.time_stop_bars == 2016 and len(fixes) == 2
     bad = dict(d); bad["entry"] = "nonsense"
     assert repair_genome(bad)[0] is None
+
+
+def test_intelligence_pace_scales_with_money_and_value():
+    from forge.treasury.intelligence import pace
+    low = pace(1.82, 0.10, 3.0, False, 0.0, 0.0, 0.5)
+    dep = pace(6.82, 0.10, 3.0, False, 0.0, 0.0, 0.5)              # operator deposits $5
+    assert abs(low.budget_24h - 1.72 / 3) < 1e-9 and dep.budget_24h > 3.5 * low.budget_24h
+    proven = pace(6.82, 0.10, 4.0, True, 0.0, 0.0, 0.5)
+    poor = pace(6.82, 0.10, 0.5, True, 0.0, 0.0, 0.5)
+    assert proven.budget_24h > dep.budget_24h > poor.budget_24h > 0  # value/$ moves the pace; never zero with credit
+    earn = pace(1.82, 0.10, 3.0, False, 0.0, 7.0, 0.5)
+    assert abs(earn.budget_24h - low.budget_24h - 0.5) < 1e-9        # earnings are reinvested into intelligence
+    spent = pace(1.82, 0.10, 3.0, False, 0.6, 0.0, 0.5)
+    assert spent.headroom < 0 and spent.cycle_s == 2700 and spent.deep_sessions == 0
+    assert dep.deep_sessions >= 2 and dep.cycle_s == 300
+    assert pace(0.05, 0.10, 3.0, False, 0.0, 0.0, 0.5).budget_24h == 0.0

@@ -44,6 +44,8 @@ class Brain:
         self.last_diag = 0.0
         self.tier = "NORMAL"
         self.circuit = Circuit("deepseek", threshold=3, base_cooldown_s=300)
+        from forge.treasury.intelligence import WakeSignal
+        self.wake = WakeSignal()                       # Balance Sentinel / earnings wake the brain immediately
 
     async def _chat(self, *a: Any, **k: Any) -> Any:
         """Every LLM call goes through the circuit breaker: AI is never a single point of failure (OP-012 layer 4)."""
@@ -81,12 +83,24 @@ class Brain:
             self._queue(item["kind"], item)                        # still failing → keep it queued
 
     # ------------------------------------------------------------------ budget / router
+    def set_balance(self, b: float) -> None:
+        """Called by the Balance Sentinel (every 5 min): the pace follows the real credit balance immediately."""
+        old = self.balance
+        self.balance, self.balance_ts = b, time.time()
+        self._retier()
+        if old is not None and b > old + 0.25:
+            self.wake.wake()
+
     async def refresh_balance(self) -> None:
-        if time.time() - self.balance_ts < 600 and self.balance is not None:
+        if time.time() - self.balance_ts < 300 and self.balance is not None:
+            self._retier()
             return
         b = await self.c.balance()
         if b is not None:
             self.balance, self.balance_ts = b, time.time()
+        self._retier()
+
+    def _retier(self) -> None:
         reserve = float(self.f.s.deepseek.min_balance_reserve_usd)
         if self.balance is None:
             self.tier = "LEAN"
@@ -110,27 +124,20 @@ class Brain:
         w = n / (n + 40.0)
         return (1 - w) * prior + w * observed
 
-    def daily_budget(self) -> float:
-        """OP-010: intelligence spend scales with confidence (measured value-per-$) and with earnings.
-        burn fraction of available balance per day: 15% unproven → up to 60% when measured ROI is strong;
-        plus a share of trailing 7-day realized trading profit (self-funding as FORGE earns)."""
-        bal = max(0.0, (self.balance or 0.0) - float(self.f.s.deepseek.min_balance_reserve_usd))
+    def pace(self) -> Any:
+        """OP-015 Intelligence Treasury: spend pace from live balance × measured value-per-$ × earnings (rolling 24 h)."""
+        from forge.treasury.intelligence import pace, profit_7d, spent_24h
         roi = max(self.roi(r) for r in ROLE_PRIOR_VALUE_PER_USD)
         measured = (self.f.db.scalar("SELECT COUNT(DISTINCT call_id) FROM intel_artifacts WHERE valued_at IS NOT NULL") or 0) >= 20
-        burn = 0.15 if not measured else min(0.60, max(0.05, 0.15 * roi))
-        profit7 = float(self.f.db.scalar(
-            "SELECT COALESCE(SUM(CAST(realized_pnl_usd AS REAL) - CAST(fees_usd AS REAL)),0) FROM positions "
-            "WHERE status='CLOSED' AND closed_at > strftime('%Y-%m-%dT%H:%M:%S','now','-7 day')") or 0.0)
-        share = float(self.f.s.treasury.ops_profit_share_default)
-        roi_budget = bal * burn
-        # OP-014: any credit balance is working capital for intelligence — pace the whole available balance over the runway
-        # (never hoard it); ROI-driven burn can still exceed this when measured value is strong; earnings add on top.
-        runway_budget = bal / max(float(getattr(self.f.s.deepseek, "spend_runway_days", 3.0)), 0.5)
-        return max(roi_budget, runway_budget) + max(0.0, profit7) * share * 4
+        return pace(self.balance, float(self.f.s.deepseek.min_balance_reserve_usd), roi, measured, spent_24h(self.f.db),
+                    profit_7d(self.f.db), float(self.f.s.treasury.ops_profit_share_default))
+
+    def daily_budget(self) -> float:
+        return self.pace().budget_24h
 
     def spent_today(self) -> float:
-        return float(self.f.db.scalar("SELECT COALESCE(SUM(CAST(cost_usd AS REAL)),0) FROM inference_calls "
-                                      "WHERE ts > date('now')") or 0.0)
+        from forge.treasury.intelligence import spent_24h
+        return spent_24h(self.f.db)
 
     def allow(self, role: str, est_cost: float, critical: bool = False) -> bool:
         if self.tier == "CRITICAL":
@@ -151,8 +158,12 @@ class Brain:
             except TimeoutError:
                 await forge.say("DeepSeek Brain", "research cycle exceeded 40 min — aborted (meltdown guard)", level="warn")
             forge.sup.beat("brain")
-            budget_left = self.daily_budget() - self.spent_today()
-            await asyncio.sleep(600 if budget_left > 0.5 else 900 if self.tier == "NORMAL" else 2700)
+            p = self.pace()
+            self.f.db.kv_set("brain.pace", {"budget_24h": p.budget_24h, "spent_24h": p.spent_24h, "runway_days": p.runway_days,
+                                            "cycle_s": p.cycle_s, "deep_sessions": p.deep_sessions, "why": p.reason,
+                                            "balance": self.balance, "ts": time.time()})
+            if await self.wake.sleep(p.cycle_s):
+                await forge.say("DeepSeek Brain", f"Woken by new funds — pace now: {self.pace().reason}")
 
     async def _cycle(self, forge: Any) -> None:
         if True:
@@ -163,12 +174,23 @@ class Brain:
                     view = await self.perceive()
                     want = view.get("escalate") if view else False
                     near = len(self.f.db.kv_get("evolution.near_miss", []) or [])
-                    headroom = self.daily_budget() - self.spent_today()
-                    # research when there is a reason (escalation, near-miss lineages to repair) or unused budget headroom
-                    due = (near > 0 or headroom > 0.25) and time.time() - self.last_scientist > 1800
-                    if (want or due) and self.allow("scientist", 0.12, critical=False):
-                        await self.scientist(reason=(view or {}).get("escalate_reason") or "scheduled research cycle",
-                                             focus=(view or {}).get("research_focus") or [])
+                    p = self.pace()
+                    # research when there is a reason (escalation, near-miss lineages) or unused headroom; the number of
+                    # deep sessions per cycle scales with what the headroom can buy (more money → more thinking)
+                    gap = 1800 if p.headroom < 0.25 else 600
+                    due = (near > 0 or p.headroom > 0.06) and time.time() - self.last_scientist > gap
+                    if want or due:
+                        for k in range(max(1, p.deep_sessions) if (want or due) else 0):
+                            if not self.allow("scientist", 0.03, critical=False):
+                                break
+                            self.last_scientist = 0.0 if k else self.last_scientist
+                            foci = [(view or {}).get("research_focus") or [], ["repair the closest near-miss lineages"],
+                                    ["new families: residual (BTC-neutral) momentum resid_z_24/72, breadth rotation "
+                                     "mkt_breadth_24h, panic absorption after capitulation"],
+                                    ["exits & execution: convex exits on 1h genomes, maker-first entries, no-progress stops"]]
+                            await self.scientist(reason=(view or {}).get("escalate_reason") or
+                                                 ("scheduled research cycle" if k == 0 else f"headroom session {k + 1}"),
+                                                 focus=foci[k % len(foci)])
                 await self.value_artifacts()
             except Exception as e:
                 log.exception("brain cycle failed")

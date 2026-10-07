@@ -44,7 +44,7 @@ class BalanceSentinel:
         st = self.state()
         if bal is None:
             return st
-        brain.balance = bal
+        brain.set_balance(bal)                         # pace follows the live balance; a top-up wakes the brain
         prev = st.get("last_balance")
         now = datetime.now(UTC).isoformat()
         if prev is not None and bal - prev >= 1.0:                       # top-up detected
@@ -57,7 +57,7 @@ class BalanceSentinel:
             if not st.get("alert_sent"):
                 st["alert_sent"], st["alert_ts"] = True, now
                 text = (f"DeepSeek balance ${bal:.2f} < ${self.threshold:.0f}. Please add ${self.refill:.0f} (one top-up). "
-                        f"FORGE keeps trading and evolving; AI research is throttled until funded. {TOPUP_URL}")
+                        f"FORGE keeps trading, evolving and thinking at a pace set by the remaining credit; a top-up raises the pace automatically. {TOPUP_URL}")
                 await self.f.say("Balance Sentinel", text, level="warn")
                 self.f.audit.append("DEEPSEEK_REFILL_REQUESTED", {"balance": bal, "requested_usd": self.refill})
                 await self.notify("FORGE: add $10 DeepSeek credit", text)
