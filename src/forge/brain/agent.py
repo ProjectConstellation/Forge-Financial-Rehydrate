@@ -193,7 +193,17 @@ class Brain:
         self.f.workers["brain"] = {"what": what, "count": count, "since": time.time(), "where": "DeepSeek API"}
 
     async def perceive(self) -> dict[str, Any] | None:
-        self._work("Flash perception: reading 30 markets")
+        tri = None
+        s1 = getattr(self.f, "systemone", None)
+        if s1 is not None:
+            sit = self._situation()
+            tri = await s1.triage({k: sit[k] for k in ("regime_breadth_1h", "top_movers_24h", "population", "capital_regime")}
+                                  | {"regimes": sit["regime_breadth_1h"], "top_movers": sit["top_movers_24h"],
+                                     "alerts": [b["code"] for b in self.f.breakers.snapshot()]})
+            if tri and s1.mode == "GATE" and (tri["escalate"] or 0) < 0.2 and (tri["anomaly"] or 0) < 0.3:
+                self.f.status("DeepSeek Brain", f"System One triage: routine ({tri['latency_ms']:.0f} ms) — Flash call skipped")
+                return {"escalate": False}
+        self._work("Flash perception: reading the market")
         msgs = [{"role": "system", "content": system_prompt("perception")},
                 {"role": "user", "content": "SITUATION PACK:\n" + json.dumps(self._situation(), default=str)}]
         res = await self._chat(msgs, agent="perception", purpose="market_perception", effort="low", json_mode=True,
@@ -202,6 +212,8 @@ class Brain:
             view = res.json()
         except Exception:
             return None
+        if s1 is not None and tri is not None:
+            s1.record_reference(bool(view.get("escalate")))
         for rc in (view.get("regime_calls") or [])[:20]:
             self._artifact(res.call_id, "perception", res.model, "regime_call", rc.get("symbol"), rc.get("p"), rc)
         self.f.status("DeepSeek Brain", f"Flash perception: {str(view.get('market_view', ''))[:120]}")
@@ -391,6 +403,9 @@ class Brain:
 
 
 def attach_brain(forge: Any) -> None:
+    from forge.brain.systemone import SystemOneTriage, make_provider
+    prov = make_provider()
+    forge.systemone = SystemOneTriage(forge, prov) if prov is not None else None
     key = forge.s.secrets.deepseek_api_key
     if key is None:
         raise RuntimeError("DEEPSEEK_API_KEY not configured (CONFIG_REQUIRED)")

@@ -15,3 +15,4 @@
 | D-012 | Modal deploy = stop + deploy + hash verify | Modal skipped deploy on mounted-source change (observed) | brief app downtime | n/a |
 | D-013 | Paper book seeded from live USD balance | Paper results comparable to live capital (OP-001) | none | n/a |
 | D-014 | Capital velocity as hurdle-rate pricing, not holding caps (OP-008) | Never reject exceptional long trades by rule | hurdle mis-estimation | learned hurdle + regime multiplier |
+| D-015 | TypeSafe Jev = optional SEMANTIC triage router (SHADOW→GATE by measured agreement), NOT the numeric trade reflex | Jev docs: weak at numeric precision; FORGE fast path is deterministic ms + own-data calibrated 2nd opinion; Jev ≈ $0.0001/triage vs Flash ≈ $0.0015 and sub-second vs ~3 s → frequent triage, fewer wasted escalations; Kalshi contract/news parsing later | vendor dependency (circuit + optional) | unset TYPESAFE_API_KEY |
