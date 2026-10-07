@@ -242,6 +242,18 @@ class ExecutionGateway:
                                                 "size": str(size), "fee": str(fee), "realized": str(realized),
                                                 "position": pos["id"] if pos else None, "book": self.book})
             n += 1
+        # positions wrongly closed while still holding coins (e.g. entry fill dropped → "ENTRY_NOT_FILLED") → reopen so the
+        # normal exit plan (SL / TP / time stop) manages them again instead of leaving an unmanaged orphan holding
+        for p in self.db.query("SELECT id, symbol, meta, qty, cost_usd FROM positions WHERE book = ? AND status = 'CLOSED' "
+                               "AND CAST(qty AS REAL) > 0", (self.book,)):
+            m = json.loads(p["meta"] or "{}")
+            qty = Decimal(p["qty"])
+            m.update(opened_ts=time.time(), high_water=float(Decimal(p["cost_usd"]) / qty), reopened_by_repair=True)
+            self.db.execute("UPDATE positions SET status = 'OPEN', closed_at = NULL, exit_reason = NULL, meta = ? WHERE id = ?",
+                            (dumps(m), p["id"]))
+            self.audit.append("POSITION_REOPENED", {"position": p["id"], "symbol": p["symbol"], "qty": p["qty"],
+                                                    "reason": "closed while still holding (dropped fill)", "book": self.book})
+            n += 1
         return n
 
     def _position_for_order(self, cid: str) -> dict[str, Any] | None:

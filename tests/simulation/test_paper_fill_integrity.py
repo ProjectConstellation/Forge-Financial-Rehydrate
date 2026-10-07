@@ -48,3 +48,22 @@ def test_repair_rebuilds_dropped_exit_fill(db):
     assert Decimal(p["realized_pnl_usd"]) < 0                                   # stop-loss loss now on the books
     assert db.scalar("SELECT COUNT(*) FROM fills WHERE order_id = 'exit1'") == 1 and "FILL_REPAIRED" in audit.events
     _ = asyncio
+
+
+def test_orphaned_holding_is_reopened(db):
+    import json
+    import types
+
+    from forge.execution.gateway import ExecutionGateway
+    db.insert("positions", {"id": "pos2", "book": "paper", "venue": "paper", "symbol": "ORCA-USD", "strategy_id": "stg_y",
+                            "status": "CLOSED", "qty": "0.47", "cost_usd": "1.4099", "fees_usd": "0.007",
+                            "realized_pnl_usd": "0", "opened_at": "2026-10-07T03:00:00+00:00",
+                            "closed_at": "2026-10-07T03:16:08+00:00", "exit_reason": "ENTRY_NOT_FILLED", "meta": json.dumps({})})
+    audit = types.SimpleNamespace(events=[], append=lambda k, d, actor=None: audit.events.append(k))
+    gw = ExecutionGateway.__new__(ExecutionGateway)
+    gw.db, gw.ledger, gw.book, gw.audit = db, None, "paper", audit
+    assert gw.repair_unrecorded_fills() == 1
+    p = db.query_one("SELECT status, exit_reason, meta FROM positions WHERE id = 'pos2'")
+    assert p["status"] == "OPEN" and p["exit_reason"] is None and json.loads(p["meta"])["reopened_by_repair"]
+    assert gw.repair_unrecorded_fills() == 0 and "POSITION_REOPENED" in audit.events
+
