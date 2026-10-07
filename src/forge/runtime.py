@@ -146,6 +146,7 @@ class Forge:
         self.audit.append("FORGE_START", {"mode": self.s.mode.value, "book": self.book, "pid": os.getpid()})
         from forge.discovery import seed_catalog
         seed_catalog(self.db)
+        self.db.execute("UPDATE compute_jobs SET status='FAILED', error='orphaned by restart' WHERE status='RUNNING'")
         n = self.arena.bootstrap()
         if n:
             await self.say("Evolution Arena", f"Seeded {n} strategy families into the population (EXPERIMENTAL)")

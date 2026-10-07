@@ -11,6 +11,7 @@ from typing import Any
 
 HOLDOUT_FRAC = 0.20     # validation window (P0.4: selection 65% / validation 20% / sealed 15%)
 SEALED_FRAC = 0.15      # one-time final-exam window; results go to the Research Trial Ledger only
+RESEARCH_DAYS = {300: 90, 3600: 365}
 
 
 def _limit_threads() -> None:
@@ -45,6 +46,13 @@ def search_on_raw(raw: dict[str, dict[str, Any]], interval: int, parents: list[d
 
     t0 = time.time()
     raw = {s: {k: np.asarray(v, dtype=float) for k, v in b.items()} for s, b in raw.items()}
+    # research window per interval: 5m × 365 d (~6M bars) blew the 900 s container limit → 90 d for 5m, 365 d for 1h
+    max_days = RESEARCH_DAYS.get(interval, 365)
+    for s_, b_ in raw.items():
+        if len(b_.get("ts", [])):
+            cut = b_["ts"][-1] - max_days * 86400
+            k0 = int(np.searchsorted(b_["ts"], cut))
+            raw[s_] = {k: v[k0:] for k, v in b_.items()}
     ds = Dataset.build(raw, interval, holdout_frac=HOLDOUT_FRAC, n_folds=4, sealed_frac=SEALED_FRAC)
     ds.trials = int(prior_trials)          # cumulative hypotheses already tested on this data → stricter deflated Sharpe
     if len(ds.symbols) < 5:
