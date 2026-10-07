@@ -74,6 +74,14 @@ class ExitLogic(BaseModel):
                                                                # early locks cut the big winners: −20% vs +31% stops-only)
     be_buffer_pct: float = Field(0.015, ge=0.012, le=0.1)     # stop level above entry once armed (≥ round-trip fees)
     lock_frac: float = Field(0.5, ge=0.25, le=0.95)           # keep at least this share of the max favorable excursion
+    # Convex Trend Exit V1 (answers §8): preserve right-tail winners
+    convex: bool = False
+    cat_atr: float = Field(2.5, ge=1.0, le=6.0)               # catastrophe stop distance (ATR units)
+    arm_atr: float = Field(1.75, ge=0.5, le=6.0)              # start trailing only after MFE ≥ arm_atr·ATR
+    chand_k: float = Field(3.5, ge=1.5, le=7.0)               # chandelier multiple (normal volatility)
+    chand_k_hv: float = Field(5.0, ge=2.0, le=9.0)            # chandelier multiple when vol_pct ≥ 0.8
+    progress_bars: int = Field(0, ge=0, le=2016)              # no-progress check after N bars (0 = off)
+    progress_atr: float = Field(0.5, ge=0.0, le=4.0)          # required progress (ATR units) at the check
 
     @field_validator("be_trigger_pct", "lock_frac", mode="before")
     @classmethod
@@ -208,6 +216,17 @@ def compile_exit_signal(g: Genome, f: dict[str, np.ndarray]) -> np.ndarray | Non
 
 def barrier_pcts(g: Genome, atr_frac: float) -> tuple[float, float]:
     """Take-profit / stop distances (fractions) for a given ATR/close, applying floors and caps."""
+    if g.exit.convex:                       # Convex Trend Exit V1: catastrophe stop, no fixed target (winners run)
+        return CONVEX_NO_TP, min(max(g.exit.cat_atr * atr_frac, 0.002), g.exit.sl_max_pct)
     tp = max(g.exit.tp_atr * atr_frac, g.exit.tp_min_pct)
     sl = min(max(g.exit.sl_atr * atr_frac, 0.002), g.exit.sl_max_pct)
     return tp, sl
+
+
+CONVEX_NO_TP = 10.0      # sentinel take-profit (+1000%): never placed as an order; exits come from the chandelier/stop/time
+
+
+def chandelier_k(g: Genome, vol_pct: float | None) -> float:
+    """Chandelier multiple for a convex exit: wider in high-volatility regimes (vol_pct ≥ 0.8)."""
+    vp = vol_pct if vol_pct is not None and vol_pct == vol_pct else 0.5
+    return g.exit.chand_k_hv if vp >= 0.8 else g.exit.chand_k

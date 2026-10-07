@@ -107,3 +107,54 @@ def test_risk_rejects_stale_and_stopped(db):
     assert g.evaluate(_intent(), c).verdict.value == "REJECT"
     c = _ctx(policy); c.cash_available_usd = D("3")
     assert g.evaluate(_intent(), c).verdict.value == "REJECT"           # below reserve + venue min
+
+
+def test_convex_exit_no_tp_order_and_chandelier(db, tmp_path):
+    """Convex Trend Exit V1 in the live/paper path: no resting TP, trail armed only after MFE ≥ arm, exit on chandelier."""
+    mkt, lg, venue, gw, closed = _setup(db, tmp_path)
+    policy = CapitalRegimeEngine(db).policy(28.27)
+    plan = ExitPlan(take_profit_pct=10.0, stop_loss_pct=0.05, time_stop_s=86400,
+                    chandelier_arm_pct=0.03, chandelier_pct=0.04)
+    it = _intent().model_copy(update={"exit_plan": plan})
+    dec = RiskGovernor().evaluate(it, _ctx(policy))
+    async def run():
+        pid = await gw.execute_entry(it, dec, ttl_s=60, maker_offset_bps=0, entry_style="maker", meta={})
+        mkt.set(99.90, 99.92); venue.on_market("SOL-USD", 99.89)
+        await gw.tick(); await gw.tick()
+        p = db.query_one("SELECT * FROM positions WHERE id = ?", (pid,))
+        assert p["status"] == "OPEN"
+        assert "tp_cid" not in (p["meta"] or "")                       # no +1000% order rests on the book
+        mkt.set(102.0, 102.02); await gw.tick()                          # +2%: not armed → no trail
+        assert db.query_one("SELECT status FROM positions WHERE id = ?", (pid,))["status"] == "OPEN"
+        mkt.set(110.0, 110.02); await gw.tick()                          # +10%: armed, stop = 110·0.96 = 105.6
+        mkt.set(106.0, 106.02); await gw.tick()                          # still above the chandelier → holds (winner runs)
+        assert db.query_one("SELECT status FROM positions WHERE id = ?", (pid,))["status"] == "OPEN"
+        mkt.set(105.0, 105.02); venue.on_market("SOL-USD", 105.0)
+        for _ in range(3):
+            await gw.tick()
+        return pid
+    pid = asyncio.run(run())
+    p = db.query_one("SELECT * FROM positions WHERE id = ?", (pid,))
+    assert p["status"] == "CLOSED" and p["exit_reason"] in ("LOCK", "TRAIL"), p["exit_reason"]
+    assert float(closed[0]["net_usd"]) > 0
+    assert lg.check_balanced("paper") == 0
+
+
+def test_convex_no_progress_exit(db, tmp_path):
+    mkt, lg, venue, gw, closed = _setup(db, tmp_path)
+    policy = CapitalRegimeEngine(db).policy(28.27)
+    plan = ExitPlan(take_profit_pct=10.0, stop_loss_pct=0.05, time_stop_s=86400, chandelier_arm_pct=0.03,
+                    chandelier_pct=0.04, progress_s=1, progress_min_pct=0.01)
+    it = _intent().model_copy(update={"exit_plan": plan})
+    dec = RiskGovernor().evaluate(it, _ctx(policy))
+    async def run():
+        pid = await gw.execute_entry(it, dec, ttl_s=60, maker_offset_bps=0, entry_style="maker", meta={})
+        mkt.set(99.90, 99.92); venue.on_market("SOL-USD", 99.89)
+        await gw.tick(); await gw.tick()
+        await asyncio.sleep(1.1)
+        mkt.set(100.1, 100.12); venue.on_market("SOL-USD", 100.1)
+        for _ in range(3):
+            await gw.tick()
+        return pid
+    pid = asyncio.run(run())
+    assert db.query_one("SELECT exit_reason FROM positions WHERE id = ?", (pid,))["exit_reason"] == "NO_PROGRESS"

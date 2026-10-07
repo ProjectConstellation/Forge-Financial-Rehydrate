@@ -18,7 +18,7 @@ from forge.regime.engine import REGIMES
 from forge.strategies.genome import ALLOWED_FEATURES, Condition, EntryLogic, Genome
 
 OPERATORS = ("jitter", "jitter_exit", "add_condition", "remove_condition", "swap_feature",
-             "regime_specialize", "regime_veto", "execution", "horizon")
+             "regime_specialize", "regime_veto", "execution", "horizon", "convex_exit")
 
 # features that are informative for entry gating (skip pure-calendar ones by default)
 ENTRY_POOL = sorted(ALLOWED_FEATURES - {"hour_sin", "hour_cos"})
@@ -154,6 +154,15 @@ def _apply(op: str, g: Genome, rng: np.random.Generator, ds: Any, scale: float) 
         ex["time_stop_bars"] = int(np.clip(round(ex["time_stop_bars"] * k), 2, 2016))
         ex["tp_min_pct"] = float(np.clip(ex["tp_min_pct"] * math.sqrt(k), 0.008, 0.5))
         return _child(g, {"operator": op, "change": f"horizon ×{k:.2f}"}, exit=ex)
+    if op == "convex_exit":
+        ex = g.exit.model_dump()
+        ex["convex"] = True if not ex.get("convex") else rng.random() > 0.15
+        ex["cat_atr"] = float(np.clip(ex.get("cat_atr", 2.5) + rng.normal(0, 0.4), 1.0, 6.0))
+        ex["arm_atr"] = float(np.clip(ex.get("arm_atr", 1.75) + rng.normal(0, 0.3), 0.5, 6.0))
+        ex["chand_k"] = float(np.clip(ex.get("chand_k", 3.5) + rng.normal(0, 0.5), 1.5, 7.0))
+        ex["chand_k_hv"] = float(np.clip(max(ex["chand_k"] + 0.5, ex.get("chand_k_hv", 5.0) + rng.normal(0, 0.5)), 2.0, 9.0))
+        ex["progress_bars"] = int(rng.choice([0, 0, 24, 48, 96, 288]))
+        return _child(g, {"operator": op, "change": f"convex exit cat {ex['cat_atr']:.1f} arm {ex['arm_atr']:.1f} k {ex['chand_k']:.1f}/{ex['chand_k_hv']:.1f} prog {ex['progress_bars']}"}, exit=ex)
     raise ValueError(op)
 
 

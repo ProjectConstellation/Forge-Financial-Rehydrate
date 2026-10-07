@@ -42,7 +42,7 @@ from forge.research.backtest import CostModel
 from forge.research.calibration import CalibrationEngine
 from forge.risk.breakers import BreakerBoard
 from forge.risk.governor import RiskContext, RiskGovernor
-from forge.strategies.genome import Genome, barrier_pcts, compile_entries
+from forge.strategies.genome import Genome, barrier_pcts, chandelier_k, compile_entries
 from forge.strategies.registry import ACTIVE_LIVE, ACTIVE_OBSERVING, State, StrategyRegistry
 from forge.treasury.regimes import CapitalRegimeEngine
 from forge.treasury.sizing import size_position
@@ -511,7 +511,8 @@ class Forge:
         lock_frac = (min(g.exit.lock_frac, 0.35) if trending else g.exit.lock_frac) if be_trig < 0.5 else g.exit.lock_frac
         plan = ExitPlan(take_profit_pct=tp, stop_loss_pct=sl, time_stop_s=int(g.exit.time_stop_bars * interval),
                         be_trigger_pct=be_trig, be_buffer_pct=g.exit.be_buffer_pct, lock_frac=lock_frac,
-                        trailing_pct=(g.exit.trail_atr * atr_now) if g.exit.trail_atr else None)
+                        trailing_pct=(g.exit.trail_atr * atr_now) if g.exit.trail_atr else None,
+                        **(convex_plan(g, atr_now, interval, self.bars[interval].state[sym].features) if g.exit.convex else {}))
         intent = TradeIntent(id=new_id("int"), ts_ns=time.time_ns(), book=self.book, opportunity_id=oid, strategy_id=g.id,
                              venue="coinbase", symbol=sym, side="buy", purpose=IntentPurpose.ENTRY,
                              requested_notional_usd=d(round(sz.notional_usd, 2)),
@@ -903,3 +904,12 @@ class Forge:
         await self.rest.close()
         await self.bus.close()
         self.audit.append("FORGE_STOP", {"uptime_s": round(time.time() - self.started)})
+
+
+def convex_plan(g: Genome, atr: float, interval: int, f: dict[str, Any]) -> dict[str, Any]:
+    """ExitPlan fields for Convex Trend Exit V1 — identical semantics to the backtester/Time Machine."""
+    vp = f.get("vol_pct")
+    vpv = float(vp[-1]) if vp is not None and len(vp) else None
+    return {"chandelier_arm_pct": g.exit.arm_atr * atr, "chandelier_pct": chandelier_k(g, vpv) * atr,
+            "progress_s": int(g.exit.progress_bars * interval) if g.exit.progress_bars else None,
+            "progress_min_pct": g.exit.progress_atr * atr}

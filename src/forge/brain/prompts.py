@@ -44,7 +44,11 @@ DSL_SPEC = f"""STRATEGY GENOME DSL (JSON). Fields:
  "regimes_allow": [regime...], "regimes_deny": [regime...], "min_regime_prob": 0..1,
  "entry": {{"all": [cond...], "any": [cond...], "min_any": int}},
  "exit": {{"tp_atr": 0.3..20, "sl_atr": 0.3..15, "tp_min_pct": 0..0.5, "sl_max_pct": 0.003..0.3,
-           "time_stop_bars": 2..2016, "trail_atr": null|0.3..15, "exit_all": [cond...]}},
+           "time_stop_bars": 2..2016, "trail_atr": null|0.3..15, "exit_all": [cond...],
+           "convex": bool (Convex Trend Exit: no fixed TP; catastrophe stop cat_atr·ATR; chandelier trail chand_k·ATR
+                     armed only after MFE ≥ arm_atr·ATR; chand_k_hv when vol_pct≥0.8; optional no-progress exit after
+                     progress_bars if gain < progress_atr·ATR), "cat_atr": 1..6, "arm_atr": 0.5..6, "chand_k": 1.5..7,
+           "chand_k_hv": 2..9, "progress_bars": 0..2016, "progress_atr": 0..4}},
  "execution": {{"entry": "maker"|"taker", "maker_offset_bps": 0..300, "maker_ttl_bars": 1..48, "exit_tp": "maker"|"taker",
                "max_spread_bps": 0.5..500}},
  "sizing": {{"model": "kelly"|"fixed", "kelly_mult": 0.05..1, "max_fraction": 0.01..1}},

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from forge.features.engine import add_cross_asset, compute_features
+from forge.features.engine import add_cross_asset, add_market_features, compute_features
 from forge.market_data.bars import resample
 from forge.regime.engine import regime_labels, regime_probs
 from forge.research.backtest import CostModel, Trade, metrics, simulate
@@ -65,8 +65,11 @@ class Dataset:
                 continue
             f = compute_features(b, interval_s)
             add_cross_asset(f, b, bench if s != benchmark else None)
-            p = regime_probs(f)
-            out[s] = SymbolData(s, b, f, p, regime_labels(p))
+            out[s] = SymbolData(s, b, f, {}, np.array([]))
+        add_market_features({s: (sd.bars, sd.f) for s, sd in out.items()}, horizon=288 if interval_s <= 300 else 24)
+        for sd in out.values():
+            sd.probs = regime_probs(sd.f)
+            sd.labels = regime_labels(sd.probs)
         ds = cls(interval_s=interval_s, symbols=out, holdout_frac=holdout_frac, n_folds=n_folds)
         ds._quantiles()
         ds._index()

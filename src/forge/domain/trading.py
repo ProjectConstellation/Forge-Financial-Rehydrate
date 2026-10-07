@@ -23,6 +23,11 @@ class ExitPlan(BaseModel):
     be_trigger_pct: float | None = None
     be_buffer_pct: float = 0.015
     lock_frac: float | None = None
+    # Convex Trend Exit V1 (answers §8): chandelier trail armed only after MFE ≥ arm; optional no-progress time check
+    chandelier_arm_pct: float | None = None
+    chandelier_pct: float | None = None
+    progress_s: int | None = None
+    progress_min_pct: float = 0.0
     exit_order: Literal["maker_then_taker", "taker", "maker"] = "maker_then_taker"
 
 

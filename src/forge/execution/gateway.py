@@ -279,7 +279,7 @@ class ExecutionGateway:
                 self.db.execute("UPDATE positions SET status = 'OPEN', meta = ? WHERE id = ?", (dumps(meta), p["id"]))
                 await self._emit("POSITION_OPENED", {"position": p["id"], "symbol": sym, "strategy": p["strategy_id"],
                                                      "qty": str(qty), "cost": p["cost_usd"]})
-                if plan and rules:
+                if plan and rules and plan.take_profit_pct < 1.0:      # convex exits carry no resting target
                     await self._place_tp(p["id"], sym, qty, Decimal(p["cost_usd"]) / qty, plan, rules, meta)
             return
         if p["status"] == "OPEN" and plan and bbo and rules:
@@ -294,6 +294,11 @@ class ExecutionGateway:
             if plan.trailing_pct:
                 stop = max(stop, hw * (1 - plan.trailing_pct))
             fav = hw / entry_px - 1 if entry_px > 0 else 0.0
+            if plan.chandelier_pct and plan.chandelier_arm_pct is not None and fav >= plan.chandelier_arm_pct:
+                stop = max(stop, hw * (1 - plan.chandelier_pct))          # convex trend exit: trail only once armed
+                if not meta.get("chandelier_armed"):
+                    meta["chandelier_armed"] = True
+                    await self._emit("TRAIL_ARMED", {"position": p["id"], "symbol": sym, "stop": stop, "peak_gain": fav})
             if plan.be_trigger_pct is not None and plan.be_trigger_pct < 0.5 and fav >= plan.be_trigger_pct:   # evolved profit lock
                 stop = max(stop, entry_px * (1 + plan.be_buffer_pct))
                 if plan.lock_frac is not None:
@@ -308,6 +313,11 @@ class ExecutionGateway:
                 reason = ("LOCK" if stop > entry_px else "TRAIL") if stop > entry_px * (1 - plan.stop_loss_pct) + 1e-12 else "SL"
             elif age >= plan.time_stop_s:
                 reason = "TIME"
+            elif (plan.progress_s and age >= plan.progress_s and not meta.get("progress_ok")):
+                if bbo.bid / entry_px - 1 < plan.progress_min_pct:
+                    reason = "NO_PROGRESS"
+                else:
+                    meta["progress_ok"] = True
             elif trading_state == "STOPPED" and json.loads(json.dumps(meta)).get("flatten_on_stop"):
                 reason = "EMERGENCY"
             if reason:

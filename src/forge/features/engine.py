@@ -139,6 +139,12 @@ _doc("bb_width_pct", "percentile of 20-bar band width over 500 bars (squeeze det
 _doc("buy_ratio_12", "aggressor-buy share of volume over 12 bars (live/recorded only)")
 _doc("hour_sin", "time of day (sin)"); _doc("hour_cos", "time of day (cos)")
 _doc("rs_btc_48", "48-bar residual return vs BTC (beta-adjusted relative strength)")
+_doc("resid_z_24", "24-bar BTC-neutral residual return / residual vol (standardized relative strength)")
+_doc("resid_z_72", "72-bar BTC-neutral residual return / residual vol")
+_doc("ext_atr_ema20", "(close / EMA20 − 1) / ATR — extension in ATR units (exhaustion/chase guard)")
+_doc("mkt_breadth_24h", "fraction of the universe with positive 24h (288×5m) return — market breadth")
+_doc("mkt_trend_24h", "equal-weight universe 24h log return — market trend")
+_doc("mkt_breadth_chg", "change in market breadth over the last 24 bars (divergence/exhaustion)")
 _doc("corr_btc_96", "96-bar return correlation with BTC")
 
 
@@ -195,6 +201,7 @@ def compute_features(bars: dict[str, np.ndarray], interval_s: int = 300) -> dict
         tr = np.maximum(h - lo, np.maximum(np.abs(h - pc), np.abs(lo - pc)))
         tr[0] = h[0] - lo[0]
         f["atr_14"] = ema(tr, 27) / c
+        f["ext_atr_ema20"] = (c / ema(c, 20) - 1.0) / f["atr_14"]
         bw = 4 * rstd(c, 20) / rmean(c, 20)
         f["bb_width_pct"] = rank_pct(np.nan_to_num(bw, nan=0.0), 500)
         bv = bars.get("buy_volume")
@@ -205,8 +212,8 @@ def compute_features(bars: dict[str, np.ndarray], interval_s: int = 300) -> dict
             f["buy_ratio_12"] = np.full(n, NAN)
     hour = (ts % 86400) / 86400 * 2 * np.pi
     f["hour_sin"], f["hour_cos"] = np.sin(hour), np.cos(hour)
-    f["rs_btc_48"] = np.full(n, NAN)
-    f["corr_btc_96"] = np.full(n, NAN)
+    for k in ("rs_btc_48", "corr_btc_96", "resid_z_24", "resid_z_72", "mkt_breadth_24h", "mkt_trend_24h", "mkt_breadth_chg"):
+        f[k] = np.full(n, NAN)
     for k, arr in f.items():
         arr[~np.isfinite(arr)] = NAN
     return f
@@ -234,7 +241,10 @@ def add_cross_asset(f: dict[str, np.ndarray], bars: dict[str, np.ndarray],
         res = ra - np.nan_to_num(beta) * rb
         f["rs_btc_48"] = rsum(res, 48)
         f["corr_btc_96"] = rcorr(ra, rb, 96)
-    for k in ("rs_btc_48", "corr_btc_96"):
+        rsd = rstd(res, 96)
+        f["resid_z_24"] = rsum(res, 24) / (rsd * np.sqrt(24))
+        f["resid_z_72"] = rsum(res, 72) / (rsd * np.sqrt(72))
+    for k in ("rs_btc_48", "corr_btc_96", "resid_z_24", "resid_z_72"):
         f[k][~np.isfinite(f[k])] = NAN
 
 
@@ -247,3 +257,30 @@ MICRO_FEATURES = ("spread_bps", "imb_l1", "imb_5", "imb_25bps", "micro_disp_bps"
                   "flow_imb_60s", "trade_rate_60s")
 for _m in MICRO_FEATURES:
     _doc(_m, "live microstructure (order book / trade flow)")
+
+
+def add_market_features(series: dict[str, tuple[dict[str, np.ndarray], dict[str, np.ndarray]]], horizon: int = 288) -> None:
+    """Cross-sectional market features aligned by timestamp (causal): breadth, equal-weight trend, breadth change.
+    `series` maps symbol → (bars, features); features are updated in place."""
+    if not series:
+        return
+    all_ts = np.unique(np.concatenate([np.asarray(b["ts"]) for b, _ in series.values()]))
+    up = np.zeros(len(all_ts))
+    cnt = np.zeros(len(all_ts))
+    lr = np.zeros(len(all_ts))
+    for b, f in series.values():
+        idx = np.searchsorted(all_ts, b["ts"])
+        r = f.get(f"ret_{horizon}")
+        if r is None:
+            continue
+        ok = np.isfinite(r)
+        up[idx[ok]] += (r[ok] > 0)
+        cnt[idx[ok]] += 1
+        lr[idx[ok]] += r[ok]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        breadth = np.where(cnt >= 5, up / cnt, NAN)
+        trend = np.where(cnt >= 5, lr / cnt, NAN)
+    chg = breadth - shift(breadth, 24)
+    for b, f in series.values():
+        idx = np.searchsorted(all_ts, b["ts"])
+        f["mkt_breadth_24h"], f["mkt_trend_24h"], f["mkt_breadth_chg"] = breadth[idx], trend[idx], chg[idx]

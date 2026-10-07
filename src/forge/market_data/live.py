@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 from forge.domain.market import BestBidAsk, Candle, MarketRules, ProductInfo, TradeTick
-from forge.features.engine import add_cross_asset, compute_features
+from forge.features.engine import add_cross_asset, add_market_features, compute_features
 from forge.market_data.bars import BarSeries
 from forge.market_data.history import CandleStore
 from forge.market_data.orderbook import L2Book
@@ -211,10 +211,18 @@ class BarEngine:
             f = compute_features(arr, self.interval_s)
             if btc is not None and s != "BTC-USD":
                 add_cross_asset(f, arr, {k: v[-self.window * 2:] for k, v in btc.items()})
-            p = regime_probs(f)
-            st.features, st.probs = f, p
-            st.regime, st.regime_dist, st.regime_conf = latest_regime(p)
+            st.features = f
             st.updated = time.time()
+        live = {s: (dict((k, v[-self.window:]) for k, v in st.series.arrays().items()), st.features)
+                for s, st in self.state.items() if st.features and len(st.series) >= 300}
+        add_market_features(live, horizon=288 if self.interval_s <= 300 else 24)
+        for s in symbols:
+            st = self.state.get(s)
+            if st is None or not st.features:
+                continue
+            p = regime_probs(st.features)
+            st.probs = p
+            st.regime, st.regime_dist, st.regime_conf = latest_regime(p)
 
     def persist(self) -> None:
         for s, st in self.state.items():

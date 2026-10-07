@@ -36,6 +36,8 @@ class Pos:
     fee_in: float
     last_i: int
     g: Genome
+    atr: float = 0.0
+    ck: float = 3.5
 
 
 @dataclass
@@ -80,7 +82,8 @@ class TMResult:
 
 def run_portfolio(genomes: list[Genome], ds: Dataset, cost: CostModel, capital: float = 28.27, segment: str = "holdout",
                   reserve_frac: float = 0.10, max_positions: int = 12, kelly_mult: float = 0.35, max_frac: float = 0.5,
-                  evidence: dict[str, dict[str, float]] | None = None) -> TMResult:
+                  evidence: dict[str, dict[str, float]] | None = None, sizing: str = "kelly",
+                  risk_per_pos: float = 0.05, risk_total: float = 0.10) -> TMResult:
     evidence = evidence or {}
     syms = list(ds.symbols)
     # global clock = union of bar timestamps within the segment
@@ -106,6 +109,8 @@ def run_portfolio(genomes: list[Genome], ds: Dataset, cost: CostModel, capital: 
             px, reason, fee_out = None, "", cost.taker_fee
             if lo <= p.stop:
                 px, reason = min(p.stop, o) * (1 - slip), ("LOCK" if p.stop > p.entry else "SL")
+            elif p.g.exit.convex and p.g.exit.progress_bars and i - p.entry_i == p.g.exit.progress_bars and c / p.entry - 1 < p.g.exit.progress_atr * p.atr:
+                px, reason = c * (1 - slip), "NO_PROGRESS"
             elif h >= p.tp * 1.0001:
                 px, reason, fee_out = max(p.tp, o), "TP", cost.maker_fee
             elif i - p.entry_i >= p.g.exit.time_stop_bars:
@@ -120,6 +125,8 @@ def run_portfolio(genomes: list[Genome], ds: Dataset, cost: CostModel, capital: 
             p.hi = max(p.hi, h)
             fav = p.hi / p.entry - 1
             a = float(ds.symbols[sym].f["atr_14"][i]) if math.isfinite(ds.symbols[sym].f["atr_14"][i]) else 0.01
+            if p.g.exit.convex and fav >= p.g.exit.arm_atr * p.atr:
+                p.stop = max(p.stop, p.hi * (1 - p.ck * p.atr))
             if p.g.exit.trail_atr:
                 p.stop = max(p.stop, p.hi * (1 - p.g.exit.trail_atr * a))
             if p.g.exit.be_trigger_pct < 0.5 and fav >= max(p.g.exit.be_trigger_pct, 1.5 * a):
@@ -137,12 +144,24 @@ def run_portfolio(genomes: list[Genome], ds: Dataset, cost: CostModel, capital: 
             if not math.isfinite(a) or a <= 0:
                 continue
             tp, sl = barrier_pcts(g, a)
+            ck = 3.5
+            if g.exit.convex:
+                sl, tp = min(g.exit.cat_atr * a, g.exit.sl_max_pct), 10.0
+                vp = float(f["vol_pct"][i_sig]) if math.isfinite(f["vol_pct"][i_sig]) else 0.5
+                ck = g.exit.chand_k_hv if vp >= 0.8 else g.exit.chand_k
             ev = evidence.get(g.id, {})
             p_win = ev.get("p_win", 0.45)
             w, l = ev.get("avg_win", tp - 0.01), ev.get("avg_loss", -(sl + 0.014))
             k = kelly_fraction(p_win, w, l) * kelly_mult * min(1.0, max(0.2, (ev.get("p_edge", 0.6) - 0.5) / 0.4))
             deployable = max(0.0, cash - equity * reserve_frac)
-            notional = min(k, max_frac) * deployable
+            if sizing == "risk":                                   # risk-at-stop (answers §9)
+                open_risk = sum(q.cost * q.sl for q in open_.values())
+                budget = max(0.0, risk_total * equity - open_risk)
+                rf = min(risk_per_pos, 0.25 * kelly_fraction(p_win, w, l) if kelly_fraction(p_win, w, l) > 0 else risk_per_pos * 0.3)
+                notional = min(equity * rf, budget) / max(sl, 1e-4)
+                notional = min(notional, deployable * max_frac)
+            else:
+                notional = min(k, max_frac) * deployable
             if notional < 1.0:
                 continue
             if g.execution.entry == "maker":
@@ -154,7 +173,7 @@ def run_portfolio(genomes: list[Genome], ds: Dataset, cost: CostModel, capital: 
                 px, fee_in = b["open"][i] * (1 + slip), cost.taker_fee
             qty = notional * (1 - fee_in) / px
             cash -= notional
-            open_[sym] = Pos(g.id, sym, i, px, qty, notional, px * (1 + tp), px * (1 - sl), sl, px, fee_in, i, g)
+            open_[sym] = Pos(g.id, sym, i, px, qty, notional, px * (1 + tp), px * (1 - sl), sl, px, fee_in, i, g, a, ck)
         pend = []
         # ---------- new signals at this bar's close ----------
         for g in genomes:
