@@ -156,3 +156,27 @@ def test_triangle_shadow_records_only_after_fees():
     rows.clear(); pm.tri_last = 0
     pm.triangle({"USDT-USD": (0.99970, 1000, 0.99971, 1000), "USDT-USDC": (0.99969, 1000, 0.99970, 1000)})
     assert not rows                                                   # 0 gap → no fake profit
+
+
+def test_probability_surface_isotonic_and_rv():
+    from forge.opportunities.probsurface import (best_lead, fit_surface, half_life, implied_median, isotonic_decreasing,
+                                                 lead_lag, surface_rv_candidates)
+    assert isotonic_decreasing([0.9, 0.7, 0.75, 0.4], [1, 1, 1, 1]) == [0.9, 0.725, 0.725, 0.4]
+    pts = [("A", 100, 0.88, 0.90), ("B", 101, 0.70, 0.72), ("C", 102, 0.30, 0.33),   # C is stale-cheap vs neighbours
+           ("D", 103, 0.48, 0.50), ("E", 104, 0.20, 0.22)]
+    s = fit_surface(pts)
+    assert all(a.fitted >= b.fitted for a, b in zip(s[:-1], s[1:]))                  # monotone surface
+    rv = surface_rv_candidates(s)
+    assert ("C", "yes") in {(t, side) for t, side, _, _ in rv}
+    assert implied_median(s) is not None
+    # lead/lag: implied follows spot with a 2-step delay
+    import random
+    rnd = random.Random(1)
+    spot = [100.0]
+    for _ in range(300):
+        spot.append(spot[-1] * math.exp(rnd.gauss(0, 0.001)))
+    implied = [spot[0]] * 2 + spot[:-2]
+    implied = [v * math.exp(rnd.gauss(0, 0.0002)) for v in implied]
+    b = best_lead(lead_lag(spot, implied))
+    assert b is not None and b.lag_steps == 2 and b.corr > 0.8
+    assert abs(half_life([(0, 0.10), (15, 0.08), (30, 0.04)]) - 26.25) < 1e-9 and half_life([(0, 0.1), (15, 0.09)]) is None

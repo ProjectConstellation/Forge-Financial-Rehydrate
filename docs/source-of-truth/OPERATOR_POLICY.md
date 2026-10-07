@@ -196,3 +196,9 @@ Verified live: zero-fee benefit ($500/mo) EXCLUDES Coinbase Advanced/DEX/derivat
 3.75% APY unlimited, members-only → FORGE's idle cash can earn it once swept to USDC; +5% staking boost (no API);
 no Advanced rebates on Basic. Stocks on Coinbase are commission-free (spread applies). Membership cost is the operator's
 personal decision → incremental cost attributed to FORGE = $0; full cost shown separately.
+
+## OP-017 — 2026-10-07 — Resource envelope: FORGE (incl. Hermes) ≤ 4 vCPU, ~4 GB RAM on the Command Center server
+Heavy work goes to Modal ($30/month, via FORGE's compute governor). Hermes must run inside the same envelope and must pay
+for itself (measured value-per-$ through the intelligence attribution ledger) — it exists to generate income.
+Implemented: `forge.slice` (CPUQuota 400%, MemoryMax 4G, MemoryHigh 3.8G) containing forge.service (≤ 300% / 3G) and
+forge-hermes.service. Supersedes the earlier 3 vCPU hard ceiling for the slice as a whole.

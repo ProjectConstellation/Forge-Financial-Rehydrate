@@ -39,6 +39,14 @@ from forge.opportunities.probability import (
     fit_underlying,
     stack_features,
 )
+from forge.opportunities.probsurface import (
+    best_lead,
+    fit_surface,
+    half_life,
+    implied_median,
+    lead_lag,
+    surface_rv_candidates,
+)
 
 log = logging.getLogger("forge.crossrail")
 
@@ -219,9 +227,10 @@ class CrossRailScanner:
         self.last_sample: dict[str, float] = {}
         self.stats: dict[str, Any] = {"scans": 0, "markets": 0, "signals": 0, "settled": 0, "fills": 0}
         saved = self.f.db.kv_get("crossrail.calibrator")
-        if saved:
+        if saved and len(saved.get("w", [])) == len(self.calib.w):     # feature set changed → refit from samples
             with contextlib.suppress(Exception):
                 self.calib.w, self.calib.cov, self.calib.n = np.array(saved["w"]), np.array(saved["cov"]), int(saved["n"])
+        self.ticks: dict[str, list[tuple[float, float, float]]] = {}      # underlying → [(ts, spot, implied median)]
 
     # ---------------------------------------------------------------- discovery
     async def refresh_series(self) -> None:
@@ -286,11 +295,12 @@ class CrossRailScanner:
         return None
 
     def refit_calibrator(self) -> None:
-        rows = self.f.db.query("SELECT p_model, p_market, minutes, outcome FROM crossrail_calibration "
+        rows = self.f.db.query("SELECT p_model, p_market, minutes, flow, direction, outcome FROM crossrail_calibration "
                                "WHERE outcome IS NOT NULL ORDER BY id DESC LIMIT 20000")
         if len(rows) < 30:
             return
-        X = np.array([stack_features(r["p_model"], r["p_market"], r["minutes"]) for r in rows])
+        X = np.array([stack_features(r["p_model"], r["p_market"], r["minutes"], r["flow"] or 0.0, r["direction"] or 0)
+                      for r in rows])
         y = np.array([float(r["outcome"]) for r in rows])
         self.calib.fit(X, y)
         self.last_calib_fit = time.time()
@@ -333,6 +343,21 @@ class CrossRailScanner:
                 adj = ref * math.exp(self._update_basis(pid, live, ref))
                 sigs: list[Signal] = ladder_arbs(live)
                 sigs += range_arbs(live, bool(ev.get("mutually_exclusive")))
+                # implied probability surface: relative value vs neighbouring strikes (no directional view needed)
+                surf = fit_surface([(m.ticker, m.floor, m.yes_bid, m.yes_ask) for m in live
+                                    if m.strike_type == "greater" and m.floor])
+                fitted = {p.ticker: p.fitted for p in surf}
+                for t, side, ask, fair in surface_rv_candidates(surf):
+                    fee = kalshi_fee(ask, fee_type=ft, multiplier=mult)
+                    if fair - ask - fee >= max(0.02, fee):
+                        sigs.append(Signal("SURFACE_RV", t, side, ask, fee, fair - ask - fee, {"surface_fair": fair}))
+                med = implied_median(surf)
+                if med and ev.get("event_ticker"):
+                    self._tick(pid, ev["event_ticker"], ref, med, now)
+                micro = self.f.market.micro(pid) if hasattr(self.f.market, "micro") else {}
+                flow = micro.get("flow_imb_60s", 0.0)
+                flow = flow if flow == flow else 0.0
+                quotes_now: dict[str, tuple[float, float, KalshiMarket]] = {}
                 for m in live:
                     minutes = (m.close_ts - now) / 60
                     if model is None or minutes > 26 * 60:
@@ -342,8 +367,10 @@ class CrossRailScanner:
                         continue
                     if m.yes_bid is not None and m.yes_ask is not None:
                         mid = 0.5 * (m.yes_bid + m.yes_ask)
-                        ps, plo, phi = self.calib.predict(pm, mid, minutes)
-                        self._calib_sample(m, pm, mid, ps, ref, model, minutes, pid)
+                        direction = 1 if m.strike_type == "greater" else -1 if m.strike_type == "less" else 0
+                        ps, plo, phi = self.calib.predict(pm, mid, minutes, flow, direction)
+                        quotes_now[m.ticker] = (plo, phi, m)
+                        self._calib_sample(m, pm, mid, ps, ref, model, minutes, pid, flow, direction, fitted.get(m.ticker))
                         for s_ in taker_signals(m, plo, phi, "TAKE", fee_type=ft, mult=mult) + \
                                 maker_quotes(m, plo, phi, fee_type=ft, mult=mult):
                             s_.detail.update(p_model=pm, p_market=mid, p_stacked=ps, p_lo=plo, p_hi=phi, minutes=minutes)
@@ -353,6 +380,7 @@ class CrossRailScanner:
                         sigs.append(s_)
                 for s_ in sigs:
                     n_sig += self._record(s_, series, pid, ref, model, ev, live)
+                self._edge_decay(quotes_now, now)
         self.stats["scans"] += 1
         self.stats["markets"] = n_mk
         self.stats["signals"] += n_sig
@@ -376,7 +404,7 @@ class CrossRailScanner:
         return self.basis.get(pid, 0.0)
 
     def _calib_sample(self, m: KalshiMarket, pm: float, mid: float, ps: float, ref: float, model: UnderlyingModel,
-                      minutes: float, pid: str) -> None:
+                      minutes: float, pid: str, flow: float = 0.0, direction: int = 0, p_surface: float | None = None) -> None:
         if not (0.05 <= mid <= 0.95) or (m.yes_ask or 1) - (m.yes_bid or 0) > 0.12:
             return
         if time.time() - self.last_sample.get(m.ticker, 0) < 900:          # ≤ 1 sample / market / 15 min
@@ -385,7 +413,84 @@ class CrossRailScanner:
         self.f.db.insert("crossrail_calibration", {
             "ts": time.time(), "ticker": m.ticker, "series": m.series, "underlying": pid, "ref_price": ref,
             "sigma_min": model.sigma_min_now, "minutes": minutes, "p_model": pm, "p_market": mid, "p_stacked": ps,
-            "spread": (m.yes_ask or 0) - (m.yes_bid or 0), "close_ts": m.close_ts, "outcome": None})
+            "spread": (m.yes_ask or 0) - (m.yes_bid or 0), "close_ts": m.close_ts, "outcome": None,
+            "flow": flow, "direction": direction, "p_surface": p_surface})
+
+    def _tick(self, pid: str, event: str, spot: float, med: float, now: float) -> None:
+        buf = self.ticks.setdefault(pid, [])
+        if buf and now - buf[-1][0] < 10:
+            return
+        buf.append((now, spot, med))
+        del buf[:-2000]
+        self.f.db.insert("crossrail_ticks", {"ts": now, "underlying": pid, "event_ticker": event, "spot": spot,
+                                             "implied_median": med})
+
+    def lead_lag_report(self) -> dict[str, Any]:
+        """Lead/lag per underlying on ~15 s samples (fast lane). A lead is trusted only when t ≥ 3 with n ≥ 15."""
+        out = {}
+        for pid, buf in self.ticks.items():
+            if len(buf) < 40:
+                continue
+            spot, imp = [b[1] for b in buf[-400:]], [b[2] for b in buf[-400:]]
+            gaps = [b[0] - a[0] for a, b in zip(buf[-400:-1], buf[-399:], strict=False)]
+            step = sorted(gaps)[len(gaps) // 2] if gaps else 15.0
+            sc = lead_lag(spot, imp)
+            b = best_lead(sc)
+            out[pid] = {"samples": len(spot), "step_s": step,
+                        "lead": ({"lag_s": b.lag_steps * step, "corr": b.corr, "t": b.t_stat, "beta": b.beta} if b else None),
+                        "lag0_corr": sc[0].corr if sc else None}
+        return out
+
+    def _edge_decay(self, quotes_now: dict[str, tuple[float, float, KalshiMarket]], now: float) -> None:
+        """Re-measure open taker signals (≤ 30 min old) at the current quote → edge-decay curve per signal."""
+        rows = self.f.db.query("SELECT id, ts, ticker, side, kind, fee FROM crossrail_signals WHERE status = 'OPEN' "
+                               "AND kind IN ('TAKE','SURFACE_RV') AND ts > ?", (now - 1800,))
+        for r in rows:
+            q = quotes_now.get(r["ticker"])
+            if q is None:
+                continue
+            plo, phi, m = q
+            ask = m.yes_ask if r["side"] == "yes" else m.no_ask
+            if ask is None:
+                continue
+            p_win = plo if r["side"] == "yes" else 1.0 - phi
+            self.f.db.insert("edge_decay", {"signal_id": r["id"], "dt_s": now - r["ts"],
+                                            "edge": p_win - ask - kalshi_fee(ask)})
+
+    def half_life_report(self) -> dict[str, Any]:
+        rows = self.f.db.query("SELECT s.id, s.kind, s.edge, d.dt_s, d.edge AS e FROM crossrail_signals s JOIN edge_decay d "
+                               "ON d.signal_id = s.id ORDER BY s.id, d.dt_s")
+        by: dict[int, dict[str, Any]] = {}
+        for r in rows:
+            by.setdefault(r["id"], {"kind": r["kind"], "obs": [(0.0, r["edge"])]})["obs"].append((r["dt_s"], r["e"]))
+        out: dict[str, Any] = {}
+        for v in by.values():
+            hl = half_life(v["obs"])
+            k = out.setdefault(v["kind"], {"n": 0, "decayed": 0, "half_lives": []})
+            k["n"] += 1
+            if hl is not None:
+                k["decayed"] += 1
+                k["half_lives"].append(hl)
+        for k in out.values():
+            hl = sorted(k.pop("half_lives"))
+            k["median_t50_s"] = hl[len(hl) // 2] if hl else None
+        return out
+
+    async def _rti_proxy(self, ticker: str, pid: str | None, close_ts: float) -> None:
+        """Settlement index (CF Benchmarks via Kalshi expiration_value) vs Coinbase 1m close at the same time."""
+        if not pid or self.f.db.scalar("SELECT 1 FROM rti_proxy WHERE ticker = ?", (ticker,)):
+            return
+        try:
+            m = await self.k.market(ticker)
+            sv = float(m.get("expiration_value") or 0)
+            c = await self.f.rest.candles(pid, int(close_ts) - 120, int(close_ts) + 60, 60)
+        except Exception:
+            return
+        if sv <= 0 or not c:
+            return
+        cb = float(min(c, key=lambda x: abs(int(x["start"]) + 60 - close_ts))["close"])
+        self.f.db.insert("rti_proxy", {"ts": time.time(), "ticker": ticker, "underlying": pid, "close_ts": close_ts,
+                                       "settlement_value": sv, "coinbase_close": cb, "log_error": math.log(cb / sv)})
 
     def _check_quotes(self, mks: list[KalshiMarket]) -> None:
         by = {m.ticker: m for m in mks}
@@ -470,6 +575,9 @@ class CrossRailScanner:
             except Exception:
                 continue
             if res in ("yes", "no"):
+                meta = db.query_one("SELECT underlying, close_ts FROM crossrail_calibration WHERE ticker = ? LIMIT 1", (r["ticker"],))
+                if meta and db.scalar("SELECT COUNT(*) FROM rti_proxy") < 5000:
+                    await self._rti_proxy(r["ticker"], meta["underlying"], float(meta["close_ts"] or 0))
                 db.execute("UPDATE crossrail_calibration SET outcome = ? WHERE ticker = ? AND outcome IS NULL",
                            (1 if res == "yes" else 0, r["ticker"]))
         self.stats["settled"] += n
@@ -492,6 +600,11 @@ class CrossRailScanner:
             kinds[r["kind"]] = {"signals": r["n"], "settled": r["s"], "pnl_per_contract_sum": r["pnl"] or 0.0,
                                 "wins": r["w"], "avg_expected_edge": r["e"], "expired_quotes": r["x"]}
         out["signals"] = kinds
+        rp = db.query("SELECT underlying, AVG(log_error) m, COUNT(*) n, AVG(ABS(log_error)) a FROM rti_proxy GROUP BY underlying")
+        out["rti_proxy_bp"] = {r["underlying"]: {"n": r["n"], "mean_bp": (r["m"] or 0) * 1e4, "mae_bp": (r["a"] or 0) * 1e4}
+                               for r in rp}
+        out["lead_lag"] = self.lead_lag_report()
+        out["edge_half_life"] = self.half_life_report()
         return out
 
     async def fast_lane(self) -> None:

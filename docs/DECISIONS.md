@@ -27,3 +27,4 @@
 | D-024 | Futures (CFM: gold, silver, oil, US500, crypto perps) = DATA rail | no CFM account; contract notional ≫ treasury; leverage forbidden by policy | none | OP to allow unlevered futures |
 | D-025 | Event-contract probability = stacked (model, market) Bayesian logistic with market-centred prior; trade on the lower bound | a model without proof must not override a liquid market; weight is earned from settled outcomes | slower to act on genuine edge | prior SDs |
 | D-026 | Path-dependent (MAX/MIN/one-touch) Kalshi series excluded from the terminal-price model | terminal model misprices barriers ~2× | missed barrier opportunities | add reflection-principle barrier model |
+| D-027 | forge.service MemoryMax 2G → 3G (drop-in) | peak 1.6G with TM replay + cross-rail models; headroom for Hermes tool API | more host RAM use (host 24G) | remove drop-in |

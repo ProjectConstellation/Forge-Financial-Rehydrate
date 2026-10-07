@@ -220,17 +220,20 @@ def fit_underlying(product: str, bars: dict[str, np.ndarray], bar_s: int = 300,
 
 
 # ------------------------------------------------------------------ stacked calibration (online Bayesian logistic)
-FEATURES = ("bias", "model_minus_market", "market", "longshot_market", "disagree_sqrt_tau")
-PRIOR_MEAN = np.array([0.0, 0.0, 1.0, 0.0, 0.0])               # prior belief: the market price is calibrated
-PRIOR_SD = np.array([0.25, 0.30, 0.12, 0.15, 0.15])            # tight around "market"; data must earn model weight
+FEATURES = ("bias", "model_minus_market", "market", "longshot_market", "disagree_sqrt_tau", "orderflow_short_horizon")
+PRIOR_MEAN = np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0])          # prior belief: the market price is calibrated
+PRIOR_SD = np.array([0.25, 0.30, 0.12, 0.15, 0.15, 0.15])      # tight around "market"; data must earn model weight
 
 
-def stack_features(p_model: float, p_market: float, minutes: float) -> np.ndarray:
-    """Parameterized on the DISAGREEMENT (logit model − logit market) so prior uncertainty does not explode in the tails."""
+def stack_features(p_model: float, p_market: float, minutes: float, flow: float = 0.0, direction: int = 0) -> np.ndarray:
+    """Parameterized on the DISAGREEMENT (logit model − logit market) so prior uncertainty does not explode in the tails.
+    Order flow (Coinbase aggressor imbalance over 60 s, −1..1) signed by contract direction (+1 'greater', −1 'less'),
+    weighted toward short horizons where flow persistence can still matter before settlement."""
     lm, lk = logit(p_model), logit(p_market)
     d = max(min(lm - lk, 6.0), -6.0)
+    fl = max(min(flow or 0.0, 1.0), -1.0) * direction * min(1.0, 15.0 / max(minutes, 1.0))
     return np.array([1.0, d, lk, lk * (1.0 if p_market < 0.30 else 0.0),
-                     math.sqrt(min(max(minutes, 1.0), 1440.0) / 60.0) * d / 4.0])
+                     math.sqrt(min(max(minutes, 1.0), 1440.0) / 60.0) * d / 4.0, fl])
 
 
 @dataclass
@@ -257,9 +260,10 @@ class StackedCalibrator:
         H = (X * (p * (1 - p))[:, None]).T @ X + P
         self.w, self.cov, self.n = w, np.linalg.inv(H), len(y)
 
-    def predict(self, p_model: float, p_market: float, minutes: float) -> tuple[float, float, float]:
+    def predict(self, p_model: float, p_market: float, minutes: float, flow: float = 0.0,
+                direction: int = 0) -> tuple[float, float, float]:
         """(p_stacked, p_lower, p_upper) — 90% band from the Laplace posterior (model-uncertainty aware)."""
-        x = stack_features(p_model, p_market, minutes)
+        x = stack_features(p_model, p_market, minutes, flow, direction)
         mu = float(x @ self.w)
         sd = math.sqrt(max(float(x @ self.cov @ x), 0.0))
         return sigmoid(mu), sigmoid(mu - 1.645 * sd), sigmoid(mu + 1.645 * sd)
