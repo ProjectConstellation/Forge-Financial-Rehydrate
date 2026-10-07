@@ -60,3 +60,13 @@ def test_credit_mode_free_and_paced(db):
     a = c.get("/api/agent/allow", headers=h, params={"role": "scientist", "est_usd": 0.5}).json()
     assert a["mode"] == "credit" and a["wake"] and a["hours_left"] > 70
     assert not c.get("/api/agent/allow", headers=h, params={"est_usd": 50}).json()["wake"]   # paced over the window
+
+
+def test_tool_output_truncation_stays_valid_json():
+    import json as _j
+
+    from forge.brain.tools import _fit_json
+    big = [{"id": i, "blob": "x" * 500} for i in range(500)]
+    out = _j.loads(_fit_json(big, 30000))
+    assert out["truncated"] and 0 < len(out["items"]) < 500 and out["total"] == 500
+    assert _j.loads(_fit_json({"a": "y" * 50000}, 30000))["truncated"]

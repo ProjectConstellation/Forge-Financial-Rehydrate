@@ -88,7 +88,7 @@ class ToolRouter:
             out = {"error": f"bad arguments: {e}"}
         except Exception as e:
             out = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
-        return json.dumps(out, default=str)[:30000]
+        return _fit_json(out, 30000)
 
     # ---------------- read tools
     def t_get_system_state(self) -> dict[str, Any]:
@@ -305,3 +305,21 @@ __all__ = ["TOOLS", "ToolRouter", "dumps"]
 def datetime_iso_hours_ago(h: float) -> str:
     from datetime import UTC, datetime, timedelta
     return (datetime.now(UTC) - timedelta(hours=h)).isoformat()
+
+
+def _fit_json(out: Any, limit: int) -> str:
+    """Serialize tool output within `limit` chars while ALWAYS staying valid JSON (truncated JSON broke callers → HTTP 500)."""
+    txt = json.dumps(out, default=str)
+    if len(txt) <= limit:
+        return txt
+    if isinstance(out, list):
+        lo, hi = 0, len(out)
+        while lo < hi:                                     # largest prefix of items that fits
+            mid = (lo + hi + 1) // 2
+            if len(json.dumps({"items": out[:mid], "truncated": True, "total": len(out)}, default=str)) <= limit:
+                lo = mid
+            else:
+                hi = mid - 1
+        return json.dumps({"items": out[:lo], "truncated": True, "total": len(out),
+                           "note": f"showing {lo}/{len(out)}; ask with a smaller limit or a filter"}, default=str)
+    return json.dumps({"truncated": True, "preview": txt[: limit - 200]}, default=str)
