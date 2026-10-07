@@ -18,11 +18,12 @@ market = modal.Volume.from_name("forge-market", create_if_missing=True)
 @app.function(image=image, cpu=2.0, memory=3072, timeout=900, volumes={"/market": market}, max_containers=16,
               scaledown_window=60, retries=0)
 def search(interval: int, parents: list, fees: dict, budget_s: float, seed: int, must_eval: list | None = None,
-           prior_trials: int = 0) -> dict:
+           prior_trials: int = 0, sealed_seen: dict | None = None, sealed_exams_prior: int = 0) -> dict:
     import time
     t0 = time.time()
     from forge.evolution.worker import local_search
-    out = local_search("/market", interval, parents, fees, budget_s, seed, must_eval, prior_trials)
+    out = local_search("/market", interval, parents, fees, budget_s, seed, must_eval, prior_trials,
+                       sealed_seen=sealed_seen, sealed_exams_prior=sealed_exams_prior)
     out["where"] = "modal"
     out["container_seconds"] = time.time() - t0
     return out
@@ -30,10 +31,10 @@ def search(interval: int, parents: list, fees: dict, budget_s: float, seed: int,
 
 @app.function(image=image, cpu=0.25, memory=256, timeout=60)
 def ping() -> dict:
-    import platform
-    import time
     import hashlib
     import pathlib
+    import platform
+    import time
 
     import forge
     src = pathlib.Path(forge.__file__).parent

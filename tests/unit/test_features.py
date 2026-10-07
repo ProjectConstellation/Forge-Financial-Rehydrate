@@ -64,5 +64,56 @@ def test_convex_barriers():
     g = seed_genomes()[0]
     g2 = g.model_copy(update={"exit": g.exit.model_copy(update={"convex": True, "cat_atr": 2.0})})
     tp, sl = barrier_pcts(g2, 0.01)
-    assert tp == CONVEX_NO_TP and abs(sl - 0.02) < 1e-12
+    unit = 0.01 * (3600 / g2.interval_s) ** 0.5            # hour-equivalent ATR (5m → ×√12)
+    assert tp == CONVEX_NO_TP and abs(sl - min(2.0 * unit, g2.exit.sl_max_pct)) < 1e-12
     assert chandelier_k(g2, 0.9) == g2.exit.chand_k_hv and chandelier_k(g2, 0.2) == g2.exit.chand_k
+
+
+def test_allocation_gates():
+    from forge.treasury.allocation import (breadth_multiplier, drawdown_state, ecr_tier, edge_coverage_ratio,
+                                           haircut_probability, retention_haircut, risk_at_stop_cap, volatility_multiplier)
+    # ECR: 50% win, +3% / −2% gross, 1% / 1.4% costs → E[gross]=0.5%, E[cost]=1.2% → 0.42 → REJECT
+    e = edge_coverage_ratio(0.5, 0.02, -0.034, 0.01, 0.014)
+    assert abs(e - 0.005 / 0.012) < 1e-9 and ecr_tier(e) == "REJECT"
+    assert ecr_tier(1.7) == "SHADOW_ONLY" and ecr_tier(2.5) == "SMALL_LIVE" and ecr_tier(4.2) == "CONCENTRATION_CANDIDATE"
+    # haircut scales EV exactly by H
+    p, w, l = 0.55, 0.03, -0.02
+    ph = haircut_probability(p, w, l, 0.25)
+    assert abs((ph * w + (1 - ph) * l) - 0.25 * (p * w + (1 - p) * l)) < 1e-12
+    assert retention_haircut(0.01, None, 0) == 0.25
+    assert retention_haircut(0.01, 0.01, 1000) > 0.95 and retention_haircut(0.01, -0.01, 1000) < 0.01
+    # exposure tiers
+    assert breadth_multiplier(0.7, "momentum") == 1.0 and breadth_multiplier(0.2, "liquidity_provision") == 1.0
+    assert 0.5 <= breadth_multiplier(0.5, "momentum") <= 0.75 and breadth_multiplier(0.1, "momentum") < 0.25
+    assert volatility_multiplier(0.95, False) == 0.5 and volatility_multiplier(0.98, False) == 0.0 and volatility_multiplier(0.98, True) == 1.0
+    assert drawdown_state(94, 100).multiplier == 0.75 and drawdown_state(89, 100).postmortem_required
+    assert drawdown_state(84, 100).generic_live_paused and drawdown_state(100, 100).state == "NORMAL"
+    # risk-at-stop: 5% of $28 at a 4% stop → ≤ $35; aggregate budget exhausted → 0
+    rc = risk_at_stop_cap(28.0, 0.04, 0.8, 0.0)
+    assert abs(rc.max_notional - 28 * 0.05 / 0.04) < 1e-9
+    assert risk_at_stop_cap(28.0, 0.04, 0.8, 2.8).max_notional < 1e-9
+
+
+def test_sealed_split_is_disjoint_and_ordered():
+    from forge.research.evaluate import Dataset
+    syms = {f"S{i}-USD": _bars(1000, seed=i) for i in range(6)}
+    ds = Dataset.build(syms, 300, holdout_frac=0.20, sealed_frac=0.15)
+    sd = next(iter(ds.symbols.values()))
+    s0, s1 = ds.split(sd, "selection")
+    h0, h1 = ds.split(sd, "holdout")
+    z0, z1 = ds.split(sd, "sealed")
+    assert s0 == 0 and s1 == h0 and h1 == z0 and z1 == sd.n          # contiguous, chronological, disjoint
+    assert abs((z1 - z0) / sd.n - 0.15) < 0.01 and abs((h1 - h0) / sd.n - 0.20) < 0.01
+    legacy = Dataset.build(syms, 300, holdout_frac=0.3)
+    assert legacy.split(next(iter(legacy.symbols.values())), "holdout")[1] == sd.n   # sealed_frac=0 → unchanged behaviour
+    assert ds.sealed_start_ts() == float(sd.bars["ts"][z0])
+
+
+def test_sealed_exam_rules():
+    from types import SimpleNamespace as NS
+
+    from forge.evolution.search import sealed_exam
+    good = NS(metrics={"n": 20, "mean_net": 0.01, "p_positive": 0.8}, trades=[NS(net=x) for x in [0.02, 0.01, -0.005] * 7])
+    assert sealed_exam(good, 1)[0]
+    assert not sealed_exam(NS(metrics={"n": 3, "mean_net": 0.05, "p_positive": 0.9}, trades=[]), 1)[0]
+    assert not sealed_exam(NS(metrics={"n": 20, "mean_net": -0.001, "p_positive": 0.4}, trades=[]), 1)[0]

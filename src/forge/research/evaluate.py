@@ -40,6 +40,7 @@ class Dataset:
     symbols: dict[str, SymbolData]
     holdout_frac: float = 0.3
     n_folds: int = 4
+    sealed_frac: float = 0.0             # P0.4: final slice reserved for ONE-TIME sealed exams (0 = no sealed window)
     trials: int = 0                      # hypotheses evaluated on this dataset (multiple-testing counter)
     feature_quantiles: dict[str, np.ndarray] = field(default_factory=dict)
     index_ts: np.ndarray = field(default_factory=lambda: np.array([]))
@@ -55,7 +56,7 @@ class Dataset:
 
     @classmethod
     def build(cls, raw: dict[str, dict[str, np.ndarray]], interval_s: int, src_interval_s: int | None = None,
-              holdout_frac: float = 0.3, n_folds: int = 4, benchmark: str = "BTC-USD") -> Dataset:
+              holdout_frac: float = 0.3, n_folds: int = 4, benchmark: str = "BTC-USD", sealed_frac: float = 0.0) -> Dataset:
         if src_interval_s and src_interval_s != interval_s:
             raw = {s: resample(b, src_interval_s, interval_s) for s, b in raw.items()}
         bench = raw.get(benchmark)
@@ -70,7 +71,7 @@ class Dataset:
         for sd in out.values():
             sd.probs = regime_probs(sd.f)
             sd.labels = regime_labels(sd.probs)
-        ds = cls(interval_s=interval_s, symbols=out, holdout_frac=holdout_frac, n_folds=n_folds)
+        ds = cls(interval_s=interval_s, symbols=out, holdout_frac=holdout_frac, n_folds=n_folds, sealed_frac=sealed_frac)
         ds._quantiles()
         ds._index()
         return ds
@@ -92,7 +93,7 @@ class Dataset:
         qs = np.linspace(0.02, 0.98, 25)
         acc: dict[str, list[np.ndarray]] = {}
         for sd in self.symbols.values():
-            cut = int(sd.n * (1 - self.holdout_frac))
+            cut = self.split(sd, "selection")[1]           # thresholds learned from selection data only
             for k, v in sd.f.items():
                 vv = v[:cut]
                 acc.setdefault(k, []).append(vv[np.isfinite(vv)])
@@ -101,12 +102,22 @@ class Dataset:
             self.feature_quantiles[k] = np.quantile(allv, qs) if len(allv) > 50 else np.array([])
 
     def split(self, sd: SymbolData, segment: str) -> tuple[int, int]:
-        cut = int(sd.n * (1 - self.holdout_frac))
+        seal = int(sd.n * (1 - self.sealed_frac)) if self.sealed_frac > 0 else sd.n
+        cut = int(sd.n * (1 - self.holdout_frac - self.sealed_frac))
         if segment == "selection":
             return 0, cut
-        if segment == "holdout":
+        if segment == "holdout":                           # validation window (re-used across cycles → contaminated over time)
+            return cut, seal
+        if segment == "sealed":                            # one-time final exam window (never feeds search or the LLM)
+            return seal, sd.n
+        if segment == "unseen":                            # everything after selection (reporting)
             return cut, sd.n
         return 0, sd.n
+
+    def sealed_start_ts(self) -> float:
+        sd = next(iter(self.symbols.values()))
+        a, _ = self.split(sd, "sealed")
+        return float(sd.bars["ts"][min(a, sd.n - 1)])
 
     def days(self, segment: str) -> float:
         sd = next(iter(self.symbols.values()))

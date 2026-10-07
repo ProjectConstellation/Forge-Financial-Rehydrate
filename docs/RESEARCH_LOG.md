@@ -1,5 +1,20 @@
 # Research log (institutional memory; newest first)
 
+## 2026-10-07 — Answers tranche A/B (Time Machine, 9 validated 5m strategies, 62 markets, sel 42d / unseen 18d)
+- Sizing: risk-at-stop (5%/10% and 3%/8%) produced IDENTICAL results to Kelly-elite — both bind on the 50% max-fraction cap because
+  5m stops are tight (risk/stop ≫ equity). At $28, risk-at-stop is a safety cap, not the active constraint → adopted as a cap
+  (aggregate open risk ≤ 10%), Kelly-elite stays the sizing engine.
+- Convex Trend Exit V1 with raw 5m ATR: **−92%** (2.5·ATR₅ₘ ≈ 1.2% stop < 1.4% round-trip fee → every trade bleeds). Fixed by
+  hour-equivalent ATR (×√(3600/interval)). Even fixed, convex exits were worse than the evolved time-stop exits on BOTH windows
+  (all-strategies: −86%/−15% vs −53%/+49%; holds 41h vs 84h — chandelier cuts the multi-day winners that carry expectancy).
+  → Convex stays an evolvable gene, default OFF; evolution must earn it on validation + sealed data.
+- WARNING: the validated set lost −33…−53% (max DD −70…−75%) over the earlier 42-day window and won +28…+49% on the latest 18 days;
+  the same configuration moved by 20 points between two runs minutes apart (new bars shift every window) → returns are
+  path-dependent and dominated by market beta. This is why the haircut (H=0.25), ECR ≥ 2 for live, sealed exams and drawdown
+  states are now mandatory before real capital scales.
+- Elite ranking in the Time Machine filters on holdout_return > 0 → that is holdout contamination; flagged for the
+  sealed-window redesign (ranking must use selection only; validation is a gate, not a selector).
+
 ## 2026-10-06 — First evolutionary runs (25→60 USD markets; 1h×365d and 5m×60d; Intro fees 0.50/0.90%)
 - Seeds on 5m: all net-negative; several have real GROSS edge (panic-wick +1.14%/trade, relative-strength +0.31%, vol-expansion +0.30%)
   that fees (~1.0–1.4% round trip) consume. 5m ATR stops (0.5–1%) are tighter than fees → horizon/barrier mutation needed.

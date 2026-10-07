@@ -17,7 +17,7 @@ import numpy as np
 
 from forge.research.backtest import CostModel
 from forge.research.evaluate import Dataset
-from forge.strategies.genome import Genome, barrier_pcts, compile_entries
+from forge.strategies.genome import Genome, barrier_pcts, chandelier_k, compile_entries, convex_atr
 from forge.treasury.sizing import kelly_fraction
 
 
@@ -145,13 +145,12 @@ def run_portfolio(genomes: list[Genome], ds: Dataset, cost: CostModel, capital: 
                 continue
             tp, sl = barrier_pcts(g, a)
             ck = 3.5
-            if g.exit.convex:
-                sl, tp = min(g.exit.cat_atr * a, g.exit.sl_max_pct), 10.0
-                vp = float(f["vol_pct"][i_sig]) if math.isfinite(f["vol_pct"][i_sig]) else 0.5
-                ck = g.exit.chand_k_hv if vp >= 0.8 else g.exit.chand_k
+            if g.exit.convex:                                       # barrier_pcts gave (no TP, catastrophe stop)
+                a = convex_atr(g, a)
+                ck = chandelier_k(g, float(f["vol_pct"][i_sig]))
             ev = evidence.get(g.id, {})
             p_win = ev.get("p_win", 0.45)
-            w, l = ev.get("avg_win", tp - 0.01), ev.get("avg_loss", -(sl + 0.014))
+            w, l = ev.get("avg_win", min(tp, 3 * sl) - 0.01), ev.get("avg_loss", -(sl + 0.014))
             k = kelly_fraction(p_win, w, l) * kelly_mult * min(1.0, max(0.2, (ev.get("p_edge", 0.6) - 0.5) / 0.4))
             deployable = max(0.0, cash - equity * reserve_frac)
             if sizing == "risk":                                   # risk-at-stop (answers §9)

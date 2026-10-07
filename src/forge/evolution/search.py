@@ -103,17 +103,55 @@ def run_search(seeds: list[Genome], ds: Dataset, cost: CostModel, generations: i
     return SearchResult(archive, evaluated, time.time() - t0, history, op_stats)
 
 
-def adjudicate(res: SearchResult, ds: Dataset, cost: CostModel, top: int = 12, seed: int = 1) -> list[dict[str, Any]]:
-    """Run the promotion gate (holdout + robustness + deflated Sharpe) on the best elites."""
+def adjudicate(res: SearchResult, ds: Dataset, cost: CostModel, top: int = 12, seed: int = 1,
+               sealed_seen: dict[str, bool] | None = None, sealed_exams_prior: int = 0) -> list[dict[str, Any]]:
+    """Run the promotion gate (validation + robustness + deflated Sharpe) on the best elites; candidates that pass take a
+    ONE-TIME sealed final exam (P0.4). `sealed_seen` maps genome id → prior exam verdict (a genome never re-sits)."""
     out = []
     rng_seed = seed
+    sealed_seen = sealed_seen if sealed_seen is not None else {}
+    exams = sealed_exams_prior
     for el in res.ranked()[:top]:
         hold = evaluate(el.genome, ds, cost, "holdout", keep_trades=True, count_trial=False)
         rob = robustness(el.genome, ds, cost, mutate, n=8, seed=rng_seed)
         ok, reasons = promotion_gate(el.ev, hold, rob, n_trials=ds.trials)
+        sleeve = sleeve_of(reasons)
+        sealed: dict[str, Any] | None = None
+        if sleeve is not None and ds.sealed_frac > 0:
+            gid = el.genome.id
+            if gid in sealed_seen:                         # already examined → verdict stands, no second peek
+                s_ok, sealed = sealed_seen[gid], {"reused": True}
+            else:
+                exams += 1
+                sev = evaluate(el.genome, ds, cost, "sealed", keep_trades=True, count_trial=False)
+                s_ok, s_why = sealed_exam(sev, exams)
+                sealed = {**{k: v for k, v in sev.metrics.items() if k != "by_regime"}, "exam_no": exams, "why": s_why}
+                sealed_seen[gid] = s_ok
+            if not s_ok:
+                reasons = reasons + [f"sealed final exam failed ({(sealed or {}).get('why', 'prior verdict')})"]
+                ok, sleeve = False, None
         out.append({"genome": el.genome, "selection": el.ev.metrics, "fold_positive": el.ev.fold_positive,
                     "holdout": hold.metrics, "robustness": rob, "passed": ok, "reasons": reasons,
-                    "sleeve": sleeve_of(reasons),
-                    "rationale": el.rationale})
+                    "sleeve": sleeve, "sealed": sealed, "rationale": el.rationale})
         rng_seed += 1
     return out
+
+
+def sealed_exam(ev: Any, n_exams: int, min_trades: int = 8) -> tuple[bool, str]:
+    """Positive sealed validation: enough trades, positive net mean, P(edge>0) ≥ 0.6, and a deflated Sharpe that survives the
+    number of exams already taken on this sealed window (exam-level multiple testing)."""
+    import numpy as np
+
+    from forge.research.stats import deflated_sharpe
+    m = ev.metrics
+    if m["n"] < min_trades:
+        return False, f"n={m['n']} < {min_trades}"
+    if m["mean_net"] <= 0:
+        return False, f"mean net {m['mean_net']:+.2%} ≤ 0"
+    if m["p_positive"] < 0.60:
+        return False, f"P(edge>0)={m['p_positive']:.2f} < 0.60"
+    rr = np.array([t.net for t in ev.trades])
+    dsr = deflated_sharpe(rr, max(1, n_exams)) if len(rr) >= 5 else 1.0
+    if dsr < 0.5:
+        return False, f"DSR {dsr:.2f} < 0.5 after {n_exams} exams"
+    return True, f"n={m['n']} mean {m['mean_net']:+.2%} P={m['p_positive']:.2f} DSR {dsr:.2f}"

@@ -42,10 +42,21 @@ from forge.research.backtest import CostModel
 from forge.research.calibration import CalibrationEngine
 from forge.risk.breakers import BreakerBoard
 from forge.risk.governor import RiskContext, RiskGovernor
-from forge.strategies.genome import Genome, barrier_pcts, chandelier_k, compile_entries
+from forge.strategies.genome import Genome, barrier_pcts, chandelier_k, compile_entries, convex_atr
 from forge.strategies.registry import ACTIVE_LIVE, ACTIVE_OBSERVING, State, StrategyRegistry
+from forge.treasury.allocation import (
+    SPECIALIST_FAMILIES,
+    breadth_multiplier,
+    drawdown_state,
+    ecr_tier,
+    edge_coverage_ratio,
+    haircut_probability,
+    retention_haircut,
+    risk_at_stop_cap,
+    volatility_multiplier,
+)
 from forge.treasury.regimes import CapitalRegimeEngine
-from forge.treasury.sizing import size_position
+from forge.treasury.sizing import SizeDecision, kelly_fraction, size_position
 from forge.treasury.velocity import OpportunityCostEngine, assess, utilization_pressure
 from forge.venues.base import FeeSchedule
 from forge.venues.coinbase.adapter import CoinbaseAdapter
@@ -286,6 +297,15 @@ class Forge:
         pol = self.capital.policy(max(eq, 0.01))
         self.treasury["regime"] = pol.as_dict()
         self.treasury["reserve_usd"] = self.capital.reserve_usd(eq)
+        hwm_key = f"treasury.hwm.{book}"
+        hwm = float(self.db.kv_get(hwm_key, 0.0) or 0.0)
+        if eq > hwm:
+            hwm = eq
+            self.db.kv_set(hwm_key, hwm)
+        dds = drawdown_state(eq, hwm)
+        self.treasury["high_water_usd"] = hwm
+        self.treasury["drawdown_state"] = {"state": dds.state, "drawdown": dds.drawdown, "multiplier": dds.multiplier,
+                                           "generic_live_paused": dds.generic_live_paused, "postmortem": dds.postmortem_required}
         return self.treasury
 
     async def _treasury_loop(self) -> None:
@@ -414,7 +434,7 @@ class Forge:
         cost_loss = (mf if g.execution.entry == "maker" else tf + spread / 2e4) + tf + 0.0003
         ev = self.arena.evidence(g.id)
         raw_p = ev.p_win if ev else 0.5
-        win = ev.avg_win if ev and ev.avg_win > 0 else tp - cost_win
+        win = ev.avg_win if ev and ev.avg_win > 0 else min(tp, 3 * sl) - cost_win      # convex: no fixed TP → 3R prior
         loss = ev.avg_loss if ev and ev.avg_loss < 0 else -(sl + cost_loss)
         cls = f"strategy:{g.family}"
         p_cal, n_cal = self.calib.calibrate(cls, raw_p)
@@ -429,6 +449,18 @@ class Forge:
         # second opinion: calibrated evidence with EARNED weight (never an automatic veto)
         p_strat = p_use
         p_use, p_meta, meta_w = self.second.opinion(g.family, {**feat, "spread_bps": 0.0}, p_use)
+        # P0.3 live-retention haircut: backtest-derived expectations keep H (prior 0.25) until forward evidence earns more
+        hold_m = self.reg.latest_metrics(g.id, "holdout") or {}
+        fwd_m = self.reg.latest_metrics(g.id, "forward") or {}
+        real = self.arena.real_outcomes(g.id)
+        f_n = int(fwd_m.get("n", 0) or 0) + len(real)
+        f_mean = ((float(fwd_m.get("mean_net", 0) or 0) * int(fwd_m.get("n", 0) or 0) + sum(real)) / f_n) if f_n else None
+        h_ret = retention_haircut(float(hold_m.get("mean_net", 0) or 0), f_mean, f_n)
+        p_pre_haircut = p_use
+        p_use = haircut_probability(p_use, win, loss, h_ret)
+        # P0.2 Edge Coverage Ratio on the un-haircut expectation (cost-survival gate; never used alone)
+        ecr = edge_coverage_ratio(p_pre_haircut, win, loss, cost_win, cost_loss, uncertainty=spread / 2e4)
+        ecr_t = ecr_tier(ecr)
         hold_h = ev.avg_hold_h if ev and ev.avg_hold_h > 0 else g.exit.time_stop_bars * interval / 3600 * 0.5
         eq = float(self.treasury.get("equity_usd") or 0)
         pol = self.capital.policy(max(eq, 0.01))
@@ -446,7 +478,8 @@ class Forge:
                  "hold_h": hold_h, "velocity_per_day": va.velocity_per_day, "hurdle_per_day": va.hurdle_per_h * 24,
                  "opportunity_cost": va.opportunity_cost_frac, "adjusted_return": va.adjusted_return,
                  "velocity_score": va.capital_velocity_score, "half_life_s": half_life_s, "spread_bps": spread,
-                 "regime_conf": ss.regime_conf, "evidence_n": ev.n if ev else 0, "p_edge": ev.p_edge if ev else 0.0}
+                 "regime_conf": ss.regime_conf, "evidence_n": ev.n if ev else 0, "p_edge": ev.p_edge if ev else 0.0,
+                 "haircut_H": h_ret, "forward_n": f_n, "p_pre_haircut": p_pre_haircut, "ecr": ecr, "ecr_tier": ecr_t}
         self.db.insert("opportunities", {
             "id": oid, "ts": _now(), "ts_ns": now_ns, "venue": "coinbase", "symbol": sym, "strategy_id": g.id,
             "family": g.family, "direction": "long", "score": float(score), "expected_net_bps": float(exp_net_bps),
@@ -467,6 +500,17 @@ class Forge:
                     return
                 # paper explores, live exploits: gather evidence on whether the kill switch is needed for this strategy
                 comps["paper_exploration"] = True
+        # ECR gate: live needs ≥ 2.0 (small-live tier); paper explores to measure whether ECR predicts outcomes
+        if ecr_t == "REJECT" or (ecr_t == "SHADOW_ONLY"):
+            if self.book != "paper":
+                self._set_opp(oid, "REJECTED", f"ECR {ecr:.2f} ({ecr_t}): expected gross edge does not cover costs ×2")
+                return
+            comps["paper_exploration"] = True
+        # treasury drawdown state: −15% from high-water pauses generic live deployment (research/paper continue)
+        dds = self.treasury.get("drawdown_state") or {}
+        if dds.get("generic_live_paused") and self.book != "paper" and g.family not in SPECIALIST_FAMILIES:
+            self._set_opp(oid, "REJECTED", f"drawdown {dds.get('drawdown', 0):.1%} from high-water: generic live paused")
+            return
         # one position per market across all strategies (no doubled bets on one coin)
         if self.db.scalar("SELECT 1 FROM positions WHERE book = ? AND symbol = ? AND status != 'CLOSED'", (self.book, sym)):
             self._set_opp(oid, "REJECTED", f"already holding {sym} (one position per market)")
@@ -497,9 +541,32 @@ class Forge:
         corr_disc = 1.0 / (1.0 + rho)
         elite = self.db.kv_get("allocation.elite") or []
         kmult = 1.0 if g.id in elite else (0.15 if elite else g.sizing.kelly_mult)      # elite allocation (Time Machine evidence)
+        # conditional exposure scaling (answers §10): breadth tiers × volatility gate × high-water drawdown state
+        fz = ss.features if ss else {}
+        vp = float(fz["vol_pct"][-1]) if "vol_pct" in fz and fz["vol_pct"][-1] == fz["vol_pct"][-1] else None
+        specialist = g.family in SPECIALIST_FAMILIES
+        m_breadth = breadth_multiplier(self.breadth.get("up_frac") if self.breadth.get("n") else None, g.family)
+        m_vol = volatility_multiplier(vp, specialist)
+        m_dd = float((self.treasury.get("drawdown_state") or {}).get("multiplier", 1.0))
+        exposure = m_breadth * m_vol * m_dd
+        if self.book == "paper" and exposure < 0.25:
+            exposure = 0.25          # paper keeps a probe size so the gates themselves can be evaluated on outcomes
+        if exposure <= 0:
+            self._set_opp(oid, "REJECTED", f"exposure gate: breadth×{m_breadth:.2f} vol×{m_vol:.2f} drawdown×{m_dd:.2f}")
+            return
         sz = size_position(p, win, loss, ev.n if ev else 0, kmult, g.sizing.max_fraction,
-                           pol.max_position_fraction, deployable * evid * corr_disc, st.value, self.breakers.size_multiplier(),
-                           va.capital_velocity_score)
+                           pol.max_position_fraction, deployable * evid * corr_disc * exposure, st.value,
+                           self.breakers.size_multiplier(), va.capital_velocity_score)
+        # risk-at-stop cap (answers §9): per-position ≤ 5% equity at the stop, aggregate open risk ≤ 10%
+        open_risk = 0.0
+        for r in self.db.query("SELECT cost_usd, exit_plan FROM positions WHERE book = ? AND status != 'CLOSED'", (self.book,)):
+            with contextlib.suppress(Exception):
+                open_risk += float(r["cost_usd"]) * float(json.loads(r["exit_plan"] or "{}").get("stop_loss_pct", 0.05))
+        rc = risk_at_stop_cap(eq, sl, kelly_fraction(p, win, loss), open_risk)
+        if sz.notional_usd > rc.max_notional:
+            sz = SizeDecision(sz.fraction, rc.max_notional, sz.kelly_raw, sz.shrink, sz.explanation + " | capped: " + rc.explanation)
+        sz = SizeDecision(sz.fraction, sz.notional_usd, sz.kelly_raw, sz.shrink,
+                          sz.explanation + f" | exposure breadth×{m_breadth:.2f} vol×{m_vol:.2f} dd×{m_dd:.2f}")
         if sz.notional_usd < 1.0:
             self._set_opp(oid, "REJECTED", f"size ${sz.notional_usd:.2f} below $1 venue minimum — {sz.explanation}")
             return
@@ -701,7 +768,8 @@ class Forge:
                                                          [g.model_dump(mode="json") for g in parents],
                                                          {"maker": float(self.fees.maker), "taker": float(self.fees.taker)},
                                                          240.0, int(time.time()), llm,
-                                                         int(self.db.kv_get(f"stats.trials.{interval}", 0) or 0)), timeout=900)
+                                                         int(self.db.kv_get(f"stats.trials.{interval}", 0) or 0),
+                                                         *self.sealed_context(interval)), timeout=900)
                 await self._absorb(results, interval)
                 self.last_improvement_ts = time.time()
             except Exception as e:
@@ -712,7 +780,45 @@ class Forge:
             self.sup.beat("improvement")
             await asyncio.sleep(30)
 
+    def sealed_context(self, interval: int) -> tuple[dict[str, bool], int]:
+        """Genomes that already sat the sealed exam (verdict stands forever) + exams taken on the current sealed window."""
+        seen = {r["genome_id"]: bool(r["sealed_passed"]) for r in self.db.query(
+            "SELECT genome_id, sealed_passed FROM research_trials WHERE sealed_exam = 1 AND interval_s = ?", (interval,))}
+        start = float(self.db.kv_get(f"research.sealed_start.{interval}", 0) or 0)
+        n = int(self.db.scalar("SELECT COUNT(*) FROM research_trials WHERE sealed_exam = 1 AND interval_s = ? "
+                               "AND sealed_start_ts >= ?", (interval, start - 86400 * 3)) or 0)
+        return seen, n
+
+    def _record_trials(self, results: dict[str, Any], interval: int) -> None:
+        """P0.5 Research Trial Ledger — one row per adjudicated candidate."""
+        import hashlib
+        ds = results.get("dataset") or {}
+        if results.get("sealed_start_ts"):
+            self.db.kv_set(f"research.sealed_start.{interval}", float(results["sealed_start_ts"]))
+        trials = int(self.db.kv_get(f"stats.trials.{interval}", 0) or 0)
+        for r in results.get("candidates", []):
+            g = r["genome"]
+            sealed = r.get("sealed")
+            exam = bool(sealed) and not sealed.get("reused")
+            feats = sorted({c.get("f") for part in ("all", "any") for c in (g.get("entry") or {}).get(part, []) if c.get("f")})
+            seg = ["selection", "holdout"] + (["sealed"] if exam else [])
+            with contextlib.suppress(Exception):
+                self.db.insert("research_trials", {
+                    "ts": _now(), "genome_id": g["id"], "family": g.get("family"), "interval_s": interval,
+                    "generation": g.get("generation"), "parents": dumps(g.get("parents", [])),
+                    "origin": str((r.get("rationale") or {}).get("operator", "seed")), "features": dumps(feats),
+                    "params_hash": hashlib.sha256(dumps({k: g.get(k) for k in ("entry", "exit", "execution")}).encode()).hexdigest()[:16],
+                    "where_run": results.get("where", "local"), "segments_seen": dumps(seg),
+                    "dataset": dumps({**ds, "sealed_start_ts": results.get("sealed_start_ts")}), "trials_cumulative": trials,
+                    "selection": dumps(r.get("selection")), "holdout": dumps(r.get("holdout")),
+                    "passed_validation": int(all(x.startswith("holdout alpha vs market drift") for x in r.get("reasons", [])
+                                                 if not x.startswith("sealed final exam"))),
+                    "sealed_exam": int(exam), "sealed_passed": (int(r.get("sleeve") is not None) if exam else None),
+                    "sealed": dumps(sealed) if exam else None, "sealed_start_ts": results.get("sealed_start_ts"),
+                    "promoted": int(r.get("sleeve") in ("alpha", "beta")), "reasons": dumps(r.get("reasons", [])[:6])})
+
     async def _absorb(self, results: dict[str, Any], interval: int) -> None:
+        self._record_trials(results, interval)
         passed = 0
         self.genomes_last_cycle = int(results.get("evaluated", 0))
         self.genomes_total += self.genomes_last_cycle
@@ -910,6 +1016,7 @@ def convex_plan(g: Genome, atr: float, interval: int, f: dict[str, Any]) -> dict
     """ExitPlan fields for Convex Trend Exit V1 — identical semantics to the backtester/Time Machine."""
     vp = f.get("vol_pct")
     vpv = float(vp[-1]) if vp is not None and len(vp) else None
+    atr = convex_atr(g, atr)
     return {"chandelier_arm_pct": g.exit.arm_atr * atr, "chandelier_pct": chandelier_k(g, vpv) * atr,
             "progress_s": int(g.exit.progress_bars * interval) if g.exit.progress_bars else None,
             "progress_min_pct": g.exit.progress_atr * atr}

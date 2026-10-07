@@ -115,7 +115,8 @@ class ComputeGovernor:
         for i in range(n):
             sub = pj[i::n] + pj[: max(0, 6 - len(pj[i::n]))]
             prior = int(forge.db.kv_get(f"stats.trials.{interval}", 0) or 0) * 1   # cumulative multiple-testing count
-            args.append((interval, sub, fees, self.burst_budget_s, int(t0) + i * 7919, llm or [], prior))
+            seen, n_ex = forge.sealed_context(interval)
+            args.append((interval, sub, fees, self.burst_budget_s, int(t0) + i * 7919, llm or [], prior, seen, n_ex))
         results: list[dict[str, Any]] = []
         try:
             async for r in fn.starmap.aio(args, return_exceptions=True):
@@ -143,6 +144,8 @@ class ComputeGovernor:
                                      Decimal(f"{cost:.8f}"), jid, memo=f"modal burst {n}x evolution_{interval}")
         merged: dict[str, Any] = {"candidates": [], "evaluated": 0, "seconds": time.time() - t0, "where": f"modal×{len(results)}",
                                   "best_fitness": max((r.get("best_fitness", 0) for r in results), default=0.0)}
+        merged["sealed_start_ts"] = results[0].get("sealed_start_ts")
+        merged["dataset"] = results[0].get("dataset")
         seen: set[str] = set()
         for r in results:
             merged["evaluated"] += r.get("evaluated", 0)

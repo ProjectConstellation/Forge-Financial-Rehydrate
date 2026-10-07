@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from typing import Literal
 
 import numpy as np
@@ -217,10 +218,17 @@ def compile_exit_signal(g: Genome, f: dict[str, np.ndarray]) -> np.ndarray | Non
 def barrier_pcts(g: Genome, atr_frac: float) -> tuple[float, float]:
     """Take-profit / stop distances (fractions) for a given ATR/close, applying floors and caps."""
     if g.exit.convex:                       # Convex Trend Exit V1: catastrophe stop, no fixed target (winners run)
-        return CONVEX_NO_TP, min(max(g.exit.cat_atr * atr_frac, 0.002), g.exit.sl_max_pct)
+        return CONVEX_NO_TP, min(max(g.exit.cat_atr * convex_atr(g, atr_frac), 0.002), g.exit.sl_max_pct)
     tp = max(g.exit.tp_atr * atr_frac, g.exit.tp_min_pct)
     sl = min(max(g.exit.sl_atr * atr_frac, 0.002), g.exit.sl_max_pct)
     return tp, sl
+
+
+def convex_atr(g: Genome, atr_frac: float) -> float:
+    """Convex-exit distance unit: hour-equivalent ATR (ATR·√(3600/interval)). The convex multiples were specified for
+    1–3 day trend trades; on 5m bars raw ATR (~0.5%) makes a 2.5·ATR stop smaller than the 1.4% round-trip fee
+    (measured: −92% in the Time Machine). Scaling by √time keeps the stop outside fee/noise range on every interval."""
+    return atr_frac * math.sqrt(max(3600.0 / max(g.interval_s, 1), 1.0))
 
 
 CONVEX_NO_TP = 10.0      # sentinel take-profit (+1000%): never placed as an order; exits come from the chandelier/stop/time

@@ -16,7 +16,14 @@ from dataclasses import asdict, dataclass, field
 import numpy as np
 
 from forge.research.stats import edge_posterior, max_drawdown, sharpe
-from forge.strategies.genome import Genome, barrier_pcts, compile_entries, compile_exit_signal
+from forge.strategies.genome import (
+    Genome,
+    barrier_pcts,
+    chandelier_k,
+    compile_entries,
+    compile_exit_signal,
+    convex_atr,
+)
 
 
 @dataclass(frozen=True)
@@ -101,11 +108,9 @@ def simulate(g: Genome, symbol: str, bars: dict[str, np.ndarray], f: dict[str, n
             e_idx = i + 1
             entry = o[e_idx] * (1 + slip)
             fee_in, liq_in = cost.taker_fee, "taker"
-        if g.exit.convex:
-            sl = min(g.exit.cat_atr * a, g.exit.sl_max_pct)
-            tp = 10.0                                          # no fixed target: winners run (convexity)
-            vp = float(f["vol_pct"][i]) if "vol_pct" in f and np.isfinite(f["vol_pct"][i]) else 0.5
-            ck = g.exit.chand_k_hv if vp >= 0.8 else g.exit.chand_k
+        if g.exit.convex:                                      # barrier_pcts already gave (no TP, catastrophe stop)
+            ca = convex_atr(g, a)                              # convex distances in hour-equivalent ATR
+            ck = chandelier_k(g, float(f["vol_pct"][i]) if "vol_pct" in f else None)
         tp_px, stop = entry * (1 + tp), entry * (1 - sl)
         trail = g.exit.trail_atr * a if g.exit.trail_atr else None
         last = min(e_idx + g.exit.time_stop_bars, end - 1)
@@ -126,15 +131,15 @@ def simulate(g: Genome, symbol: str, bars: dict[str, np.ndarray], f: dict[str, n
                     exit_px = max(tp_px, o[k]) * (1 - slip)
                 reason, x_idx = "TP", k
                 break
-            if g.exit.convex and g.exit.progress_bars and k - e_idx == g.exit.progress_bars and c[k] / entry - 1 < g.exit.progress_atr * a:
+            if g.exit.convex and g.exit.progress_bars and k - e_idx == g.exit.progress_bars and c[k] / entry - 1 < g.exit.progress_atr * ca:
                 exit_px, reason, x_idx = c[k] * (1 - slip), "NO_PROGRESS", k
                 break
             if exit_sig is not None and k > e_idx and exit_sig[k]:
                 exit_px, reason, x_idx = c[k] * (1 - slip), "SIGNAL", k
                 break
             hi_since = max(hi_since, h[k])
-            if g.exit.convex and hi_since / entry - 1 >= g.exit.arm_atr * a:
-                stop = max(stop, hi_since * (1 - ck * a))
+            if g.exit.convex and hi_since / entry - 1 >= g.exit.arm_atr * ca:
+                stop = max(stop, hi_since * (1 - ck * ca))
             if trail is not None:
                 stop = max(stop, hi_since * (1 - trail))
             fav = hi_since / entry - 1
