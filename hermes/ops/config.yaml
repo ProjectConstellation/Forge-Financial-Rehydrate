@@ -15,8 +15,6 @@ agent:
     - file
     - browser
     - computer_use
-    - delegation
-    - cronjob
     - image_gen
     - homeassistant
     - discord
@@ -42,6 +40,8 @@ platform_toolsets:
     - session_search
     - todo
     - clarify
+    - cronjob
+    - delegation
   cli:
     - forge_ops
     - memory
@@ -61,3 +61,11 @@ providers:
 tools:
   tool_search:
     enabled: "off"
+stt:
+  enabled: true
+  echo_transcripts: true
+  provider: "local"
+  language: "en"
+  prompt: "FORGE, Kalshi, Coinbase, Modal, DeepSeek, Hermes, USDC, PAXG, debrief, treasury"
+  local:
+    model: "base"

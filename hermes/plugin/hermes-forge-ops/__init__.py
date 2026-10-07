@@ -264,6 +264,76 @@ def register(ctx):
         {"transfer_id": {"type": "string"}, "phrase": {"type": "string"}, "code": {"type": "string"}},
         ["transfer_id", "phrase", "code"]))
 
+    # ---------------------------------------------------------------- insight tools (OP-026)
+    def _get(path, session_id):
+        return _out(_call("GET", path, actor=_actor(session_id)))
+
+    ctx.register_tool(name="ops_leaderboard", toolset="forge_ops", schema=_schema(
+        "ops_leaderboard", "[FORGE EXEC] Who makes / loses the money: evolved strategies ranked by net $ (paper book, with "
+        "forward evidence) and every income stream ranked by evidence (tier, mean per unit, P>0, potential $/h). Use for "
+        "'which strategy is best/worst', 'what's working', 'what should we scale or kill'.",
+        {"window": {"type": "string", "description": "30m … 7d, today, lifetime (default 7d)"}, "limit": {"type": "integer"}}),
+        handler=lambda p, session_id=None, **kw: _get(
+            f"/api/ops/leaderboard?window={urllib.parse.quote(str(p.get('window', '7d')))}&limit={int(p.get('limit', 10))}",
+            session_id))
+
+    ctx.register_tool(name="ops_trades", toolset="forge_ops", schema=_schema(
+        "ops_trades", "[FORGE EXEC] Trades and positions: open now, recent closes with net P&L and exit reason (paper/live), "
+        "Kalshi signals (shadow) and Kalshi live orders. Use for 'what did we trade', 'what's open', 'show recent bets'.",
+        {"window": {"type": "string"}, "book": {"type": "string", "enum": ["all", "paper", "live", "shadow", "kalshi"]},
+         "limit": {"type": "integer"}}),
+        handler=lambda p, session_id=None, **kw: _get(
+            f"/api/ops/trades?window={urllib.parse.quote(str(p.get('window', '24h')))}&book={p.get('book', 'all')}"
+            f"&limit={int(p.get('limit', 25))}", session_id))
+
+    ctx.register_tool(name="ops_changes", toolset="forge_ops", schema=_schema(
+        "ops_changes", "[FORGE EXEC] What changed since a time: deployments, strategy promotions/kills, completed directives "
+        "and objectives, owner/agent actions, guardian repairs, new listings, warnings. Use for 'what happened while I was "
+        "away', 'what changed today', 'catch me up'.", {"since": {"type": "string", "description": "e.g. 2h, today, 24h"}}),
+        handler=lambda p, session_id=None, **kw: _get(f"/api/ops/changes?since={urllib.parse.quote(str(p.get('since', 'today')))}",
+                                                     session_id))
+
+    def h_chart(params, session_id=None, **kw):
+        metric, window = str(params.get("metric", "treasury")), str(params.get("window", "24h"))
+        d = _call("GET", f"/api/ops/series?metric={urllib.parse.quote(metric)}&window={urllib.parse.quote(window)}",
+                  actor=_actor(session_id))
+        if d.get("error"):
+            return _out(d)
+        try:
+            path = _render_chart(d)
+        except Exception as e:  # noqa: BLE001
+            return _out({"error": f"chart render failed: {e}"})
+        return (f"Chart ready. To send it to the owner, put this exact line in your reply on its own line:\nMEDIA:{path}\n"
+                f"Summary data: {json.dumps(_chart_summary(d))[:1500]}")
+    ctx.register_tool(name="ops_chart", toolset="forge_ops", handler=h_chart, schema=_schema(
+        "ops_chart", "[FORGE EXEC] Make a chart image and send it in the chat: treasury (live $), paper_equity, usd_per_hour "
+        "(realized vs potential vs target), stream_pnl (bar: P&L by income stream). Use whenever the owner says show / "
+        "chart / graph / visualize, or when a picture explains a trend faster.",
+        {"metric": {"type": "string", "enum": ["treasury", "paper_equity", "usd_per_hour", "stream_pnl"]},
+         "window": {"type": "string", "description": "1h, 4h, today, 24h, 7d"}}, ["metric"]))
+
+    def h_alert(params, session_id=None, **kw):
+        return _out(_call("POST", "/api/ops/alerts", params, _actor(session_id)))
+    ctx.register_tool(name="ops_alert", toolset="forge_ops", handler=h_alert, schema=_schema(
+        "ops_alert", "[FORGE EXEC] Instant rule alerts to the owner's Telegram (checked every 30 s, no AI cost): create / "
+        "list / delete. Metrics: treasury_usd, live_usd_per_h_1h, live_net_today_usd, paper_equity_usd, health_score, "
+        "open_incidents, potential_usd_per_h, settled_signals_1h, stream_tier (arg = stream id, e.g. kalshi.SETTLE_WINDOW; "
+        "threshold e.g. MEDIUM). Use for 'tell me when / if …', 'alert me', 'let me know'.",
+        {"action": {"type": "string", "enum": ["create", "list", "delete"]}, "metric": {"type": "string"},
+         "arg": {"type": "string"}, "op": {"type": "string", "enum": ["<", "<=", ">", ">=", "==", "!="]},
+         "threshold": {"type": "string"}, "note": {"type": "string"}, "once": {"type": "boolean"}, "id": {"type": "integer"}},
+        ["action"]))
+
+    def h_cred(params, session_id=None, **kw):
+        return _out(_call("POST", "/api/ops/credential_request", params, _actor(session_id)))
+    ctx.register_tool(name="ops_credential_request", toolset="forge_ops", handler=h_cred, schema=_schema(
+        "ops_credential_request", "[FORGE EXEC] When a platform needs an API key/secret: create a one-time secure link "
+        "(30 min) the owner opens on their phone (portal login) to paste it; it is installed server-side and FORGE restarts "
+        "to load it. kind=env for single-line values (UPPER_SNAKE name, e.g. KALSHI_API_KEY_ID), kind=pem for key files "
+        "(lowercase name, e.g. kalshi_private_key). Send the owner the link; never ask for secrets in chat.",
+        {"name": {"type": "string"}, "kind": {"type": "string", "enum": ["env", "pem"]}, "purpose": {"type": "string"}},
+        ["name", "purpose"]))
+
     # ---------------------------------------------------------------- host operations (FORGE units only)
     def h_restart(params, session_id=None, **kw):
         unit = UNITS.get(str(params.get("unit", "")))
@@ -335,3 +405,87 @@ def register(ctx):
 
     ctx.register_hook("post_api_request", lambda **kw: _usage("api", **kw))
     ctx.register_hook("post_auxiliary_call", lambda **kw: None if kw.get("error") else _usage("aux", **kw))
+
+
+# ---------------------------------------------------------------------------------------------- chart rendering (Pillow)
+def _chart_summary(d):
+    if d.get("kind") == "bar":
+        return {"bars": d.get("bars", [])[:12]}
+    lines = d.get("lines") or {d.get("metric", "value"): d.get("points", [])}
+    out = {}
+    for k, pts in lines.items():
+        vals = [v for _, v in pts if v is not None]
+        if vals:
+            out[k] = {"first": round(vals[0], 4), "last": round(vals[-1], 4), "min": round(min(vals), 4),
+                      "max": round(max(vals), 4), "n": len(vals)}
+    return out
+
+
+def _render_chart(d):
+    from datetime import datetime, timezone
+
+    from PIL import Image, ImageDraw, ImageFont
+    W, H, L, R, T, B = 1000, 560, 90, 30, 60, 70
+    img = Image.new("RGB", (W, H), (17, 20, 27))
+    g = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.load_default(size=18)
+        small = ImageFont.load_default(size=14)
+    except TypeError:
+        font = small = ImageFont.load_default()
+    title = f"FORGE · {d.get('metric')} · {d.get('window')}"
+    g.text((L, 18), title, fill=(235, 235, 240), font=font)
+    colors = [(56, 189, 248), (250, 204, 21), (239, 68, 68), (34, 197, 94), (168, 85, 247)]
+    pw, ph = W - L - R, H - T - B
+    g.rectangle([L, T, L + pw, T + ph], outline=(60, 66, 80))
+    if d.get("kind") == "bar":
+        bars = d.get("bars", [])[:14] or [["(no data)", 0.0]]
+        vals = [v for _, v in bars]
+        lo, hi = min(0.0, min(vals)), max(0.0, max(vals))
+        span = (hi - lo) or 1.0
+        y0 = T + ph * (hi / span)
+        g.line([L, y0, L + pw, y0], fill=(120, 120, 130))
+        bw = pw / len(bars)
+        for i, (lab, v) in enumerate(bars):
+            x0, x1 = L + i * bw + 6, L + (i + 1) * bw - 6
+            y = T + ph * ((hi - v) / span)
+            g.rectangle([x0, min(y, y0), x1, max(y, y0)], fill=(34, 197, 94) if v >= 0 else (239, 68, 68))
+            g.text((x0, T + ph + 6), str(lab)[-14:], fill=(200, 200, 210), font=small)
+            g.text((x0, min(y, y0) - 18), f"{v:+.3f}", fill=(220, 220, 225), font=small)
+    else:
+        lines = d.get("lines") or {d.get("metric", "value"): d.get("points", [])}
+        allpts = [p for pts in lines.values() for p in pts if p[1] is not None]
+        if not allpts:
+            g.text((L + 20, T + 20), "no data yet for this window", fill=(200, 200, 210), font=font)
+        else:
+            x_lo, x_hi = min(p[0] for p in allpts), max(p[0] for p in allpts)
+            y_lo, y_hi = min(p[1] for p in allpts), max(p[1] for p in allpts)
+            if y_hi - y_lo < 1e-9:
+                y_lo, y_hi = y_lo - 1, y_hi + 1
+            pad = (y_hi - y_lo) * 0.08
+            y_lo, y_hi = y_lo - pad, y_hi + pad
+            fx = lambda x: L + pw * ((x - x_lo) / ((x_hi - x_lo) or 1))  # noqa: E731
+            fy = lambda y: T + ph * (1 - (y - y_lo) / (y_hi - y_lo))      # noqa: E731
+            for k in range(5):
+                yv = y_lo + (y_hi - y_lo) * k / 4
+                g.line([L, fy(yv), L + pw, fy(yv)], fill=(40, 45, 56))
+                g.text((8, fy(yv) - 8), f"{yv:,.4g}", fill=(170, 170, 180), font=small)
+            for k in range(5):
+                xv = x_lo + (x_hi - x_lo) * k / 4
+                g.text((fx(xv) - 20, T + ph + 8), datetime.fromtimestamp(xv, timezone.utc).strftime("%m-%d %H:%M"),
+                       fill=(170, 170, 180), font=small)
+            for i, (name, pts) in enumerate(lines.items()):
+                xy = [(fx(x), fy(y)) for x, y in pts if y is not None]
+                if len(xy) >= 2:
+                    g.line(xy, fill=colors[i % len(colors)], width=3)
+                elif xy:
+                    g.ellipse([xy[0][0] - 3, xy[0][1] - 3, xy[0][0] + 3, xy[0][1] + 3], fill=colors[i % len(colors)])
+                g.text((L + 10 + i * 230, T + ph + 40), f"■ {name}", fill=colors[i % len(colors)], font=small)
+    out = Path(os.environ.get("FORGE_CHART_DIR", "/srv/forge/runtime/ops/work/charts"))
+    out.mkdir(parents=True, exist_ok=True)
+    for old in sorted(out.glob("*.png"))[:-30]:
+        old.unlink(missing_ok=True)
+    path = out / f"{d.get('metric')}_{int(time.time())}.png"
+    img.save(path, "PNG")
+    return str(path)
+

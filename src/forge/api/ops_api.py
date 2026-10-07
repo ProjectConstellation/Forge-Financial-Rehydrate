@@ -52,7 +52,7 @@ ACTIONS: dict[str, tuple[str, str]] = {
 }
 ALWAYS_ALLOWED_WHEN_LOCKED = {"stop_trading", "lockdown"}
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}
-READ_AUDIT_SKIP_MIRROR = {"guardian", "eng_next", "eng_ticket", "eng_queue", "capabilities", "status", "tool", "econ", "debrief", "directives_read", "objectives_read", "audit_read"}
+READ_AUDIT_SKIP_MIRROR = {"leaderboard", "trades", "changes", "series", "outbox", "guardian", "eng_next", "eng_ticket", "eng_queue", "capabilities", "status", "tool", "econ", "debrief", "directives_read", "objectives_read", "audit_read"}
 RATE = {"read": (240, 60.0), "write": (30, 600.0), "confirm": (12, 3600.0)}     # (max calls, window seconds)
 _hits: dict[str, list[float]] = {}
 
@@ -457,6 +457,88 @@ def mount_ops(app: FastAPI, forge: Any, token: str, etoken: str | None = None) -
         audit(actor, "eng_deploy_result", {"id": tid, "deploy_status": ds}, "OK", {"class": b.get("deploy_class")})
         return {"id": tid, "deploy_status": ds}
 
+    # ------------------------------------------------------------------ insight tools (OP-026)
+    @app.get("/api/ops/leaderboard")
+    async def ops_leaderboard(request: Request, window: str = "7d", limit: int = 10) -> Any:
+        check(request, "read", "leaderboard")
+        from forge.ops.insights import leaderboard
+        try:
+            return leaderboard(forge, window, limit)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/ops/trades")
+    async def ops_trades(request: Request, window: str = "24h", book: str = "all", limit: int = 25) -> Any:
+        check(request, "read", "trades")
+        from forge.ops.insights import trades
+        try:
+            return trades(forge, window, book, limit)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/ops/changes")
+    async def ops_changes(request: Request, since: str = "today") -> Any:
+        check(request, "read", "changes")
+        from forge.ops.insights import changes
+        try:
+            return changes(forge, since)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/ops/series")
+    async def ops_series(request: Request, metric: str = "treasury", window: str = "24h") -> Any:
+        check(request, "read", "series")
+        from forge.ops.insights import series
+        try:
+            return series(forge, metric, window)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.post("/api/ops/alerts")
+    async def ops_alerts(request: Request) -> Any:
+        actor = check(request, "write", "alerts")
+        from forge.ops.insights import METRICS, metric_value
+        b = await request.json()
+        act = str(b.get("action") or "list")
+        if act == "create":
+            m, op = str(b.get("metric") or ""), str(b.get("op") or "")
+            if m not in METRICS or op not in ("<", "<=", ">", ">=", "==", "!="):
+                raise HTTPException(400, f"metric one of {METRICS}; op one of < <= > >= == !=")
+            try:
+                now_val = metric_value(forge, m, b.get("arg"))
+            except Exception as e:
+                raise HTTPException(400, str(e)[:200]) from e
+            aid = db.insert_id("ops_alerts", {"ts": time.time(), "metric": m, "arg": b.get("arg"), "op": op,
+                                              "threshold": str(b.get("threshold")), "note": str(b.get("note") or "")[:200],
+                                              "once": 1 if b.get("once") else 0, "active": 1, "armed_true": 0})
+            audit(actor, "alert_create", b, "OK", {"id": aid})
+            return {"id": aid, "metric": m, "current_value": now_val, "note": "checked every 30 s; Telegram on trigger"}
+        if act == "delete":
+            db.execute("UPDATE ops_alerts SET active = 0 WHERE id = ?", (int(b.get("id") or 0),))
+            audit(actor, "alert_delete", b, "OK")
+            return {"deleted": int(b.get("id") or 0)}
+        return {"alerts": db.query("SELECT id, metric, arg, op, threshold, note, once, active, fire_count, last_fired FROM "
+                                   "ops_alerts WHERE active = 1 ORDER BY id"), "metrics": METRICS}
+
+    @app.get("/api/ops/outbox")
+    async def ops_outbox(request: Request) -> Any:
+        check(request, "read", "outbox")
+        q = db.kv_get("ops.outbox") or []
+        db.kv_set("ops.outbox", [])
+        return {"messages": q}
+
+    @app.post("/api/ops/credential_request")
+    async def ops_cred_request(request: Request) -> Any:
+        actor = check(request, "write", "credential_request")
+        from forge.ops.insights import credential_request
+        b = await request.json()
+        try:
+            out = credential_request(db, str(b.get("name") or ""), str(b.get("purpose") or ""), str(b.get("kind") or "env"))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        audit(actor, "credential_request", {"name": out["name"], "kind": out["kind"]}, "OK")
+        return out
+
     @app.post("/api/ops/guardian")
     async def guardian_post(request: Request) -> Any:
         check(request, "read", "guardian")
@@ -501,7 +583,8 @@ def mount_ops(app: FastAPI, forge: Any, token: str, etoken: str | None = None) -
             "budgets": {"modal": comp.summary() if comp else None, "deepseek": db.kv_get("deepseek.sentinel"),
                         "hermes_mode": db.kv_get("hermes.mode")},
             "your_actions": {k: {"class": c, "description": d} for k, (c, d) in ACTIONS.items()},
-            "your_tools": ["ops_status", "ops_debrief", "ops_econ", "ops_capabilities", "ops_objective", "ops_objectives",
+            "your_tools": ["ops_leaderboard", "ops_trades", "ops_changes", "ops_chart", "ops_alert",
+                           "ops_credential_request", "ops_status", "ops_debrief", "ops_econ", "ops_capabilities", "ops_objective", "ops_objectives",
                            "ops_assign", "ops_directives", "ops_action", "ops_confirm", "ops_restart", "ops_logs", "ops_host",
                            "ops_engineer", "ops_tickets", "ops_transfer_preview", "ops_transfer_confirm", "ops_audit"]
                           + [f"ops_{t}" for t in READ_TOOLS],

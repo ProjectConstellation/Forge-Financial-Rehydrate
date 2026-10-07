@@ -316,6 +316,54 @@ ExecStart=/usr/local/sbin/forge-exec-provision
 X
 systemctl daemon-reload; systemctl enable --now forge-ops-provision.path >/dev/null 2>&1
 
+# ---------------------------------------------------------------- portal credential intake → root installs into /etc/forge
+cat > /usr/local/sbin/forge-exec-cred-provision <<'X'
+#!/usr/bin/env python3
+"""Consume /srv/forge/var/run/cred_provision.json (owner pasted it on the logged-in portal via a one-time link) →
+/etc/forge/forge.env (UPPER_SNAKE) or /etc/forge/<name>.pem (root:forge 0640) → restart FORGE. Never echoes values."""
+import json, os, re, shutil, subprocess, sys, time
+P = "/srv/forge/var/run/cred_provision.json"
+if not os.path.exists(P):
+    sys.exit(0)
+try:
+    d = json.load(open(P))
+finally:
+    os.remove(P)
+name, kind, val = str(d.get("name", "")), str(d.get("kind", "")), str(d.get("value", ""))
+if kind == "pem" and re.fullmatch(r"[a-z][a-z0-9_]{2,40}", name) and "BEGIN" in val:
+    path = f"/etc/forge/{name}.pem"
+    with open(path + ".tmp", "w") as fh:
+        fh.write(val.strip() + "\n")
+    os.chmod(path + ".tmp", 0o640); shutil.chown(path + ".tmp", "root", "forge"); os.replace(path + ".tmp", path)
+elif kind == "env" and re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", name) and "\n" not in val:
+    env = "/etc/forge/forge.env"
+    shutil.copy2(env, f"/etc/forge/backup/forge.env.{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}")
+    lines = [l for l in open(env).read().splitlines() if not l.startswith(name + "=")] + [f"{name}={val}"]
+    open(env, "w").write("\n".join(lines) + "\n")
+else:
+    sys.exit("invalid credential payload")
+subprocess.run(["systemctl", "restart", "forge"], check=False)
+print("installed credential", name, "(value not shown); FORGE restarted")
+X
+chmod 700 /usr/local/sbin/forge-exec-cred-provision
+mkdir -p /etc/forge/backup
+cat > /etc/systemd/system/forge-cred-provision.path <<'X'
+[Unit]
+Description=Install a FORGE credential submitted via a one-time portal link
+[Path]
+PathExists=/srv/forge/var/run/cred_provision.json
+[Install]
+WantedBy=multi-user.target
+X
+cat > /etc/systemd/system/forge-cred-provision.service <<'X'
+[Unit]
+Description=Install FORGE credential (root, one-shot)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/forge-exec-cred-provision
+X
+systemctl daemon-reload; systemctl enable --now forge-cred-provision.path >/dev/null 2>&1
+
 # ---------------------------------------------------------------- emergency revocation
 cat > /usr/local/sbin/forge-exec-revoke <<'X'
 #!/usr/bin/env bash

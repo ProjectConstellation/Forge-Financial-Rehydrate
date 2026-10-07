@@ -260,7 +260,8 @@ def build_app(forge: Any) -> FastAPI:
         elif path not in PUBLIC and who(request) is None:
             if path.startswith("/api/") or request.method != "GET" or path in ("/ready", "/metrics"):
                 return JSONResponse({"detail": "login required"}, status_code=401)
-            return RedirectResponse("/login?next=/setup" if path == "/setup" else "/login", status_code=303)
+            return RedirectResponse("/login?next=" + ("/setup" if path == "/setup" else "/setup/credential") if path.startswith("/setup")
+                                    else "/login", status_code=303)
         resp = await call_next(request)
         if path.startswith("/static/") or path in ("/sw.js", "/manifest.webmanifest"):
             resp.headers["Cache-Control"] = "no-store, max-age=0"     # never let Cloudflare/browser serve stale app code
@@ -466,6 +467,45 @@ def build_app(forge: Any) -> FastAPI:
     @app.get("/setup")
     async def setup_page() -> HTMLResponse:
         return _html("setup.html")
+
+    @app.get("/setup/credential")
+    async def cred_page() -> HTMLResponse:
+        return _html("credential.html")
+
+    @app.get("/api/setup/credential")
+    async def cred_info(request: Request, r: str = "") -> Any:
+        if who(request) is None:
+            raise HTTPException(401, "login required")
+        req = (forge.db.kv_get("ops.cred_requests") or {}).get(r)
+        if not req or req.get("used") or req["expires"] < time.time():
+            raise HTTPException(404, "link expired or already used — ask FORGE for a new one")
+        return {"name": req["name"], "kind": req["kind"], "purpose": req["purpose"],
+                "minutes_left": round((req["expires"] - time.time()) / 60)}
+
+    @app.post("/api/setup/credential")
+    async def cred_submit(request: Request) -> Any:
+        actor = require_csrf(request)
+        b = await request.json()
+        reqs = forge.db.kv_get("ops.cred_requests") or {}
+        req = reqs.get(str(b.get("r") or ""))
+        if not req or req.get("used") or req["expires"] < time.time():
+            raise HTTPException(404, "link expired or already used")
+        val = str(b.get("value") or "").strip()
+        if req["kind"] == "pem" and "BEGIN" not in val:
+            raise HTTPException(400, "paste the whole key including the BEGIN/END lines")
+        if not val or len(val) > 20000 or (req["kind"] == "env" and "\n" in val):
+            raise HTTPException(400, "invalid value")
+        p = Path(forge.s.home) / "run" / "cred_provision.json"
+        fd = os.open(str(p) + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            json.dump({"name": req["name"], "kind": req["kind"], "value": val}, fh)
+        os.replace(str(p) + ".tmp", p)                      # root path unit installs it into /etc/forge + restarts FORGE
+        req["used"] = True
+        forge.db.kv_set("ops.cred_requests", reqs)
+        forge.db.kv_set("ops.cred_installed", {**(forge.db.kv_get("ops.cred_installed") or {}),
+                                               req["name"]: {"ts": time.time(), "kind": req["kind"]}})
+        forge.audit.append("CREDENTIAL_SUBMITTED", {"name": req["name"], "kind": req["kind"], "actor": actor}, actor=actor)
+        return {"ok": True, "name": req["name"], "note": "installing — FORGE restarts in a few seconds to load it"}
 
     @app.get("/api/setup/telegram")
     async def setup_status(request: Request) -> Any:

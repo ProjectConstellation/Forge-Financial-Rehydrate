@@ -205,6 +205,7 @@ class Forge:
         B("settlement_window", self.settlement_window.run, 300)
         from forge.ops.econ import EconSampler
         B("econ", EconSampler(self).run, 120)
+        B("ops_alerts", self._ops_alerts_loop, 180)
         from forge.agents.genome import PromptGenomes
         self.prompt_genomes = PromptGenomes(self)
         self.prompt_genomes.seed()
@@ -338,6 +339,16 @@ class Forge:
                 if self.book == "paper":                       # venue balances must match the repaired ledger
                     st = self.ledger.state("paper")
                     self.venue.balances = {"USD": st.cash_usd, **{asset: h.qty for (_, asset), h in st.holdings.items()}}
+
+    async def _ops_alerts_loop(self) -> None:
+        from forge.ops.insights import evaluate_alerts
+        while not self.stop_event.is_set():
+            self.sup.beat("ops_alerts")
+            try:
+                await asyncio.to_thread(evaluate_alerts, self)
+            except Exception as e:
+                log.warning("ops alerts: %s", e)
+            await asyncio.sleep(30)
 
     # ================================================================== treasury truth
     def _snapshot_treasury(self) -> dict[str, Any]:

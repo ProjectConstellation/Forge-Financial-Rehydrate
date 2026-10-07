@@ -27,7 +27,7 @@ from pathlib import Path
 API = "http://127.0.0.1:8470"
 STATE = Path("/var/lib/forge-guardian/state.json")
 UNITS = ["forge", "forge-hermes", "forge-tunnel", "forge-ops", "forge-eng"]
-AUX = ["forge-deployer.timer", "forge-ops-provision.path"]
+AUX = ["forge-deployer.timer", "forge-ops-provision.path", "forge-cred-provision.path"]
 CRITICAL_LOOPS = {"api", "market_stream", "feed_watch", "bars_300", "bars_3600", "execution", "treasury", "healing",
                   "crossrail", "crossrail_fast", "settlement_window", "sw_sampler", "kalshi_live", "velocity", "econ"}
 ALERT_COOLDOWN_S = 1800
@@ -218,6 +218,11 @@ def main() -> int:
     check_loops(st, status)
     check_telegram(st)
     check_resources(st)
+    try:
+        for m in api("GET", "/api/ops/outbox").get("messages", [])[:10]:
+            notify(m["text"])
+    except Exception:
+        pass
     st["last_run"] = time.time()
     save(st)
     try:
