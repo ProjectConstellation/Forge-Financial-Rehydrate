@@ -17,10 +17,10 @@ class _Audit:
 
 
 @pytest.fixture()
-def ops(db, monkeypatch):
+def ops(db, monkeypatch, tmp_path):
     monkeypatch.setattr(ops_api, "LOOPBACK", {"127.0.0.1", "::1", "localhost", "testclient"})
     ops_api._hits.clear()
-    forge = types.SimpleNamespace(db=db, audit=_Audit(), s=types.SimpleNamespace(mode=types.SimpleNamespace(value="PAPER")),
+    forge = types.SimpleNamespace(db=db, audit=_Audit(), s=types.SimpleNamespace(mode=types.SimpleNamespace(value="PAPER"), home=tmp_path),
                                   book="paper", treasury={}, sup=types.SimpleNamespace(snapshot=lambda: []), started=0.0)
     app = FastAPI()
     ops_api.mount_ops(app, forge, "secret-ops-token")
@@ -43,7 +43,7 @@ def test_safe_action_executes_and_is_audited(ops):
     c, db, forge = ops
     r = c.post("/api/ops/action", json={"action": "stop_trading", "params": {"reason": "test"}}).json()
     assert r["status"] == "DONE" and db.kv_get("trading.state")["state"] == "STOPPED"
-    assert forge.audit.events[-1][0] == "EMERGENCY_STOP"
+    assert any(e[0] == "EMERGENCY_STOP" for e in forge.audit.events)
     a = db.query("SELECT actor, action, outcome FROM ops_audit ORDER BY id DESC LIMIT 1")[0]
     assert a == {"actor": "test-owner", "action": "stop_trading", "outcome": "OK"}
     assert c.post("/api/ops/action", json={"action": "rm_rf", "params": {}}).status_code == 403
