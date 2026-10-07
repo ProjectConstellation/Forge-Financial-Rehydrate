@@ -206,6 +206,13 @@ def tm_job(market_dir: str, genomes: list[dict[str, Any]], evidence: dict[str, d
         return {"ok": False, "note": "no validated strategies on this interval"}
     store = CandleStore(Path(market_dir))
     raw = {s: store.load(s, interval) for s in store.symbols(interval)}
+    # memory: same research window as evolution (5m × 365 d × 62 markets ≈ 1+ GB per replay worker)
+    from forge.evolution.worker import RESEARCH_DAYS
+    days = RESEARCH_DAYS.get(interval, 365)
+    for s_, b_ in list(raw.items()):
+        if b_ is not None and len(b_["ts"]):
+            k0 = int(np.searchsorted(b_["ts"], b_["ts"][-1] - days * 86400))
+            raw[s_] = {k: v[k0:] for k, v in b_.items()}
     ds = Dataset.build({s: b for s, b in raw.items() if b is not None}, interval)
     cost = CostModel(maker_fee=fees.get("maker", 0.005), taker_fee=fees.get("taker", 0.009))
     out = {"ok": True, "strategies": len(gs), "markets": len(ds.symbols), "capital": capital}

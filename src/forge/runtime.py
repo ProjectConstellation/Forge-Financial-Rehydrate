@@ -559,11 +559,17 @@ class Forge:
         if self.db.scalar("SELECT 1 FROM positions WHERE book = ? AND symbol = ? AND status != 'CLOSED'", (self.book, sym)):
             self._set_opp(oid, "REJECTED", f"already holding {sym} (one position per market)")
             return
+        if self.book == "paper" and va.adjusted_return <= 0 and p_pre_haircut != p_use:
+            # paper explores, live exploits: the haircut must never stop paper from gathering the forward evidence that
+            # is the only way to earn the haircut back (deadlock found 2026-10-07: 161/193 paper opportunities rejected)
+            va = assess(p_pre_haircut, win, loss, hold_h, self.hurdle.hurdle(pol.hurdle_multiplier), pressure)
+            comps["paper_exploration"] = True
         if va.adjusted_return <= 0:
             self._set_opp(oid, "REJECTED", va.rationale)
             await self.say("Allocator", f"{sym} {g.family}: WAIT — {va.rationale}", strategy=g.id, opportunity=oid)
             return
-        await self._allocate_and_execute(g, st, sym, oid, p_use, win, loss, tp, sl, interval, va, spread, ev, pol)
+        p_trade = p_pre_haircut if (self.book == "paper" and comps.get("paper_exploration")) else p_use
+        await self._allocate_and_execute(g, st, sym, oid, p_trade, win, loss, tp, sl, interval, va, spread, ev, pol)
 
     def _set_opp(self, oid: str, status: str, reason: str) -> None:
         self.db.execute("UPDATE opportunities SET status = ?, reason = ? WHERE id = ?", (status, reason[:500], oid))
@@ -757,9 +763,12 @@ class Forge:
                 have = set(self.store.symbols(interval))
                 todo = [s for s in self.universe if s not in have]
                 for s_ in self.universe:
-                    a_ = await asyncio.to_thread(self.store.load, s_, interval) if s_ in have else None   # off the event loop
+                    if s_ not in have or self.db.kv_get(f"backfill.deep.{interval}.{s_}"):
+                        continue                                         # deepen at most once (young coins can't reach 365 d)
+                    a_ = await asyncio.to_thread(self.store.load, s_, interval)   # off the event loop
                     if a_ is not None and len(a_["ts"]) and a_["ts"][0] > time.time() - days * 86400 * 0.9:
                         todo.append(s_)                                  # deepen history to the full window
+                    self.db.kv_set(f"backfill.deep.{interval}.{s_}", time.time())
                 if todo:
                     self.status("Data Engine", f"backfilling {len(todo)} × {interval // 60}m history")
                 for s in todo:
@@ -771,10 +780,12 @@ class Forge:
                     except Exception as e:
                         log.warning("backfill %s: %s", s, e)
                 if todo:
-                    await self.say("Data Engine", f"History ready: {len(todo)} new markets × {interval // 60}m ({days}d)")
-                    self.bars[interval].state.clear()
-                    self.bars[interval].load_history(self.universe)
-                    self.bars[interval].recompute(self.universe)
+                    await self.say("Data Engine", f"History ready: {len(todo)} markets × {interval // 60}m ({days}d)")
+                    eng = self.bars[interval]
+                    for s_ in todo:                                      # reload ONLY the changed markets, off the loop
+                        eng.state.pop(s_, None)
+                    await asyncio.to_thread(eng.load_history, list(todo))
+                    await asyncio.to_thread(eng.recompute, list(todo))
             self.sup.beat("backfill")
             await asyncio.sleep(3600)
 
