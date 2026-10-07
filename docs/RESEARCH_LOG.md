@@ -1,5 +1,19 @@
 # Research log (institutional memory; newest first)
 
+## 2026-10-07 (night) — Data integrity root cause, clean-data results, first cross-rail evidence
+- ROOT CAUSE: CandleStore.merge sorted kept rows by ROW POSITION, not time → after the 365 d backfill 66 history files were
+  time-scrambled (HYPE 5m: first 2026-08-07, last 2026-02-05). Effects: stale "latest" bars, quarantine/repair loops, negative
+  forward hold times, validation splits on the wrong periods. Found by Hermes Doctor + Critic (HIGH RISK) within 1 h of
+  launch. Fixed (sort by ts + defensive sorted load), files re-sorted, 9 strategies demoted to re-validate.
+- Clean-data evolution (5m, 90 d window): 38,316 genomes → 20 passed validation AND the one-time sealed exam
+  (sealed net +1.5…+2.9 %/trade after fees, n 114–164, P 0.92–0.98) — all breakout family, BETA sleeve (alpha P 0.16–0.52).
+  Diversity cap keeps 6 in SHADOW. Not live: forward evidence must confirm (arena → CHALLENGER → readiness).
+- Kalshi cross-rail (738 settled calibration samples): model Brier 0.1564 vs market 0.1513 → model WORSE than market; the
+  stacked calibrator correctly cut model weight to 4.5 %. MAKE quotes −16¢/contract (adverse selection), MODEL_RAW −3¢.
+  SURFACE_RV (model-free strike-surface relative value) +7.5¢/contract, ROI +37 %, n=40, bootstrap P(mean>0)=0.86 —
+  promising, NOT yet significant. RTI proxy: Coinbase vs CF settlement 0.5–3 bp (crypto), PAXG–gold basis 17.8 bp.
+- Live money: idle cash → USDC rewards (Coinbase One 3.75 % APY): $23.27 converted (fee 0), $5 USD buffer (OP-019).
+
 ## 2026-10-07 — Answers tranche A/B (Time Machine, 9 validated 5m strategies, 62 markets, sel 42d / unseen 18d)
 - Sizing: risk-at-stop (5%/10% and 3%/8%) produced IDENTICAL results to Kelly-elite — both bind on the 50% max-fraction cap because
   5m stops are tight (risk/stop ≫ equity). At $28, risk-at-stop is a safety cap, not the active constraint → adopted as a cap

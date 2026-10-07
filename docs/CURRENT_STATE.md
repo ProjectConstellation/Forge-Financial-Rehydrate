@@ -31,3 +31,17 @@
 - Next: settle ≥ 300 Kalshi calibration samples (hourly contracts settle every hour) → refit stacked calibrator → decide
   Kalshi funding on evidence; equity T-bill (SGOV) idle rail once eligibility verified; barrier model for MAX/MIN series;
   portal panel for /api/surface.
+
+## 2026-10-07 06:40 UTC — overnight autonomous state
+- LIVE MONEY: Coinbase USD 5.00 + USDC 23.27 earning Coinbase One USDC rewards (rail coinbase.usdc_rewards = LIVE; rewards
+  verified hourly from wallet truth; live-start guard converts USDC→USD before any live spot session).
+- Spot: PAPER. 6 SHADOW breakout (beta-sleeve) strategies passed validation + sealed exam on clean data; they paper-trade on
+  live data; promotion to CHALLENGER needs forward evidence → readiness gate (only remaining gaps: ≥1 CHALLENGER, live flag).
+- Hermes v0.21.5 (forge-hermes.service, forge.slice) on Claude Opus 5.5 (operator Azure credit, $180/72 h, used ≈ $0.2):
+  9 jobs, 7 role genomes v1 (governor, alpha_inventor, adversary, critic, doctor, rail_hunter, architect) served by FORGE
+  (Prompt Genome System: versions, paired identical-snapshot challengers, calibrated KPIs, blind panels). Swap:
+  `forge-hermes-mode deepseek|opus|use|add-provider` (docs/HERMES.md).
+- Fixed tonight: time-scrambled history (root cause), event-loop stalls (index + off-loop parquet I/O), quarantine flags
+  persisting across restarts, false stale-bar quarantines after restarts, Modal 5m bursts exceeding 900 s (5m window 90 d),
+  population trim killing newcomers, genome schema drift crash, WS L2 shard limit.
+- Kalshi: shadow only (no API key/funding). SURFACE_RV is the candidate edge (n=40, P=0.86).

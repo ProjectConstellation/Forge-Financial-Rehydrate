@@ -19,4 +19,7 @@
 | ≥1 strategy through gate → SHADOW → CHALLENGER | IN PROGRESS | evolution running 24/7 |
 | LIVE trading | NOT ENABLED | blocked by readiness gate until evidence exists |
 | Answers P0 gates (ECR, haircut, sealed exam, trial ledger, risk cap, exposure states) | DONE | tests/unit/test_features.py |
-| OP-013 Opportunity Surface (registry, allocator, listing sentinel, Kalshi cross-rail shadow) | WORKING (shadow) | tests/unit/test_opportunities.py; /api/surface |
+| OP-013 Opportunity Surface (registry, allocator, listing sentinel, Kalshi cross-rail shadow) | WORKING (shadow) + USDC rewards LIVE | tests/unit/test_opportunities.py; /api/surface |
+| Hermes integration (agent API, plugin, gates, 9 cron roles, Opus/DeepSeek swap) | WORKING LIVE | tests/simulation/test_agent_api.py; role_reports |
+| Agent cognitive architecture (Constitution, 7 genomes, prompt genome evolution, blind panels) | WORKING LIVE | tests/simulation/test_prompt_genomes.py |
+| Data integrity (time-sorted history, bad-tick repair, quarantine lifecycle) | FIXED + TESTED | test_candle_store_merge_keeps_time_order, test_bad_print_detector_and_repair |
