@@ -14,5 +14,7 @@
 | Modal compute (forge env, volume, bursts, budget states) | WORKING LIVE | 2×workers 6,740 genomes $0.004 |
 | API (/health /ready /metrics /api/*, SSE) + PWA + STOP ALL TRADING | WORKING | 127.0.0.1:8470 |
 | Readiness gate | DONE | `forge readiness` |
+| 24/7 liveness: supervisor auto-restart + systemd notify watchdog (3 min) | DONE | tests/unit/test_supervisor; `systemctl show forge -p WatchdogUSec` |
+| OP-010 confidence/earnings-scaled AI budget, near-miss racing (16× Modal) | DONE | runtime |
 | ≥1 strategy through gate → SHADOW → CHALLENGER | IN PROGRESS | evolution running 24/7 |
 | LIVE trading | NOT ENABLED | blocked by readiness gate until evidence exists |
