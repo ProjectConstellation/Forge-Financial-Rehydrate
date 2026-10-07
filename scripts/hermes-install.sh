@@ -11,32 +11,18 @@ gate() { # file role est quiet_h key
   printf 'import runpy, sys\nsys.path.insert(0, __file__.rsplit("/", 1)[0])\nsys.argv = ["forge_gate.py", "%s", "%s", "%s", "%s"]\nrunpy.run_path(__file__.rsplit("/", 1)[0] + "/forge_gate.py", run_name="__main__")\n' \
     "$2" "$3" "$4" "$5" | sudo tee $HH/scripts/$1 >/dev/null
 }
-gate gate_governor.py    governor  0.01 6    governor
-gate gate_scientist.py   scientist 0.03 8    scientist_a
-gate gate_scientist_b.py scientist 0.03 8    scientist_b
-gate gate_critic.py      critic    0.01 24   critic
-gate gate_doctor.py      doctor    0.01 9999 doctor
-gate gate_rail_hunter.py scout     0.01 12   rail_hunter
-gate gate_architect.py   governor  0.03 12   architect
+gate gate_governor.py       governor       0.05 6    governor
+gate gate_alpha_inventor.py alpha_inventor 0.05 8    alpha_inventor
+gate gate_adversary.py      adversary      0.05 8    adversary
+gate gate_critic.py         critic         0.05 24   critic
+gate gate_doctor.py         doctor         0.02 9999 doctor
+gate gate_rail_hunter.py    rail_hunter    0.05 12   rail_hunter
+gate gate_architect.py      architect      0.05 12   architect
+gate gate_report.py         governor       0.05 20   report
 sudo install -m 600 -o forge-hermes -g forge-hermes /srv/forge/var/run/agent_token $HH/forge/agent_token
 sudo chown -R forge-hermes:forge-hermes $HH
 hc plugins enable hermes-forge >/dev/null 2>&1 || true
-# 2) cron jobs (Flash; low effort except scientist; local delivery; budget/change-gated pre-run scripts)
-existing=$(hc cron list 2>/dev/null || true)
-mk() { # name schedule script effort prompt
-  if ! grep -q "$1" <<<"$existing"; then
-    hc cron create "$2" "$5" --name "$1" --script "$3" --reasoning-effort "$4" --deliver local --failure-deliver local >/dev/null
-    echo "created $1"
-  fi
-}
-P=/srv/forge/hermes/prompts
-mk forge-scout       "every 2h"  forge_scout.py  low  "$(cat $P/scout.md)"
-mk forge-governor    "every 3h"  gate_governor.py low  "$(cat $P/governor.md)"
-mk forge-scientist   "every 6h"  gate_scientist.py high "$(cat $P/scientist.md)"
-mk forge-critic      "0 7 * * *" gate_critic.py  low  "$(cat $P/critic.md)"
-mk forge-doctor      "every 30m" gate_doctor.py  low  "$(cat $P/doctor.md)"
-mk forge-daily-report "0 12 * * *" gate_governor.py low "$(cat $P/report.md)"
-hc cron list 2>/dev/null | head -40
+# 2) cron jobs + model: managed by scripts/hermes-mode.sh (opus | deepseek)
 # 3) cron platform: FORGE tools + skills/memory/todo/session_search/delegation only (no browser/shell/files/desktop)
 hc tools disable web browser terminal file code_execution vision image_gen tts computer_use connections clarify --platform cron >/dev/null 2>&1 || true
 hc tools enable forge --platform cron >/dev/null 2>&1 || true

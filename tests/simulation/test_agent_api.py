@@ -37,7 +37,7 @@ def test_agent_api_scope_and_accounting(db):
     r = c.post("/api/agent/tool", headers=h, json={"name": "submit_research_lead", "role": "scout", "session_id": "s1",
                                                    "args": {"title": "t", "body": "b", "category": "rail"}}).json()
     assert r["lead_id"].startswith("lead")
-    assert db.scalar("SELECT role FROM intel_artifacts WHERE kind='lead'") == "hermes_scout"
+    assert db.scalar("SELECT role FROM intel_artifacts WHERE kind='lead'") == "hermes_rail_hunter"   # scout → canonical role
     u = c.post("/api/agent/usage", headers=h, json={"api_request_id": "r1", "role": "scout", "model": "deepseek-flash",
                                                     "usage": {"prompt_tokens": 100000, "completion_tokens": 10000}}).json()
     assert abs(u["cost_usd"] - 0.042) < 1e-9

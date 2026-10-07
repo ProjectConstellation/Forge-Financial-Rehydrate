@@ -193,6 +193,10 @@ class Forge:
         B("listing_sentinel", self.listings.run, 600)
         B("crossrail", self.crossrail.run, 1200)
         B("crossrail_fast", self.crossrail.fast_lane, 600)
+        from forge.agents.genome import PromptGenomes
+        self.prompt_genomes = PromptGenomes(self)
+        self.prompt_genomes.seed()
+        B("prompt_lab", self._prompt_lab_loop, 1800)
         from forge.opportunities.pegmaker import PegMaker
         self.pegmaker = PegMaker(self)
         B("pegmaker", self.pegmaker.run, 300)
@@ -204,6 +208,23 @@ class Forge:
         self.tasks.append(asyncio.create_task(self.sup.watch(self.stop_event), name="supervisor"))
         await self.say("Forge", f"All loops running under supervision: {len(self.sup.loops)} loops + watchdog — "
                                 "EARNING + IMPROVEMENT loops active 24/7")
+
+    async def _prompt_lab_loop(self) -> None:
+        """Agent cognitive architecture: score forecasts vs real gate outcomes, evaluate paired prompt runs, promote/archive
+        prompt genomes, open blind panels for high-stakes items. Deterministic; no LLM spend."""
+        while not self.stop_event.is_set():
+            self.sup.beat("prompt_lab")
+            try:
+                pg = self.prompt_genomes
+                scored = await asyncio.to_thread(pg.score_predictions)
+                decisions = await asyncio.to_thread(pg.evaluate)
+                panels = await asyncio.to_thread(pg.open_panels)
+                for pid, d in decisions.items():
+                    await self.say("Prompt Lab", f"Prompt genome {pid} {d} on paired, identical-evidence comparisons")
+                self.db.kv_set("prompt_lab.last", {"ts": time.time(), "scored": scored, "decisions": decisions, "panels": panels})
+            except Exception as e:
+                log.warning("prompt lab failed: %s", e)
+            await asyncio.sleep(600)
 
     async def _on_loop_restart(self, name: str, why: str) -> None:
         await self.say("Supervisor", f"Loop '{name}' restarted automatically: {why}", level="warn")

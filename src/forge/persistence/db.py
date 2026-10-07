@@ -114,6 +114,15 @@ class Database:
             cur = self._conn.execute(f"{verb} INTO {table} ({cols}) VALUES ({qs})", vals)
             return cur.rowcount
 
+    def insert_id(self, table: str, row: dict[str, Any]) -> int:
+        """INSERT and return the new rowid (insert() returns the row count)."""
+        cols = ", ".join(row)
+        qs = ", ".join("?" for _ in row)
+        vals = [dumps(v) if isinstance(v, dict | list) else v for v in row.values()]
+        with self._lock:
+            cur = self._conn.execute(f"INSERT INTO {table} ({cols}) VALUES ({qs})", vals)
+            return int(cur.lastrowid or 0)
+
     def close(self) -> None:
         with self._lock:
             self._conn.close()

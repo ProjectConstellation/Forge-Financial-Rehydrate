@@ -44,6 +44,23 @@ TOOLS = [
     _fn("get_shadow_rails", "Paper results of non-core rails (stable peg maker, stable triangle, listing discovery).", {}),
     _fn("get_listing_events", "Recent Coinbase product/listing/status/doc-page discovery events.", {"limit": {"type": "integer"}}),
     _fn("get_intelligence_budget", "Live DeepSeek balance, 24h pace/headroom, value-per-$ by role (incl. Hermes roles).", {}),
+    # cognitive architecture (role briefs, structured reports, prompt genomes, blind panels)
+    _fn("get_role_brief", "FIRST CALL OF EVERY RUN: your engineered role brief (constitution, mission, decision rights, "
+        "evidence standard, output schema), live world state and your role's track record.", {"role": {"type": "string"}},
+        ["role"]),
+    _fn("submit_role_report", "LAST CALL OF EVERY RUN: structured role report (JSON object per your brief's output schema).",
+        {"role": {"type": "string"}, "report": {"type": "object"}}, ["role", "report"]),
+    _fn("get_recent_candidates", "LLM-designed strategy candidates with gate/sealed outcomes and inventor/adversary forecasts.",
+        {"limit": {"type": "integer"}}),
+    _fn("get_role_reports", "Recent structured reports of all roles (blind-panel verdicts hidden until reconciled).",
+        {"limit": {"type": "integer"}, "role": {"type": "string"}}),
+    _fn("get_prompt_performance", "Prompt genome versions per role with runs, KPI, cost, calibration and challenger status.",
+        {"role": {"type": "string"}}),
+    _fn("submit_prompt_variant", "Architect only: propose ONE challenger prompt variant (edit 1–3 sections) with a hypothesis.",
+        {"role": {"type": "string"}, "parent_version": {"type": "integer"}, "hypothesis": {"type": "string"},
+         "sections": {"type": "object"}}, ["role", "hypothesis", "sections"]),
+    _fn("get_system_health", "Self-healing health: loop heartbeats, feed state, event-loop lag, quarantines, circuits, "
+        "recent warnings/errors, memory.", {}),
     _fn("submit_research_lead", "Record a research lead (new rail, fee/rule change, market-structure anomaly, data source) with "
         "sources; it is triaged by FORGE and valued if it leads to income.",
         {"title": {"type": "string"}, "body": {"type": "string"}, "category": {"type": "string"},
@@ -154,7 +171,7 @@ class ToolRouter:
             queue.append({"genome": g.model_dump(mode="json"), "rationale": c.get("rationale", {}),
                           "predicted_p": c.get("predicted_holdout_p_positive"), "call_id": self.call_id, "role": self.role})
             ok.append(g.id)
-            self.artifacts.append({"kind": "genome", "ref_id": g.id})
+            self.artifacts.append({"kind": "genome", "ref_id": g.id, "prediction": c.get("predicted_holdout_p_positive")})
         self.f.db.kv_set("brain.candidate_queue", queue[-60:])
         return {"queued": ok, "rejected": bad}
 
@@ -164,6 +181,52 @@ class ToolRouter:
                                      "confidence": float(min(max(confidence, 0), 1)), "created_at": _now()})
         self.artifacts.append({"kind": "lesson", "ref_id": lid})
         return {"lesson_id": lid}
+
+    # ---------------- cognitive architecture
+    def _pg(self) -> Any:
+        from forge.agents.genome import PromptGenomes
+        return PromptGenomes(self.f)
+
+    def _session(self) -> str:
+        return self.call_id.split(":", 1)[1] if ":" in self.call_id else self.call_id
+
+    def t_get_role_brief(self, role: str) -> dict[str, Any]:
+        return self._pg().brief(role, self._session())
+
+    def t_submit_role_report(self, role: str, report: dict[str, Any]) -> dict[str, Any]:
+        out = self._pg().submit_report(role, self._session(), report if isinstance(report, dict) else {"raw": str(report)})
+        self.artifacts.append({"kind": "role_report", "ref_id": out.get("prompt_id")})
+        return out
+
+    def t_get_recent_candidates(self, limit: int = 20) -> list[dict[str, Any]]:
+        return self._pg().recent_candidates(limit)
+
+    def t_get_role_reports(self, limit: int = 20, role: str | None = None) -> list[dict[str, Any]]:
+        return self._pg().role_reports(self.role.replace("hermes_", ""), limit, role)
+
+    def t_get_prompt_performance(self, role: str | None = None) -> list[dict[str, Any]]:
+        return self._pg().performance(role)
+
+    def t_submit_prompt_variant(self, role: str, hypothesis: str, sections: dict[str, str],
+                                parent_version: int | None = None) -> dict[str, Any]:
+        if not self.role.endswith("architect"):
+            return {"error": "only the architect role may propose prompt variants"}
+        out = self._pg().submit_variant(role, parent_version, hypothesis, sections, author=self.role)
+        if out.get("prompt_id"):
+            self.artifacts.append({"kind": "prompt_variant", "ref_id": out["prompt_id"]})
+        return out
+
+    def t_get_system_health(self) -> dict[str, Any]:
+        f = self.f
+        h = getattr(f, "health", None)
+        warn = self.f.db.query("SELECT ts, agent, level, substr(message,1,240) AS message FROM timeline WHERE level IN "
+                               "('warn','error') ORDER BY id DESC LIMIT 15")
+        return {"score": h.score() if h else None, "loops": f.sup.snapshot() if hasattr(f.sup, "snapshot") else None,
+                "quarantined": [r["key"].split(".", 1)[1] for r in self.f.db.query(
+                    "SELECT key FROM kv_state WHERE key LIKE 'quarantine.%' AND value != 'null'")],
+                "recent_warnings": warn, "bad_ticks_repaired_24h": self.f.db.scalar(
+                    "SELECT COUNT(*) FROM listing_events WHERE event='BAD_TICK_REPAIRED' AND ts > ?",
+                    (datetime_iso_hours_ago(24),))}
 
     def t_get_opportunity_surface(self) -> dict[str, Any]:
         db = self.f.db
@@ -193,7 +256,7 @@ class ToolRouter:
         roles = self.f.db.query("SELECT agent, COUNT(*) n, SUM(CAST(cost_usd AS REAL)) usd FROM inference_calls GROUP BY agent")
         return {"pace": self.f.db.kv_get("brain.pace"), "balance": getattr(b, "balance", None),
                 "spend_by_agent": roles, "roi": {r: b.roi(r) for r in ("perception", "scientist", "hermes_governor",
-                                                                     "hermes_scout", "hermes_scientist")} if b else None}
+                                                                     "hermes_alpha_inventor", "hermes_adversary", "hermes_rail_hunter")} if b else None}
 
     def t_submit_research_lead(self, title: str, body: str, category: str, sources: list[str] | None = None,
                                expected_value_usd_month: float | None = None) -> dict[str, Any]:
@@ -230,3 +293,8 @@ def _now() -> str:
 
 
 __all__ = ["TOOLS", "ToolRouter", "dumps"]
+
+
+def datetime_iso_hours_ago(h: float) -> str:
+    from datetime import UTC, datetime, timedelta
+    return (datetime.now(UTC) - timedelta(hours=h)).isoformat()

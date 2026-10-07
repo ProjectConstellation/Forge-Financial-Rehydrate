@@ -25,7 +25,8 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 
-HERMES_ROLES = ("governor", "scout", "scientist", "critic", "doctor")
+HERMES_ROLES = ("governor", "alpha_inventor", "adversary", "critic", "doctor", "rail_hunter", "architect",
+                "scout", "scientist")    # last two: legacy tags (aliases)
 HERMES_SHARE_PRIOR = 0.40          # share of the Intelligence Treasury pace Hermes may use before its value is measured
 
 
@@ -128,15 +129,19 @@ def mount(app: FastAPI, forge: Any, token: str) -> None:
     async def tool(request: Request) -> Any:
         check(request)
         body = await request.json()
-        role = str(body.get("role") or "governor")
+        from forge.agents.genome import canonical_role
+        role = canonical_role(str(body.get("role") or "governor"))
         role = role if role in HERMES_ROLES else "governor"
         call_id = f"hermes:{str(body.get('session_id') or 'na')[:60]}"
         router = ToolRouter(forge, call_id, f"hermes_{role}")
         out = await router.dispatch(str(body.get("name", "")), json.dumps(body.get("args") or {}))
         for a in router.artifacts:
+            pred = a.get("prediction")
             forge.db.insert("intel_artifacts", {"ts": _now(), "call_id": call_id, "role": f"hermes_{role}",
                                                 "model": str(body.get("model") or "deepseek-flash"), "kind": a["kind"],
-                                                "ref_id": a.get("ref_id"), "prediction": None, "detail": None})
+                                                "ref_id": a.get("ref_id"),
+                                                "prediction": float(pred) if isinstance(pred, int | float) else None,
+                                                "detail": None})
         return json.loads(out)
 
     @app.post("/api/agent/usage")
@@ -156,7 +161,8 @@ def mount(app: FastAPI, forge: Any, token: str) -> None:
         usage_n = {"prompt_tokens": prompt, "completion_tokens": int(u.get("completion_tokens") or u.get("output_tokens") or 0),
                    "prompt_cache_hit_tokens": cache}
         model = str(b.get("model") or "deepseek-flash")
-        role = str(b.get("role") or "governor")
+        from forge.agents.genome import canonical_role
+        role = canonical_role(str(b.get("role") or "governor"))
         brain = getattr(forge, "brain", None)
         ext = EXTERNAL_PRICES.get(model)
         if ext:      # list-price cost for value measurement; free operator credit → NOT a treasury expense
@@ -166,7 +172,7 @@ def mount(app: FastAPI, forge: Any, token: str) -> None:
             cost = brain.c.cost(model if model in forge.s.deepseek.prices else "deepseek-flash", usage_n) if brain else 0.0
         forge.db.insert("inference_calls", {
             "id": rid, "ts": _now(), "agent": f"hermes_{role}", "purpose": str(b.get("purpose") or "hermes")[:80],
-            "model": model, "effort": b.get("effort"), "prompt_version": "hermes",
+            "model": model, "effort": b.get("effort"), "prompt_version": f"session:{str(b.get('session_id') or 'na')[:60]}",
             "input_tokens": usage_n["prompt_tokens"], "cached_tokens": usage_n["prompt_cache_hit_tokens"],
             "output_tokens": usage_n["completion_tokens"], "cost_usd": f"{cost:.8f}", "latency_ms": int(b.get("latency_ms") or 0),
             "tool_calls": None, "result_class": "hermes", "strategy_id": None, "opportunity_id": None, "error": None})

@@ -28,8 +28,8 @@ log = logging.getLogger("forge.brain")
 
 ROLE_PRIOR_VALUE_PER_USD = {"perception": 3.0, "scientist": 5.0, "diagnostician": 2.0, "critic": 2.0,
                             # Hermes roles (OP-015): modest optimistic priors; measured value takes over with evidence
-                            "hermes_governor": 2.0, "hermes_scout": 2.0, "hermes_scientist": 3.0, "hermes_critic": 1.5,
-                            "hermes_doctor": 1.5}
+                            "hermes_governor": 2.0, "hermes_alpha_inventor": 3.0, "hermes_adversary": 2.0,
+                            "hermes_critic": 1.5, "hermes_doctor": 1.5, "hermes_rail_hunter": 2.0, "hermes_architect": 1.5}
 
 
 def _now() -> str:
