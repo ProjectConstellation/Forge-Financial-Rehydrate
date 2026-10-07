@@ -357,6 +357,22 @@ def build_app(forge: Any) -> FastAPI:
                               "WHERE book = ? AND ts > strftime('%Y-%m-%dT%H:%M:%S','now', ?) ORDER BY ts", (forge.book, f"-{int(hours * 60)} minutes"))
         return _j(rows)
 
+    @app.get("/api/surface")
+    async def surface() -> Any:
+        """OP-013 Opportunity Surface: rail registry, allocator plan (now vs if-unblocked), cross-rail evidence, listings."""
+        db = forge.db
+        rails = db.query("SELECT id, provider, category, status, executable, blockers, capabilities, economics, last_probe "
+                         "FROM rail_registry ORDER BY executable DESC, id")
+        return _j({"allocation": db.kv_get("surface.allocation"), "account": db.kv_get("surface.account"),
+                   "product_types": db.kv_get("surface.product_types"),
+                   "rails": [{**dict(r), "blockers": json.loads(r["blockers"] or "[]"),
+                              "capabilities": json.loads(r["capabilities"] or "{}"),
+                              "economics": json.loads(r["economics"] or "{}")} for r in rails],
+                   "crossrail": db.kv_get("crossrail.scorecard"), "calibrator": db.kv_get("crossrail.calibrator"),
+                   "kalshi_mapping": db.kv_get("crossrail.mapping"),
+                   "listing_events": db.query("SELECT ts, product_id, product_type, event FROM listing_events "
+                                              "ORDER BY id DESC LIMIT 50")})
+
     @app.get("/api/calibration")
     async def calibration() -> Any:
         return _j([forge.calib.reliability(c) for c in forge.calib.classes()])

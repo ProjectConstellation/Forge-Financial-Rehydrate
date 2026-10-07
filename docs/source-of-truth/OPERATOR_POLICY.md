@@ -159,3 +159,22 @@ probability/evidence-weighted allocation; keep smarter order placement + agreeme
 SELF-HEALING HEALTH SCORE on the dashboard: system, feed, execution, strategy, AI, treasury.
 Operating law: always have a tested replacement strategy waiting whenever reasonably possible.
 The organism is always EARNING, LEARNING, HEALING, or PREPARING TO EARN BETTER.
+
+## OP-013 — 2026-10-07 — EXPAND THE COINBASE OPPORTUNITY SURFACE (discovery, not a static list)
+FORGE's mandate covers EVERY legitimate, account-eligible, programmatically automatable opportunity through Coinbase and
+compatible rails — not only Advanced spot. Build a dynamic Opportunity Surface Registry that periodically re-queries
+capabilities, eligibility, APIs, fees, minimums, settlement delays and new products; a newly launched rail becomes a candidate
+automatically. Minimum scope: Advanced spot (all eligible markets); Coinbase Prediction Markets (Kalshi-operated → official
+Kalshi API, never browser automation); Coinbase stocks/ETFs (only via an official API; otherwise track as future rail + use
+data); gold/commodities (PAXG, GLD when executable, gold event contracts); CDP onchain/DEX/agentic swaps/DeFi yield (explicit
+wallet permissions + net-positive economics only); idle-capital yield (USDC rewards/staking) — idle money earns the best
+legitimate low-friction return when not better deployed; any other current/future Coinbase product/API with positive EV.
+Per rail: expected net return × calibrated probability × capital velocity × liquidity − fees − slippage − settlement/lockup
+opportunity cost − inference/compute cost − risk penalty; the Capital Allocator decides where each dollar works. Crypto spot is
+not preferred merely because it was integrated first. Never unsupported browser automation or bypassing platform controls; only
+rails with legitimate APIs/SDKs/authorized access may execute automatically. Exploit CROSS-RAIL information (PAXG vs gold event
+contracts, BTC spot vs BTC contracts, crypto vs related event markets, equity/ETF signals vs event contracts, other linked
+instruments). Open-ended: research anything missed; incorporate and test. "FORGE goes where the best proven money is."
+Follow-up instruction (same day): the probability model must be state-of-the-art and built for FORGE's profit — not a mere
+"fair probability" model (implemented: HAR-RV + Garman–Klass (bias-corrected) + variance term structure + intraday seasonality +
+filtered-historical-simulation tails + settlement-averaging + Bayesian stacked calibration vs market + maker-quote shadow).

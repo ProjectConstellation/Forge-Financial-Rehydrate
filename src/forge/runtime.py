@@ -182,6 +182,15 @@ class Forge:
         self.analyst = StrategyAnalyst(self)
         B("analyst", self.analyst.run, 600)
         B("time_machine", self._time_machine_loop, 3 * 3600)
+        # OP-013 Opportunity Surface: discovery registry + allocator, Listing Sentinel, cross-rail (Kalshi) shadow engine
+        from forge.opportunities.crossrail import CrossRailScanner
+        from forge.opportunities.surface import ListingSentinel, SurfaceRegistry
+        self.surface = SurfaceRegistry(self)
+        self.listings = ListingSentinel(self)
+        self.crossrail = CrossRailScanner(self)
+        B("surface", self.surface.run, 3600)
+        B("listing_sentinel", self.listings.run, 600)
+        B("crossrail", self.crossrail.run, 1200)
         from forge.core.healing import HealthMonitor
         self.health = HealthMonitor(self)
         B("healing", self.health.run, 120, critical=True)
