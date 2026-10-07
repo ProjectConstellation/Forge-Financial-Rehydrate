@@ -169,7 +169,17 @@ class PromptGenomes:
                 "crossrail": {k: sc.get(k) for k in ("calibration_n", "brier_model", "brier_market", "brier_stacked",
                                                      "model_weight_share", "signals", "rti_proxy_bp")},
                 "shadow_rails": shadow, "quarantined_markets": q,
-                "intelligence": db.kv_get("brain.pace"), "hermes_mode": (db.kv_get("hermes.mode") or {}).get("mode")}
+                "forge_internal_brain_pace": db.kv_get("brain.pace"),
+                "your_budget": self._hermes_budget(), "hermes_mode": (db.kv_get("hermes.mode") or {}).get("mode"),
+                "evaluation_queue": len(db.kv_get("brain.candidate_queue", []) or [])}
+
+    def _hermes_budget(self) -> dict[str, Any]:
+        try:
+            from forge.api.agent_api import hermes_allowance
+            a = hermes_allowance(self.f)
+            return {k: a.get(k) for k in ("mode", "headroom", "budget_24h", "spent_24h", "hours_left", "pace")}
+        except Exception as e:
+            return {"error": str(e)[:100]}
 
     def memory(self, role: str) -> dict[str, Any]:
         db = self.db

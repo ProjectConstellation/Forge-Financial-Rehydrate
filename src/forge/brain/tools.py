@@ -129,7 +129,14 @@ class ToolRouter:
     def t_get_strategy(self, id: str) -> dict[str, Any]:
         g = self.f.reg.get(id)
         if g is None:
-            return {"error": "not found"}
+            q = self.f.db.kv_get("brain.candidate_queue", []) or []
+            for i, item in enumerate(q):
+                if item["genome"].get("id") == id:
+                    return {"state": "PENDING_EVALUATION", "queue_position": i + 1, "queue_length": len(q),
+                            "note": "queued for the next evolution cycle (≤ 12 LLM genomes per cycle per interval)",
+                            "genome": item["genome"], "predicted_p": item.get("predicted_p")}
+            return {"error": "not found (not in registry or evaluation queue; duplicates of existing DNA map to the "
+                             "existing strategy id)"}
         return {"genome": g.model_dump(mode="json"), "state": self.f.reg.state(id), "lineage": self.f.reg.lineage(id, 3),
                 "holdout": _short(self.f.reg.latest_metrics(id, "holdout")), "forward": _short(self.f.reg.latest_metrics(id, "forward"))}
 

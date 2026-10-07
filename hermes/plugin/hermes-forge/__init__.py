@@ -70,8 +70,17 @@ def register(ctx):
     def _usage(kind, session_id=None, usage=None, model=None, api_request_id=None, api_duration=None, **kwargs):
         if not usage:
             return
-        u = usage if isinstance(usage, dict) else getattr(usage, "__dict__", {})
-        body = {"api_request_id": f"{kind}_{api_request_id or os.urandom(6).hex()}", "role": _role(session_id),
+        if isinstance(usage, dict):
+            u = usage
+        elif hasattr(usage, "model_dump"):
+            u = usage.model_dump()
+        elif hasattr(usage, "__dataclass_fields__"):
+            import dataclasses
+            u = dataclasses.asdict(usage)
+        else:
+            u = {k: getattr(usage, k) for k in dir(usage) if k.endswith("tokens") and not k.startswith("_")}
+        uid = f"{kind}_{session_id}_{api_request_id}_{kwargs.get('api_call_count')}_{os.urandom(4).hex()}"
+        body = {"api_request_id": uid[:120], "role": _role(session_id),
                 "model": model or "deepseek-flash", "usage": u, "session_id": session_id,
                 "latency_ms": int(float(api_duration or 0) * 1000), "purpose": kind}
         threading.Thread(target=lambda: _safe_post(body), daemon=True).start()

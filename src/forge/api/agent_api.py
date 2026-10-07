@@ -148,7 +148,8 @@ def mount(app: FastAPI, forge: Any, token: str) -> None:
     async def usage(request: Request) -> Any:
         check(request)
         b = await request.json()
-        rid = f"hermes_{str(b.get('api_request_id') or secrets.token_hex(8))[:60]}"
+        import hashlib
+        rid = "hermes_" + hashlib.sha1(str(b.get("api_request_id") or secrets.token_hex(8)).encode()).hexdigest()[:24]
         if forge.db.scalar("SELECT 1 FROM inference_calls WHERE id = ?", (rid,)):
             return {"ok": True, "duplicate": True}
         u = b.get("usage") or {}
