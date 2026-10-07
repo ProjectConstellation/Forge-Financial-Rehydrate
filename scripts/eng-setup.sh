@@ -13,6 +13,7 @@ chmod 755 $E 2>/dev/null || true
 for d in $F $R $F/runtime/deploy/stage; do git config --system --get-all safe.directory | grep -qx "$d" || git config --system --add safe.directory "$d"; done
 
 # engineer repo (own clone; remote prod = production, read-only to forge-eng)
+install -d -o forge-eng -g forge-eng -m 755 $R
 if [ ! -d $R/.git ]; then sudo -u forge-eng git clone -q $F $R; fi
 sudo -u forge-eng git -C $R remote remove origin 2>/dev/null || true
 sudo -u forge-eng git -C $R remote get-url prod >/dev/null 2>&1 || sudo -u forge-eng git -C $R remote add prod $F
