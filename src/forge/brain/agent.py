@@ -142,7 +142,9 @@ class Brain:
                 "Inspect evidence with tools first (system state, strategies incl. EXPERIMENTAL elites, failures, missed "
                 "opportunities, calibration, market state 300s and 3600s). Then submit 4–10 candidates via "
                 "submit_strategy_candidates and record lessons. Finish with the JSON described in your role.")
-        await self._tool_session("scientist", user, deep=True, effort=self.f.s.deepseek.deep_effort, max_rounds=8)
+        # scheduled research: Pro @ high; critical escalations: Pro @ max (OP-009 §1 — escalate when value warrants)
+        await self._tool_session("scientist", user, deep=True, effort=self.f.s.deepseek.deep_effort if critical else "high",
+                                 max_rounds=8)
 
     async def _tool_session(self, role: str, user: str, deep: bool, effort: str, max_rounds: int = 6,
                             strategy_id: str | None = None) -> dict[str, Any] | None:
@@ -153,11 +155,19 @@ class Brain:
         first_id = None
         for _ in range(max_rounds):
             res = await self.c.chat(msgs, agent=role, purpose=f"{role}_session", deep=deep, effort=effort, tools=TOOLS,
-                                    max_tokens=8000, strategy_id=strategy_id, prompt_version=PROMPT_VERSION)
+                                    max_tokens=32000 if deep else 8000, strategy_id=strategy_id, prompt_version=PROMPT_VERSION)
             first_id = first_id or res.call_id
             router = router or ToolRouter(self.f, first_id, role)
             total += res.cost_usd
             if not res.tool_calls:
+                if not res.content.strip():
+                    # thinking consumed the budget: ask for the final answer only (prefix-cached → cheap)
+                    msgs.append({"role": "assistant", "content": ""})
+                    msgs.append({"role": "user", "content": "Output ONLY the final JSON object for your role now."})
+                    res = await self.c.chat(msgs, agent=role, purpose=f"{role}_finalize", deep=deep, effort="low",
+                                            json_mode=True, max_tokens=12000, strategy_id=strategy_id,
+                                            prompt_version=PROMPT_VERSION)
+                    total += res.cost_usd
                 try:
                     final = res.json()
                 except Exception:
@@ -210,6 +220,7 @@ class Brain:
         await self.refresh_balance()
         if not self.allow("diagnostician", 0.05, critical=True):
             return
+        self.last_scientist = 0.0          # critical events also unlock an immediate research session
         user = f"CRITICAL EVENT: {reason}. Data: {json.dumps(data, default=str)[:6000]}. Diagnose root cause with tools, " \
                "propose repaired/successor genomes (submit_strategy_candidates) and lessons."
         await self._tool_session("diagnostician", user, deep=True, effort="max", max_rounds=6)

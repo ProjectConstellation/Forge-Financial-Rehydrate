@@ -1,0 +1,48 @@
+[Unit]
+Description=FORGE — Find Opportunities · Reinvest · Grow · Evolve (autonomous capital growth engine)
+Documentation=file:///srv/forge/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=forge
+Group=forge
+WorkingDirectory=/srv/forge
+EnvironmentFile=/etc/forge/forge.env
+Environment=FORGE_ENV=production
+Environment=FORGE_HOME=/srv/forge/var
+Environment=FORGE_MODE=PAPER
+Environment=HOME=/srv/forge/var/modal-home
+Environment=MODAL_ENVIRONMENT=forge
+Environment=PYTHONUNBUFFERED=1
+Environment=OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 NUMEXPR_NUM_THREADS=2
+ExecStart=/srv/forge/.venv/bin/python -m forge.cli run
+Restart=always
+RestartSec=5
+TimeoutStopSec=60
+# Resource envelope (DOSSIER §3 / DIRECTIVE §4): 2 vCPU normal target, 3 vCPU hard ceiling for the whole cgroup
+CPUQuota=300%
+CPUWeight=50
+Nice=5
+MemoryHigh=1536M
+MemoryMax=2G
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+TasksMax=256
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/forge/var
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

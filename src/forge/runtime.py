@@ -458,12 +458,34 @@ class Forge:
                 cancelled_for_stop = True
             elif ts != "STOPPED":
                 cancelled_for_stop = False
+            req = self.db.kv_get("cashout.request")
+            if req and self.gateway:
+                await self._handle_cashout(req)
             if self.gateway:
                 try:
                     await self.gateway.tick(ts)
                 except Exception:
                     log.exception("execution tick failed")
             await asyncio.sleep(2)
+
+    async def _handle_cashout(self, req: dict[str, Any]) -> None:
+        """OP-003 Stage 1: operator-initiated liquidation to USD (Trade permission only; never LLM/strategy initiated)."""
+        assert self.gateway is not None
+        self.db.kv_set("cashout.request", None)
+        n_cancel = await self.gateway.cancel_all_entries()
+        amount = str(req.get("amount", "all")).lower()
+        cash = float(self.treasury.get("cash_usd") or 0)
+        target = None if amount == "all" else float(amount)
+        n = 0
+        if target is None or target > cash:
+            n = await self.gateway.liquidate("CASHOUT")
+        if amount == "all":
+            tstate.stop_all(self.db, self.audit, actor="cashout", reason="cash-out all: entries paused",
+                            safe_stop_policy="keep_exits")
+        self.audit.append("CASHOUT_EXECUTED", {"request": req, "cancelled_entries": n_cancel, "liquidated_positions": n})
+        await self.say("Accountant", f"Cash-out ({amount}, {req.get('urgency')}): cancelled {n_cancel} pending entries, "
+                                     f"liquidating {n} positions to USD. When complete, use Coinbase 'Cash out' to move USD "
+                                     f"to your bank/card (FORGE's key has no transfer permission by design).", level="warn")
 
     async def _universe_loop(self) -> None:
         while not self.stop_event.is_set():
