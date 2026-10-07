@@ -70,8 +70,11 @@ class Circuit:
                 "total_success": self.total_success, "cooldown_s": round(self.cooldown_s), "last_error": self.last_error}
 
 
-def bar_integrity(series_arrays: dict[str, Any]) -> list[str]:
-    """Return problems with the latest bars (stale/missing/contradictory/corrupt)."""
+def bar_integrity(series_arrays: dict[str, Any], interval_s: int | None = None, now_s: float | None = None,
+                  live_price: float | None = None) -> list[str]:
+    """Problems with the latest bars. Genuine violent moves are NOT corruption: a spike is only a bad print if it reverts
+    on the next bar and the live market does not corroborate it. Missing candles in thin markets are normal; only a stale
+    latest bar counts."""
     import numpy as np
     c, h, lo, ts = (np.asarray(series_arrays[k], dtype=float) for k in ("close", "high", "low", "ts"))
     issues: list[str] = []
@@ -80,15 +83,20 @@ def bar_integrity(series_arrays: dict[str, Any]) -> list[str]:
     tail = slice(-50, None)
     if not np.all(np.isfinite(c[tail])) or np.any(c[tail] <= 0):
         issues.append("non-finite or non-positive prices")
+        return issues
     if np.any(h[tail] < lo[tail]):
         issues.append("high < low (contradictory bar)")
-    r = np.abs(np.diff(np.log(np.maximum(c[tail], 1e-12))))
-    med = float(np.median(r)) or 1e-6
-    if r.size and float(r.max()) > max(0.25, 40 * med):
-        issues.append(f"outlier jump {float(r.max()):.1%} (median move {med:.3%})")
-    gaps = np.diff(ts[tail])
-    if gaps.size and float(gaps.max()) > 6 * float(np.median(gaps)):
-        issues.append("time gap in bar series")
+    r = np.diff(np.log(np.maximum(c[tail], 1e-12)))
+    med = float(np.median(np.abs(r))) or 1e-6
+    big = max(0.25, 40 * med)
+    for i in range(len(r) - 1):
+        if abs(r[i]) > big and np.sign(r[i + 1]) == -np.sign(r[i]) and abs(r[i + 1]) > 0.6 * abs(r[i]):
+            issues.append(f"bad print: {r[i]:+.1%} spike reverted next bar ({r[i + 1]:+.1%})")
+            break
+    if live_price and live_price > 0 and abs(live_price / c[-1] - 1) > max(0.15, 20 * med):
+        issues.append(f"bars disagree with live market ({c[-1]:.6g} vs live {live_price:.6g})")
+    if interval_s and now_s and now_s - ts[-1] > 4 * interval_s:
+        issues.append(f"stale bars (latest {int((now_s - ts[-1]) / interval_s)} intervals old)")
     return issues
 
 
@@ -154,7 +162,8 @@ class HealthMonitor:
             for sym, st in list(eng.state.items()):
                 if len(st.series) < 300:
                     continue
-                issues = bar_integrity(st.series.arrays())
+                bbo = self.f.market.get_bbo(sym)
+                issues = bar_integrity(st.series.arrays(), interval, time.time(), bbo.mid if bbo else None)
                 key = f"{sym}@{interval}"
                 if issues and key not in self.quarantined:
                     self.quarantined[key] = {"since": time.time(), "issues": issues}

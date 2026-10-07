@@ -65,8 +65,13 @@ def test_corrupt_bars_detected():
     good = {"ts": np.arange(n) * 300.0, "close": c, "high": c * 1.001, "low": c * 0.999}
     assert bar_integrity(good) == []
     bad = {k: v.copy() for k, v in good.items()}
-    bad["close"][-3] = bad["close"][-4] * 3.5                      # spike / corrupt print
-    assert any("outlier" in i for i in bar_integrity(bad))
+    bad["close"][-3] = bad["close"][-4] * 3.5                      # spike that reverts next bar = bad print
+    assert any("bad print" in i for i in bar_integrity(bad))
+    pump = {k: v.copy() for k, v in good.items()}
+    pump["close"][-3:] = pump["close"][-4] * 1.6                    # genuine 60% move that HOLDS → not corruption
+    pump["high"][-3:] = pump["close"][-3:] * 1.001; pump["low"][-3:] = pump["close"][-3:] * 0.999
+    assert bar_integrity(pump, live_price=float(pump["close"][-1])) == []
+    assert any("disagree" in i for i in bar_integrity(good, live_price=float(good["close"][-1]) * 1.5))
     bad2 = {k: v.copy() for k, v in good.items()}
     bad2["high"][-2] = bad2["low"][-2] * 0.5                       # contradictory bar
     assert any("high < low" in i for i in bar_integrity(bad2))
