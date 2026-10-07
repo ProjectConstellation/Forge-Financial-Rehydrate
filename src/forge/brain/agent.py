@@ -83,7 +83,7 @@ class Brain:
         burn = 0.15 if not measured else min(0.60, max(0.05, 0.15 * roi))
         profit7 = float(self.f.db.scalar(
             "SELECT COALESCE(SUM(CAST(realized_pnl_usd AS REAL) - CAST(fees_usd AS REAL)),0) FROM positions "
-            "WHERE status='CLOSED' AND closed_at > datetime('now','-7 day')") or 0.0)
+            "WHERE status='CLOSED' AND closed_at > strftime('%Y-%m-%dT%H:%M:%S','now','-7 day')") or 0.0)
         share = float(self.f.s.treasury.ops_profit_share_default)
         return bal * burn + max(0.0, profit7) * share * 4      # earnings expand the research budget
 

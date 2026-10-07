@@ -80,7 +80,7 @@ def snapshot(forge: Any) -> dict[str, Any]:
     db, book = forge.db, forge.book if forge.book in ("live", "paper") else "paper"
 
     def window(hours: float) -> dict[str, float]:
-        since = f"datetime('now','-{int(hours * 60)} minutes')"
+        since = f"strftime('%Y-%m-%dT%H:%M:%S','now','-{int(hours * 60)} minutes')"
         trade = float(db.scalar("SELECT COALESCE(SUM(CAST(realized_pnl_usd AS REAL) - CAST(fees_usd AS REAL)),0) FROM positions "
                                 f"WHERE book = ? AND status='CLOSED' AND closed_at > {since}", (book,)) or 0.0)
         opex = float(db.scalar("SELECT COALESCE(SUM(CAST(amount_usd AS REAL)),0) FROM ledger_entries WHERE book = ? AND "
@@ -147,7 +147,7 @@ def snapshot(forge: Any) -> dict[str, Any]:
         "throughput": {"genomes_total": int(db.kv_get("stats.genomes_total", 0) or 0), "genomes_last_cycle": forge.genomes_last_cycle,
                        "cycles": forge.improvement_runs, "feed_messages": forge.stream.quality.messages,
                        "markets_streaming": len(forge.stream.symbols), "markets_discovered": len(forge.market.products),
-                       "opportunities_24h": db.scalar("SELECT COUNT(*) FROM opportunities WHERE ts > datetime('now','-1 day')") or 0,
+                       "opportunities_24h": db.scalar("SELECT COUNT(*) FROM opportunities WHERE ts > strftime('%Y-%m-%dT%H:%M:%S','now','-1 day')") or 0,
                        "paper_trades_open": len(positions)},
         "today": {"realized_net_usd": windows_today(db, book), "unrealized_usd": sum((p["live_pnl_usd"] or 0) for p in positions)}})
 
@@ -329,7 +329,7 @@ def build_app(forge: Any) -> FastAPI:
     @app.get("/api/history")
     async def history(hours: float = 24) -> Any:
         rows = forge.db.query("SELECT ts, equity_usd, true_net_usd, account_total_usd, invested_usd FROM equity_series "
-                              "WHERE book = ? AND ts > datetime('now', ?) ORDER BY ts", (forge.book, f"-{int(hours * 60)} minutes"))
+                              "WHERE book = ? AND ts > strftime('%Y-%m-%dT%H:%M:%S','now', ?) ORDER BY ts", (forge.book, f"-{int(hours * 60)} minutes"))
         return _j(rows)
 
     @app.get("/api/calibration")

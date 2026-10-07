@@ -65,7 +65,7 @@ async def readiness_report(s: Settings, db: Database) -> dict[str, Any]:
     add("≥1 strategy passed replay + shadow criteria", bool(ready_strats),
         f"{len(ready_strats)} CHALLENGER/PRODUCTION; population {counts}")
     # 5. market feed recently healthy (from runtime timeline)
-    recent = db.scalar("SELECT COUNT(*) FROM timeline WHERE agent = 'Market Scout' AND ts > datetime('now','-2 hours')") or 0
+    recent = db.scalar("SELECT COUNT(*) FROM timeline WHERE agent = 'Market Scout' AND ts > strftime('%Y-%m-%dT%H:%M:%S','now','-2 hours')") or 0
     add("market feed stable (runtime active in last 2h)", recent > 0, f"{recent} market-scout events in 2h")
     stop_tested = db.scalar("SELECT COUNT(*) FROM timeline WHERE message LIKE 'STOP ALL TRADING%'") or 0
     add("emergency stop exercised end-to-end", stop_tested > 0, f"{stop_tested} recorded stop events")
