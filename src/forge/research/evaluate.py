@@ -158,7 +158,7 @@ def evaluate(g: Genome, ds: Dataset, cost: CostModel, segment: str = "selection"
     return Evaluation(g.id, segment, m, fold_means, fold_pos, fit, trades if keep_trades else [], cost.ruler())
 
 
-def fitness(m: dict, fold_pos: float, complexity: int, min_trades: int = 40, velocity_weight: float = 1.0,
+def fitness(m: dict, fold_pos: float, complexity: int, min_trades: int = 40, velocity_weight: float = 3.0,
             hurdle_per_day: float = 0.0096) -> float:
     """Multi-objective selection score (DOSSIER §14.5 + OP-008 velocity):
     per-trade growth × evidence × consistency + capital velocity vs hurdle − penalties."""
