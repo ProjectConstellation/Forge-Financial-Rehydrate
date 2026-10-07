@@ -109,7 +109,7 @@ sleep 10
 # the Engineer's wake-up job (gate = free when no ticket is waiting)
 HC="sudo -u forge-eng env HOME=$EH HERMES_HOME=$EH $H/app/venv/bin/hermes"
 for id in $($HC cron list 2>/dev/null | awk '/^  [0-9a-f]{12} \[/{id=$1} $1=="Name:" && $2=="forge-engineer" {print id}'); do $HC cron remove "$id" >/dev/null 2>&1 || true; done
-$HC cron create "every 10m" "$(cat $F/hermes/eng/boot_engineer.md)" --name forge-engineer --script "$EH/scripts/gate_engineer.py" \
+cd $R && $HC cron create "every 10m" "$(cat $F/hermes/eng/boot_engineer.md)" --name forge-engineer --script gate_engineer.py \
   --reasoning-effort xhigh --deliver local --failure-deliver local >/dev/null
 systemctl restart forge-eng
 echo "forge-eng: $(systemctl is-active forge-eng) · deployer timer: $(systemctl is-active forge-deployer.timer)"
