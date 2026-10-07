@@ -336,5 +336,11 @@ chmod 700 /usr/local/sbin/forge-exec-revoke
 
 systemctl daemon-reload
 systemctl enable forge-ops >/dev/null 2>&1
-systemctl restart forge-ops
-sleep 6; echo "forge-ops: $(systemctl is-active forge-ops)"
+SIG=$(cat $OH/SOUL.md $OH/config.yaml $OH/.env /etc/systemd/system/forge-ops.service /etc/systemd/system/forge-ops.service.d/*.conf \
+      $(find $OH/plugins -type f -name "*.py" -o -type f -name "*.yaml" | sort) 2>/dev/null | sha256sum | cut -c1-16)
+if [ "$(cat $OH/.setup_sig 2>/dev/null)" != "$SIG" ] || ! systemctl is-active -q forge-ops; then
+  systemctl restart forge-ops; echo "$SIG" > $OH/.setup_sig; chown forge-ops:forge-ops $OH/.setup_sig; sleep 6
+  echo "forge-ops: restarted (changed) → $(systemctl is-active forge-ops)"
+else
+  echo "forge-ops: unchanged — not restarted (no Telegram interruption)"
+fi

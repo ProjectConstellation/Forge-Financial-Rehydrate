@@ -32,6 +32,9 @@ plugins:
     - hermes-forge-ops
   disabled:
     - hermes-forge
+platforms:
+  telegram:
+    gateway_restart_notification: false
 platform_toolsets:
   telegram:
     - forge_ops

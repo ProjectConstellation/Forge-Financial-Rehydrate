@@ -52,7 +52,7 @@ ACTIONS: dict[str, tuple[str, str]] = {
 }
 ALWAYS_ALLOWED_WHEN_LOCKED = {"stop_trading", "lockdown"}
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}
-READ_AUDIT_SKIP_MIRROR = {"eng_next", "eng_ticket", "eng_queue", "capabilities", "status", "tool", "econ", "debrief", "directives_read", "objectives_read", "audit_read"}
+READ_AUDIT_SKIP_MIRROR = {"guardian", "eng_next", "eng_ticket", "eng_queue", "capabilities", "status", "tool", "econ", "debrief", "directives_read", "objectives_read", "audit_read"}
 RATE = {"read": (240, 60.0), "write": (30, 600.0), "confirm": (12, 3600.0)}     # (max calls, window seconds)
 _hits: dict[str, list[float]] = {}
 
@@ -93,6 +93,14 @@ def _version() -> dict[str, Any]:
         return {"commit": None}
 
 
+def _guardian_summary(db: Any) -> dict[str, Any]:
+    g = db.kv_get("guardian.state") or {}
+    last = float(g.get("last_run") or 0)
+    return {"alive": time.time() - last < 180, "last_check_s_ago": round(time.time() - last) if last else None,
+            "open_incidents": {k: v.get("text") for k, v in (g.get("open_incidents") or {}).items()},
+            "recent_repairs": [f"{time.strftime('%H:%M', time.gmtime(r['ts']))} {r['text']}" for r in (g.get("recent_repairs") or [])[-5:]]}
+
+
 def status(forge: Any) -> dict[str, Any]:
     """One-call live operational + economic status (what the owner asks for most)."""
     from forge.core import state as tstate
@@ -131,7 +139,8 @@ def status(forge: Any) -> dict[str, Any]:
                    "kalshi_shadow_today_per_contract": shadow_today,
                    "top_levers": [p["action"] for p in (v.get("priorities") or [])[:3]]},
         "open_positions": open_pos, "population": forge.reg.counts() if hasattr(forge, "reg") else None,
-        "health": {"score": h.score() if h else None, "loops": len(loops), "stale_loops": stale, "recent_warnings": warn},
+        "health": {"score": h.score() if h else None, "loops": len(loops), "stale_loops": stale, "recent_warnings": warn,
+                   "guardian": _guardian_summary(db)},
         "compute": comp.summary() if comp else None, "deepseek_spend_24h_usd": intel_24h,
         "hermes_roles_24h": roles,
         "open_directives": db.query("SELECT id, role, priority, substr(instruction, 1, 120) instruction, ts FROM ops_directives "
@@ -448,6 +457,12 @@ def mount_ops(app: FastAPI, forge: Any, token: str, etoken: str | None = None) -
         audit(actor, "eng_deploy_result", {"id": tid, "deploy_status": ds}, "OK", {"class": b.get("deploy_class")})
         return {"id": tid, "deploy_status": ds}
 
+    @app.post("/api/ops/guardian")
+    async def guardian_post(request: Request) -> Any:
+        check(request, "read", "guardian")
+        db.kv_set("guardian.state", {**(await request.json()), "received": time.time()})
+        return {"ok": True}
+
     @app.get("/api/ops/capabilities")
     async def ops_capabilities(request: Request) -> Any:
         """Live roster: every agent, service, loop, rail, budget and power the EXECUTIVE OPS agent commands."""
@@ -473,7 +488,11 @@ def mount_ops(app: FastAPI, forge: Any, token: str, etoken: str | None = None) -
                                "as fast as evidence allows (exponential, compounding); delegate to the right specialist.",
             "hermes_specialists": roster,
             "forge_services": {"forge": "trading engine + API + all loops", "forge-hermes": "7 specialist agents (scheduled)",
-                               "forge-tunnel": "portal", "forge-ops": "you (EXECUTIVE OPS)"},
+                               "forge-tunnel": "portal", "forge-ops": "you (EXECUTIVE OPS)",
+                               "forge-eng": "FORGE ENGINEER (sandboxed coding agent)",
+                               "forge-deployer": "root deployer (scan → sandboxed tests → deploy → watch → rollback)",
+                               "forge-guardian": "root watchdog every 60 s: restarts anything down/stalled, alerts owner once"},
+            "guardian": _guardian_summary(db),
             "engine_loops": {"count": len(loops), "names": sorted(x["loop"] for x in loops),
                              "unhealthy": [x["loop"] for x in loops if not x["alive"]]},
             "earning_streams": [{"id": s["id"], "live": s.get("live"), "tier": s.get("tier"), "n": s.get("n")}
