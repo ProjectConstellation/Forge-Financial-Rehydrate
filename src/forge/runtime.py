@@ -196,6 +196,9 @@ class Forge:
         from forge.opportunities.kalshi_live import KalshiLive
         self.kalshi_live = KalshiLive(self)
         B("kalshi_live", self.kalshi_live.run, 600)
+        from forge.treasury.velocity import VelocityEngine
+        self.velocity = VelocityEngine(self)
+        B("velocity", self.velocity.run, 900)
         from forge.agents.genome import PromptGenomes
         self.prompt_genomes = PromptGenomes(self)
         self.prompt_genomes.seed()

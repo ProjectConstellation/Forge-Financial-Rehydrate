@@ -33,10 +33,10 @@ def test_v2_order_bodies():
 
 def test_ladder_and_cusum():
     assert ladder_contracts([0.1] * 5)[0] == 0                                   # too few
-    assert ladder_contracts([0.45, -0.55, 0.45, 0.45, 0.45, -0.55, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45])[0] == 1
+    assert ladder_contracts([0.45, -0.55, 0.45, 0.45, 0.45, -0.55, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45])[0] == 2   # MEDIUM
     assert ladder_contracts([0.45, -0.55] * 15)[0] == 0                            # mean −5¢ → closed
     strong = [0.40, 0.40, 0.40, -0.60] * 15                                        # mean +15¢, n=60
-    assert ladder_contracts(strong)[0] == 3 and posterior_positive(strong)[1] > 0.99
+    assert ladder_contracts(strong)[0] == 50 and posterior_positive(strong)[1] > 0.99      # EXCEPTIONAL → frontier
     assert cusum([-0.05] * 3) < -0.08 and cusum([0.0] * 50) == 0.0
 
 
@@ -60,19 +60,28 @@ def test_gated_round_trip(db, monkeypatch):
         db.insert("crossrail_signals", {"ts": time.time() - 4000, "kind": "TAKE_THRESH", "ticker": f"T{i}", "side": "yes",
                                         "price": 0.5, "fee": 0.02, "edge": 0.05, "status": "SETTLED",
                                         "pnl": 0.48 if i % 4 else -0.52, "settled_ts": time.time() - 3000, "close_ts": 0})
-    assert kl.decision()[0] == 1
+    assert kl.decision()[0] == 2
+    db.kv_set("velocity", {"treasury": {"total": 30.0}})                         # bootstrap regime, $30 treasury
     sid = db.insert_id("crossrail_signals", {"ts": time.time(), "kind": "TAKE_THRESH", "ticker": "KXBTCD-LIVE", "side": "no",
                                              "price": 0.60, "fee": 0.02, "edge": 0.05, "status": "OPEN", "close_ts": time.time() - 200})
     sig = {"id": sid, "ts": time.time(), "ticker": "KXBTCD-LIVE", "side": "no", "price": 0.60, "fee": 0.02, "close_ts": time.time() - 200}
     asyncio.run(kl.on_signal(sig))
     asyncio.run(kl.on_signal(sig))                                                # idempotent: no duplicate order
-    assert len(kl.client.orders) == 1 and kl.client.orders[0][:4] == ("KXBTCD-LIVE", "no", 0.60, 1)
+    assert len(kl.client.orders) == 1 and kl.client.orders[0][:4] == ("KXBTCD-LIVE", "no", 0.60, 2)
     o = db.query_one("SELECT * FROM kalshi_live_orders")
-    assert o["status"] == "FILLED" and abs(o["avg_price"] - 0.60) < 1e-9 and abs(o["cost"] - 0.61) < 1e-9
+    assert o["status"] == "FILLED" and abs(o["avg_price"] - 0.60) < 1e-9 and abs(o["cost"] - 1.22) < 1e-9
     db.execute("UPDATE crossrail_signals SET status='SETTLED', payout=1.0, pnl=0.38, settled_ts=? WHERE id=?", (time.time(), sid))
     assert asyncio.run(kl.settle()) == 1
     o = db.query_one("SELECT * FROM kalshi_live_orders")
-    assert o["status"] == "SETTLED" and abs(o["pnl"] - 0.39) < 1e-9
-    # hard daily stop
-    db.execute("UPDATE kalshi_live_orders SET pnl = -3.5")
-    assert kl.decision()[0] == 0 and "daily hard stop" in kl.decision()[1]
+    assert o["status"] == "SETTLED" and abs(o["pnl"] - 0.78) < 1e-9
+    # bootstrap circuit breakers on a $30 treasury: hourly 15% ($4.50), daily 35% ($10.50)
+    db.execute("UPDATE kalshi_live_orders SET pnl = -4.0, shadow_pnl = -2.0")
+    assert kl.decision()[0] == 2
+    db.execute("UPDATE kalshi_live_orders SET pnl = -5.0, shadow_pnl = -2.5")
+    assert kl.decision()[0] == 0 and kl.paused_until > time.time()        # hourly breaker → 1 h pause
+    kl.paused_until = 0.0
+    now = time.time()
+    day0 = now - now % 86400
+    if now - day0 > 3700:                                   # an earlier-today loss: outside the hour, inside the day
+        db.execute("UPDATE kalshi_live_orders SET pnl = -11.0, shadow_pnl = -5.5, settled_ts = ?", (day0 + 1,))
+        assert kl.decision()[0] == 0 and "daily circuit breaker" in kl.decision()[1]

@@ -363,6 +363,11 @@ def build_app(forge: Any) -> FastAPI:
                               "WHERE book = ? AND ts > strftime('%Y-%m-%dT%H:%M:%S','now', ?) ORDER BY ts", (forge.book, f"-{int(hours * 60)} minutes"))
         return _j(rows)
 
+    @app.get("/api/velocity")
+    async def velocity() -> Any:
+        """FORGE PROFIT VELOCITY: realized/expected true-net $/h, frontier, regime, scaling curve, priorities."""
+        return _j(forge.db.kv_get("velocity") or {})
+
     @app.get("/api/surface")
     async def surface() -> Any:
         """OP-013 Opportunity Surface: rail registry, allocator plan (now vs if-unblocked), cross-rail evidence, listings."""

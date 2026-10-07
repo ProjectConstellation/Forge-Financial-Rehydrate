@@ -213,3 +213,24 @@ Executed 2026-10-07 05:5x UTC: $23.27 USD → 23.27 USDC via Advanced Trade conv
 COMPLETED); $5.00 USD kept liquid for the Coinbase One fee (first charge 2026-10-14). Rewards are verified hourly from wallet
 truth (unexplained USDC increases); before any LIVE trading session FORGE converts USDC back to USD (live-start guard).
 Spot strategy trading stays behind the readiness gate: no strategy has validated edge on clean data yet.
+
+## OP-021 — 2026-10-07 — Starting-capital addendum: dynamic treasury regime (BOOTSTRAP → RESERVE)
+Operator: until treasury reaches $50, FORGE may deploy essentially the entire treasury when calibrated evidence justifies it
+(confidence-weighted: low → small, medium → moderate, high → large, exceptional → may use nearly all deployable capital);
+never force all capital into one trade to chase the hourly target. At $50 a $25 protected reserve activates (first $25 =
+survival capital, everything above deployable); reserve may grow with treasury.
+Implemented: `src/forge/treasury/regime.py` — BOOTSTRAP while high-water mark < $50 (reserve $0); RESERVE latched once HWM
+≥ $50 (reserve $25; ≥ $100 HWM → max($25, 25% of HWM)); tiers by INDEPENDENT-cluster evidence: LOW (n≥10, P≥0.80) 0.10
+Kelly / 10% per cluster, MEDIUM (n≥10, P≥0.90, edge≥2¢/$) 0.25 / 25%, HIGH (n≥20, P≥0.95, ≥3¢) 0.50 / 50%, EXCEPTIONAL
+(n≥40, P≥0.99) 1.0 / 90%. Circuit breakers (model-failure protection, not profit caps): bootstrap hourly 15% / daily 35% of
+treasury; reserve regime 20% / 50% of deployable, never into the reserve.
+
+## OP-022 — 2026-10-07 — Ambition directive: ≥ $1/h TRUE NET across the whole ecosystem, rising with capital and edge
+Operator: optimise FORGE PROFIT VELOCITY (expected true net profit per capital-hour) across every legitimate rail; target
+≥ $1/h true net, ratcheting upward as treasury and proven edge grow; never strategically stagnant.
+Implemented: `src/forge/treasury/velocity.py` (loop every 5 min, `/api/velocity`, tool `get_profit_velocity`, headline in
+every Hermes role brief): realized true-net $/h 1h/4h/24h (live fills + settlements + verified idle rewards − paid
+intelligence − membership), expected $/h frontier (live-now / proven-LCB / potential) solved under capital-lock (Little's
+law), drawdown-probability, Kelly-tier and liquidity constraints; capital utilization, recycle time, profit per deployed
+dollar, opportunity cost, scaling curve ($28→$1000), and ranked levers (marginal $/h of capital, proof, flow). Target =
+max($1/h, ratchet ×1.25 after each 24 h at/above target, proven frontier).

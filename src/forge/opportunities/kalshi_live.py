@@ -3,13 +3,15 @@
 Live orders are placed only when ALL hold:
   1. credentials present (KALSHI_API_KEY_ID + private key file) and KALSHI_LIVE != "off";
   2. FORGE global trading state is RUNNING (STOP ALL overrides everything);
-  3. the out-of-sample evidence ladder passes (only TAKE_THRESH signals settled AFTER pre-registration count):
-       n ≥ 10, P(μ>0) ≥ 0.90, mean ≥ 2¢  → 1 contract
-       n ≥ 20, P(μ>0) ≥ 0.95, mean ≥ 3¢  → 2 contracts
-       n ≥ 40, P(μ>0) ≥ 0.99, mean ≥ 2¢  → 3 contracts
-     and the most recent 30 outcomes are not decaying (P ≥ 0.70, mean > 0);
-  4. risk caps: hourly realized loss > −$1.00 (soft stop, 1 h pause), daily > −$3.00 (hard stop for the day),
-     open cost ≤ $3.00 (scales ×2 / ×3 with the ladder), signal fresh (≤ 60 s), IOC limit never worse than the signal ask;
+  3. the out-of-sample evidence ladder passes on INDEPENDENT CLUSTERS (signals on the same underlying, expiry and
+     direction count once — 8 correlated NO bets on one hour are one bet):
+       n ≥ 10, P(μ>0) ≥ 0.80, mean > 0   → 1 contract (LOW: probe)
+       n ≥ 10, P(μ>0) ≥ 0.90, mean ≥ 2¢  → 2 (MEDIUM)      n ≥ 20, P ≥ 0.95, mean ≥ 3¢ → 3 (HIGH)
+       n ≥ 40, P(μ>0) ≥ 0.99, mean ≥ 2¢  → sized by the profit-velocity frontier (EXCEPTIONAL, ≤ 50/signal)
+     and the most recent 30 clusters are not decaying (P ≥ 0.70, mean > 0);
+  4. treasury regime (OP-021): BOOTSTRAP (< $50 HWM) may deploy essentially the whole Kalshi balance; RESERVE never
+     touches the protected reserve; circuit breakers hourly 15% / daily 35% of treasury (bootstrap), signal fresh
+     (≤ 60 s), IOC limit never worse than the signal ask;
   5. live-vs-shadow CUSUM (k = 1¢, h = 8¢) not tripped.
 Every order is idempotent (client_order_id derived from the signal id) and recorded; P&L comes from actual fills and the
 market's real settlement — never from the model.
@@ -29,10 +31,9 @@ from typing import Any
 log = logging.getLogger("forge.kalshi_live")
 
 KIND = "TAKE_THRESH"
-LADDER = ((40, 0.99, 0.02, 3), (20, 0.95, 0.03, 2), (10, 0.90, 0.02, 1))
-HOURLY_SOFT_STOP = -1.00
-DAILY_HARD_STOP = -3.00
-OPEN_COST_CAP = 3.00
+# (min independent clusters, min P(mean>0), min mean $/contract, max contracts/signal; 0 = sized by the velocity frontier)
+LADDER = ((40, 0.99, 0.02, 0), (20, 0.95, 0.03, 3), (10, 0.90, 0.02, 2), (10, 0.80, 0.0, 1))
+FRONTIER_MAX = 50
 CUSUM_K, CUSUM_H = 0.01, 0.08
 
 
@@ -56,8 +57,9 @@ def ladder_contracts(pnls: list[float]) -> tuple[int, str]:
             return 0, f"decay stop: last-30 mean {rm*100:+.1f}¢ P={rp:.2f}"
     for need_n, need_p, need_m, k in LADDER:
         if n >= need_n and p >= need_p and m >= need_m:
-            return k, f"ladder n={n} mean {m*100:+.1f}¢ P={p:.3f} → {k} contract(s)"
-    return 0, f"gate closed: n={n} mean {m*100:+.1f}¢ P={p:.2f} (need n≥10, P≥0.90, mean≥2¢)"
+            k = k or FRONTIER_MAX
+            return k, f"ladder n={n} clusters mean {m*100:+.1f}¢ P={p:.3f} → up to {k} contract(s)"
+    return 0, f"gate closed: n={n} clusters mean {m*100:+.1f}¢ P={p:.2f} (need ≥10 independent clusters, P≥0.80, mean>0)"
 
 
 def cusum(diffs: list[float], k: float = CUSUM_K) -> float:
@@ -88,9 +90,10 @@ class KalshiLive:
     # ------------------------------------------------------------------ evidence + risk
     def oos_pnls(self) -> list[float]:
         # the TAKE_THRESH kind only exists since its pre-registration → every settled signal is out-of-sample
-        rows = self.f.db.query("SELECT pnl FROM crossrail_signals WHERE kind = ? AND status = 'SETTLED' ORDER BY settled_ts",
-                               (KIND,))
-        return [float(r["pnl"]) for r in rows]
+        from forge.treasury.velocity import cluster_unit_pnls
+        rows = self.f.db.query("SELECT ticker, underlying, close_ts, side, pnl FROM crossrail_signals WHERE kind = ? AND "
+                               "status = 'SETTLED' ORDER BY settled_ts", (KIND,))
+        return cluster_unit_pnls(rows)          # one value per independent cluster (correlation-safe evidence)
 
     def realized(self, since: float) -> float:
         return float(self.f.db.scalar("SELECT COALESCE(SUM(pnl),0) FROM kalshi_live_orders WHERE settled_ts >= ?",
@@ -110,11 +113,13 @@ class KalshiLive:
         if time.time() < self.paused_until:
             return 0, f"paused until {time.strftime('%H:%M', time.gmtime(self.paused_until))} UTC (loss stop / CUSUM)"
         day0 = time.time() - (time.time() % 86400)
-        if self.realized(day0) <= DAILY_HARD_STOP:
-            return 0, "daily hard stop (−$3) reached"
-        if self.realized(time.time() - 3600) <= HOURLY_SOFT_STOP:
+        reg = self.regime()
+        day_pnl, hour_pnl = self.realized(day0), self.realized(time.time() - 3600)
+        if day_pnl < 0 and day_pnl <= -reg["daily_loss_stop"]:
+            return 0, f"daily circuit breaker (−${reg['daily_loss_stop']:.2f}, {reg['regime']}) reached"
+        if hour_pnl < 0 and hour_pnl <= -reg["hourly_loss_stop"]:
             self.paused_until = time.time() + 3600
-            return 0, "hourly soft stop (−$1): paused 1 h"
+            return 0, f"hourly circuit breaker (−${reg['hourly_loss_stop']:.2f}): paused 1 h"
         diffs = [r["live_minus_shadow"] for r in self.f.db.query(
             "SELECT (pnl / fill_count) - shadow_pnl AS live_minus_shadow FROM kalshi_live_orders WHERE status = 'SETTLED' "
             "AND fill_count > 0 AND shadow_pnl IS NOT NULL ORDER BY settled_ts")]
@@ -122,6 +127,24 @@ class KalshiLive:
             self.paused_until = time.time() + 3 * 3600
             return 0, "live/shadow CUSUM divergence: paused 3 h for diagnosis"
         return ladder_contracts(self.oos_pnls())
+
+    def regime(self) -> dict[str, Any]:
+        from forge.treasury import regime as treg
+        v = self.f.db.kv_get("velocity") or {}
+        tr = (v.get("treasury") or {}).get("total")
+        if not tr:
+            tr = float(self.f.db.scalar("SELECT account_total_usd FROM equity_series ORDER BY ts DESC LIMIT 1") or 0) + \
+                float((self.status or {}).get("balance_usd") or 0)
+        st = self.f.db.kv_get("treasury.regime") or {}
+        return treg.regime_for(float(tr), max(float(st.get("hwm", 0)), float(tr)))
+
+    def frontier_units(self) -> float | None:
+        """Contracts per signal the profit-velocity frontier allocates to this stream (live-now scenario)."""
+        v = self.f.db.kv_get("velocity") or {}
+        for st in ((v.get("frontier") or {}).get("live_now") or {}).get("streams", []):
+            if st.get("stream") == f"kalshi.{KIND}":
+                return float(st.get("units") or 0)
+        return None
 
     # ------------------------------------------------------------------ execution
     async def on_signal(self, sig: dict[str, Any]) -> None:
@@ -133,7 +156,12 @@ class KalshiLive:
         if time.time() - float(sig["ts"]) > 60:
             return
         price, cost_each = float(sig["price"]), float(sig["price"]) + float(sig["fee"])
-        cap = OPEN_COST_CAP * max(1, n)
+        fu = self.frontier_units()
+        if fu is not None and fu >= 1:
+            n = min(n, int(fu))                         # confidence-weighted size from the velocity frontier
+        reg = self.regime()
+        bal = float((self.status or {}).get("balance_usd") or 0) or reg["deployable"]
+        cap = min(bal, reg["deployable"]) * 0.95         # bootstrap: whole treasury usable; reserve regime: above reserve
         n = min(n, int((cap - self.open_cost()) // max(cost_each, 0.01)))
         if n <= 0:
             return

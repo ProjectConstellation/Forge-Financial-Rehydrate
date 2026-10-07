@@ -41,6 +41,9 @@ TOOLS = [
         "plan now vs if-unblocked, fixed costs (Coinbase One).", {}),
     _fn("get_crossrail_evidence", "Kalshi↔Coinbase prediction engine evidence: Brier model/market/stacked, settled shadow P&L by "
         "signal kind, lead/lag, edge half-life, RTI-proxy error, calibrator weights.", {}),
+    _fn("get_profit_velocity", "FORGE PROFIT VELOCITY (the master KPI): realized true-net $/h (1h/4h/24h), expected $/h "
+        "(live-now / proven / potential frontier), target, treasury regime, binding constraint, per-stream evidence tiers, "
+        "scaling curve and ranked levers (marginal $/h of capital, proof, flow). Optimise research toward its top levers.", {}),
     _fn("get_shadow_rails", "Paper results of non-core rails (stable peg maker, stable triangle, listing discovery).", {}),
     _fn("get_listing_events", "Recent Coinbase product/listing/status/doc-page discovery events.", {"limit": {"type": "integer"}}),
     _fn("get_intelligence_budget", "Live DeepSeek balance, 24h pace/headroom, value-per-$ by role (incl. Hermes roles).", {}),
@@ -248,6 +251,13 @@ class ToolRouter:
         sc = self.f.db.kv_get("crossrail.scorecard") or {}
         return {**sc, "calibrator": self.f.db.kv_get("crossrail.calibrator"),
                 "mapping": (self.f.db.kv_get("crossrail.mapping") or {}).get("mapped")}
+
+    def t_get_profit_velocity(self) -> dict[str, Any]:
+        v = dict(self.f.db.kv_get("velocity") or {})
+        fr = v.pop("frontier", {}) or {}
+        v["frontier"] = {k: {kk: vv for kk, vv in (f or {}).items() if kk != "streams"} | {"streams": (f or {}).get("streams", [])[:8]}
+                         for k, f in fr.items()}
+        return v
 
     def t_get_shadow_rails(self) -> dict[str, Any]:
         rows = self.f.db.query("SELECT rail, COUNT(*) n, SUM(pnl_usd) pnl, AVG(pnl_usd / (entry * qty)) mean_ret, "

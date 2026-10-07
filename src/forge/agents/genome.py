@@ -171,7 +171,25 @@ class PromptGenomes:
                 "shadow_rails": shadow, "quarantined_markets": q,
                 "forge_internal_brain_pace": db.kv_get("brain.pace"),
                 "your_budget": self._hermes_budget(), "hermes_mode": (db.kv_get("hermes.mode") or {}).get("mode"),
-                "evaluation_queue": len(db.kv_get("brain.candidate_queue", []) or [])}
+                "evaluation_queue": len(db.kv_get("brain.candidate_queue", []) or []),
+                "profit_velocity": self._velocity_headline()}
+
+    def _velocity_headline(self) -> dict[str, Any]:
+        """The master KPI every role optimises: true-net $/h vs target, binding constraint, top levers (tool:
+        get_profit_velocity for the full frontier)."""
+        v = self.db.kv_get("velocity") or {}
+        if not v:
+            return {}
+        fr = v.get("frontier") or {}
+        return {"target_usd_per_h": v.get("target_usd_per_h"), "regime": (v.get("regime") or {}).get("regime"),
+                "treasury": (v.get("treasury") or {}).get("total"),
+                "realized_usd_per_h": {k: round((v.get("realized") or {}).get(k, {}).get("usd_per_h", 0.0), 4)
+                                       for k in ("1h", "4h", "24h")},
+                "expected_usd_per_h": {k: round(x, 4) for k, x in (v.get("expected_usd_per_h") or {}).items()},
+                "binding": {k: (fr.get(k) or {}).get("binding") for k in ("live_now", "proven", "potential")},
+                "diagnosis": v.get("diagnosis"),
+                "top_levers": [{"action": p["action"], "delta_usd_per_h": round(p["delta_usd_per_h"], 4)}
+                               for p in (v.get("priorities") or [])[:5]]}
 
     def _hermes_budget(self) -> dict[str, Any]:
         try:
