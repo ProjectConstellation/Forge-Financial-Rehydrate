@@ -1,1 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#0b0d12"/><path d="M128 330h256l-28 56H156z" fill="#7c9cff"/><path d="M176 150h196l-30 60h-62v120h-60V210h-44z" fill="#ff8a3d"/><circle cx="380" cy="128" r="18" fill="#ffb547"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="75%"><stop offset="0" stop-color="#1b1430"/><stop offset="1" stop-color="#07090d"/></radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff3b0"/><stop offset=".45" stop-color="#ffc83d"/><stop offset="1" stop-color="#e08a00"/></linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5b6578"/><stop offset="1" stop-color="#1c2230"/></linearGradient>
+    <linearGradient id="wing" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#22e39a" stop-opacity="0"/><stop offset="1" stop-color="#22e39a"/></linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ffd25a" stop-opacity=".55"/><stop offset="1" stop-color="#ffd25a" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <circle cx="256" cy="232" r="170" fill="url(#glow)"/>
+  <!-- money wings -->
+  <path d="M150 214c-52-10-88-44-104-86 34 16 70 20 104 14-26 12-36 30-36 46 14-8 30-10 44-6z" fill="url(#wing)" opacity=".9"/>
+  <path d="M150 214c-52-10-88-44-104-86 34 16 70 20 104 14-26 12-36 30-36 46 14-8 30-10 44-6z" fill="url(#wing)" opacity=".9" transform="matrix(-1 0 0 1 512 0)"/>
+  <!-- gold coin -->
+  <circle cx="256" cy="214" r="92" fill="url(#gold)" stroke="#a86400" stroke-width="6"/>
+  <circle cx="256" cy="214" r="72" fill="none" stroke="#fff3b0" stroke-opacity=".55" stroke-width="4"/>
+  <text x="256" y="250" text-anchor="middle" font-family="Georgia,serif" font-weight="700" font-size="112" fill="#7a4300">$</text>
+  <!-- hammer -->
+  <g transform="rotate(-32 360 120)"><rect x="300" y="78" width="104" height="44" rx="8" fill="url(#steel)" stroke="#8792a8" stroke-width="3"/>
+    <rect x="344" y="118" width="16" height="96" rx="6" fill="#b06a2c"/></g>
+  <!-- sparks -->
+  <g stroke="#ffd25a" stroke-width="7" stroke-linecap="round"><path d="M332 132l22-20"/><path d="M344 156l30-4"/><path d="M318 118l4-28"/></g>
+  <!-- anvil -->
+  <path d="M136 322h240c0 22-20 34-46 36v26h34v26H148v-26h34v-26c-26-2-46-14-46-36z" fill="url(#steel)" stroke="#8792a8" stroke-width="3"/>
+  <path d="M376 322h36c-8 14-22 22-36 22z" fill="url(#steel)"/>
+</svg>

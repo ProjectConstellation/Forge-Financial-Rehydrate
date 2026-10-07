@@ -122,8 +122,8 @@ class CoinbaseConfig(BaseModel):
     rest_base: str = "https://api.coinbase.com"
     ws_url: str = "wss://advanced-trade-ws.coinbase.com"
     quote_currencies: list[str] = Field(default_factory=lambda: ["USD", "USDC"])
-    universe_max: int = 30
-    ws_symbols_max: int = 30
+    universe_max: int = 60
+    ws_symbols_max: int = 60
     default_maker_fee: Decimal = Decimal("0.005")   # verified Intro tier 2026-10-06
     default_taker_fee: Decimal = Decimal("0.009")
 

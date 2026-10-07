@@ -143,7 +143,21 @@ def snapshot(forge: Any) -> dict[str, Any]:
         "intelligence": forge.brain.spend_summary() if forge.brain else {"available": False},
         "compute": forge.compute.summary() if forge.compute else {"available": False},
         "deepseek_sentinel": db.kv_get("deepseek.sentinel"), "improvement_cycles": forge.improvement_runs,
-        "uptime_s": round(time.time() - forge.started), "workers": workers(forge), "lights": lights(forge, positions)})
+        "uptime_s": round(time.time() - forge.started), "workers": workers(forge), "lights": lights(forge, positions),
+        "throughput": {"genomes_total": int(db.kv_get("stats.genomes_total", 0) or 0), "genomes_last_cycle": forge.genomes_last_cycle,
+                       "cycles": forge.improvement_runs, "feed_messages": forge.stream.quality.messages,
+                       "markets_streaming": len(forge.stream.symbols), "markets_discovered": len(forge.market.products),
+                       "opportunities_24h": db.scalar("SELECT COUNT(*) FROM opportunities WHERE ts > datetime('now','-1 day')") or 0,
+                       "paper_trades_open": len(positions)},
+        "today": {"realized_net_usd": windows_today(db, book), "unrealized_usd": sum((p["live_pnl_usd"] or 0) for p in positions)}})
+
+
+def windows_today(db: Any, book: str) -> float:
+    trade = float(db.scalar("SELECT COALESCE(SUM(CAST(realized_pnl_usd AS REAL) - CAST(fees_usd AS REAL)),0) FROM positions "
+                            "WHERE book = ? AND status='CLOSED' AND closed_at > date('now')", (book,)) or 0.0)
+    opex = float(db.scalar("SELECT COALESCE(SUM(CAST(amount_usd AS REAL)),0) FROM ledger_entries WHERE book = ? AND "
+                           "account LIKE 'OPEX:%' AND ts > date('now')", (book,)) or 0.0)
+    return trade - opex
 
 
 def workers(forge: Any) -> list[dict[str, Any]]:

@@ -1,36 +1,66 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#07090d"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/static/icon.svg"><link rel="apple-touch-icon" href="/static/icon.svg"><title>FORGE</title><link rel="stylesheet" href="/static/styles.css"></head>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07090d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/static/icon.svg">
+<link rel="apple-touch-icon" href="/static/icon.svg">
+<title>FORGE · Forging money</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
 <body>
-<header class="top"><div class="brand"><img src="/static/icon.svg" alt=""><div><b>FORGE</b><small id="sub">connecting…</small></div></div>
-<div class="top-right"><span id="live" class="livedot"></span><span id="modeb" class="pill">…</span><button id="logout" class="icon-btn" title="Sign out">⎋</button></div></header>
+<header class="top">
+  <div class="brand"><img src="/static/icon.svg" alt=""><div><b>FORGE</b><small id="sub">Find Opportunities · Reinvest · Grow · Evolve</small></div></div>
+  <div class="top-right"><span id="livepill" class="livepill"><i></i><span id="livetxt">CONNECTING</span></span>
+    <span id="modeb" class="pill">…</span><button id="logout" class="icon-btn" title="Sign out">⎋</button></div>
+</header>
 <a id="refill" class="refill" href="https://platform.deepseek.com/top_up" target="_blank" rel="noopener" hidden></a>
-<section id="lights" class="lights"></section>
-<nav class="tabs" id="tabs"><button data-t="overview" class="on">Overview</button><button data-t="workers">Workers</button><button data-t="strategies">Strategies</button><button data-t="markets">Markets</button><button data-t="timeline">Live feed</button><button data-t="control">Control</button></nav>
+
 <main>
-<div class="tab on" id="t-overview">
-  <section class="hero card glow">
-    <div><label>Total account balance <span class="muted tiny">(Coinbase, live prices)</span></label><div id="acct" class="huge">—</div>
-      <div class="row3"><div><label>FORGE book</label><b id="book">—</b></div><div><label>Invested now</label><b id="inv">—</b></div><div><label>Cash ready</label><b id="cash">—</b></div></div></div>
-    <svg id="chart" class="chart" viewBox="0 0 600 140" preserveAspectRatio="none"></svg>
-    <div id="doing" class="doing">—</div>
+  <!-- 1. THE MONEY -->
+  <section class="money card">
+    <div class="money-label"><span class="spark">⚒</span> FORGED TODAY <span class="muted tiny">true net · live</span></div>
+    <div class="counter"><span id="mcounter">$0.00</span><div id="coins" class="coins"></div></div>
+    <div class="money-sub"><span>realized <b id="m_real">$0.00</b></span><span>open positions <b id="m_open">$0.00</b></span><span>pace <b id="m_pace">$0.00</b>/h</span></div>
+    <div class="money-grid">
+      <div><label>Total account</label><b id="acct">—</b><small>Coinbase · live prices</small></div>
+      <div><label>Invested now</label><b id="inv">—</b><small id="inv_s">—</small></div>
+      <div><label>Cash ready</label><b id="cash">—</b><small id="res_s">—</small></div>
+    </div>
+    <svg id="chart" class="chart" viewBox="0 0 600 120" preserveAspectRatio="none"></svg>
+    <div id="doing" class="doing">Connecting to the engine…</div>
   </section>
+
+  <!-- 2. LIVE SYSTEMS -->
+  <section class="card"><h3>Live systems <span class="muted tiny">what is working to earn — this second</span></h3>
+    <div id="systems" class="systems"></div></section>
+
+  <!-- 3. EARNINGS WINDOWS -->
   <section class="earn-grid" id="earn"></section>
-  <section class="kpis" id="kpis"></section>
-  <section class="card"><h3>Open positions <span class="muted tiny">live mark-to-market · 🔒 = profit locked</span></h3><div id="positions"></div></section>
-</div>
-<div class="tab" id="t-workers"><section class="card"><h3>Who is working on what — right now</h3><div id="workers" class="workers"></div></section>
-  <section class="card"><h3>Engine loops (24/7 supervision)</h3><div id="loops" class="chips"></div></section>
-  <section class="card"><h3>Intelligence & compute</h3><div id="intel" class="kpis"></div></section></div>
-<div class="tab" id="t-strategies"><section class="card"><h3>Strategy population</h3><div id="pop" class="chips"></div><div id="strats"></div></section>
-  <section class="card"><h3>Opportunity feed</h3><div id="opps"></div></section></div>
-<div class="tab" id="t-markets"><section class="card"><h3>Income rails</h3><div id="rails"></div></section>
-  <section class="card"><h3>Market pulse</h3><div id="pulse" class="kpis"></div></section></div>
-<div class="tab" id="t-timeline"><section class="card"><h3>Live feed — every decision as it happens</h3><div id="timeline" class="timeline"></div></section></div>
-<div class="tab" id="t-control"><section class="card danger"><h3>Founder controls</h3><p class="muted">FORGE runs autonomously. These are protected overrides.</p>
-  <button id="stop" class="stop">STOP ALL TRADING</button>
-  <div class="row"><button id="resume" class="ghost">Resume trading…</button><button id="cashout" class="ghost">Cash out to USD…</button></div>
-  <div id="ctlmsg" class="muted"></div></section></div>
+
+  <!-- 4. POSITIONS -->
+  <section class="card"><h3>Open positions <span class="muted tiny">live · 🔒 profit locked</span></h3><div id="positions"></div></section>
+
+  <nav class="tabs" id="tabs"><button data-t="strategies" class="on">Strategies</button><button data-t="opps">Opportunities</button>
+    <button data-t="markets">Markets</button><button data-t="feed">Live feed</button><button data-t="costs">Costs</button><button data-t="control">Control</button></nav>
+  <div class="tab on" id="t-strategies"><section class="card"><div id="pop" class="chips"></div><div id="strats"></div></section></div>
+  <div class="tab" id="t-opps"><section class="card"><div id="opps"></div></section></div>
+  <div class="tab" id="t-markets"><section class="card"><h3>Income rails</h3><div id="rails"></div></section>
+    <section class="card"><h3>Market pulse</h3><div id="pulse" class="kpis"></div></section></div>
+  <div class="tab" id="t-feed"><section class="card"><div id="timeline" class="timeline"></div></section></div>
+  <div class="tab" id="t-costs"><section class="card"><div id="kpis" class="kpis"></div></section>
+    <section class="card"><h3>Engine loops (24/7 supervision)</h3><div id="loops" class="chips"></div></section></div>
+  <div class="tab" id="t-control"><section class="card danger"><h3>Founder controls</h3>
+    <p class="muted">FORGE runs autonomously. These are protected overrides.</p>
+    <button id="stop" class="stop">STOP ALL TRADING</button>
+    <div class="row"><button id="resume" class="ghost">Resume trading…</button><button id="cashout" class="ghost">Cash out to USD…</button></div>
+    <div id="ctlmsg" class="muted"></div></section></div>
 </main>
 <footer id="foot" class="muted tiny">—</footer>
-<script src="/static/app.js"></script></body></html>
+<script src="/static/app.js"></script>
+</body>
+</html>

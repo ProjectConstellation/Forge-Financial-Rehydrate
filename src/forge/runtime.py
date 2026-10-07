@@ -105,6 +105,8 @@ class Forge:
         self.account: dict[str, Any] = {"total_usd": None, "cash_usd": None, "assets": [], "ts": 0.0}
         self.workers: dict[str, dict[str, Any]] = {}      # live worker board for the founder portal
         self.last_improvement_ts = 0.0
+        self.genomes_total = 0
+        self.genomes_last_cycle = 0
         self.events: deque[dict[str, Any]] = deque(maxlen=500)
         self.tasks: list[asyncio.Task[Any]] = []
         self.pool: ProcessPoolExecutor | None = None
@@ -428,11 +430,15 @@ class Forge:
         if st not in tradable or self.gateway is None:
             self._set_opp(oid, "OBSERVED", f"{st.value}: shadow observation (would-be trade)")
             return
+        comps["breadth_at_entry"] = self.breadth.get("up_frac")
         if self.db.kv_get(f"strategy.sleeve.{g.id}") == "beta":
             b = self.breadth
             if b["up_frac"] < 0.55 or b["btc_regime"] in ("TREND_DOWN", "PANIC_SELLING"):
-                self._set_opp(oid, "REJECTED", f"beta sleeve kill switch: breadth {b['up_frac']:.0%} up, BTC {b['btc_regime']}")
-                return
+                if self.book != "paper":
+                    self._set_opp(oid, "REJECTED", f"beta sleeve kill switch: breadth {b['up_frac']:.0%} up, BTC {b['btc_regime']}")
+                    return
+                # paper explores, live exploits: gather evidence on whether the kill switch is needed for this strategy
+                comps["paper_exploration"] = True
         if va.adjusted_return <= 0:
             self._set_opp(oid, "REJECTED", va.rationale)
             await self.say("Allocator", f"{sym} {g.family}: WAIT — {va.rationale}", strategy=g.id, opportunity=oid)
@@ -653,6 +659,9 @@ class Forge:
 
     async def _absorb(self, results: dict[str, Any], interval: int) -> None:
         passed = 0
+        self.genomes_last_cycle = int(results.get("evaluated", 0))
+        self.genomes_total += self.genomes_last_cycle
+        self.db.kv_set("stats.genomes_total", int(self.db.kv_get("stats.genomes_total", 0) or 0) + self.genomes_last_cycle)
         near = self.db.kv_get("evolution.near_miss", []) or []
         for r in results.get("candidates", []):
             g = Genome.model_validate(r["genome"])

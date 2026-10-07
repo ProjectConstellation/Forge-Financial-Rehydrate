@@ -58,3 +58,35 @@ footer{text-align:center;padding:16px}
 .btn-primary{padding:13px;border-radius:12px;border:none;background:linear-gradient(90deg,var(--acc),#3fd6a0);color:#061016;font-weight:800;font-size:15px;cursor:pointer}.err{color:var(--bad);min-height:18px}
 @media (max-width:820px){.lights{grid-template-columns:repeat(3,1fr)}.earn-grid{grid-template-columns:repeat(2,1fr)}.hero .huge{font-size:36px}}
 @media (max-width:420px){.lights{grid-template-columns:repeat(2,1fr)}.row3 b{font-size:15px}}
+
+/* ===== v3: money-first live design ===== */
+.livepill{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);font-size:11px;font-weight:800;letter-spacing:.08em;background:var(--bg2);color:var(--muted)}
+.livepill i{width:8px;height:8px;border-radius:50%;background:#555}.livepill.on{color:var(--ok);border-color:var(--okd)}.livepill.on i{background:var(--ok);animation:pulse 1.4s infinite}
+.livepill.off{color:var(--bad);border-color:#4a1820}.livepill.off i{background:var(--bad);animation:pulseR .9s infinite}
+.money{position:relative;overflow:hidden;text-align:center;padding:18px 14px 12px;border-color:#3a2e10;
+  background:radial-gradient(600px 220px at 50% 0%,rgba(255,200,61,.14),transparent 70%),var(--card);box-shadow:0 0 60px rgba(255,200,61,.08)}
+.money-label{font-size:12px;font-weight:800;letter-spacing:.14em;color:#ffd77a}.spark{display:inline-block;animation:strike 2.4s infinite}
+@keyframes strike{0%,80%,100%{transform:rotate(0)}85%{transform:rotate(-28deg)}90%{transform:rotate(8deg)}}
+.counter{position:relative;font-size:clamp(46px,13vw,84px);font-weight:900;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.05;margin:6px 0 4px;
+  background:linear-gradient(180deg,#fff6c9,#ffc83d 55%,#e08a00);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 30px rgba(255,200,61,.25)}
+.counter.neg{background:linear-gradient(180deg,#ffd0d8,#ff8aa0);-webkit-background-clip:text;background-clip:text}
+.counter.bump{animation:bump .6s}@keyframes bump{30%{transform:scale(1.06)}}
+.coins{position:absolute;inset:0;pointer-events:none}.coin{position:absolute;top:40%;font-size:22px;animation:coin 1.4s ease-out forwards}
+@keyframes coin{0%{opacity:0;transform:translateY(0) scale(.6)}20%{opacity:1}100%{opacity:0;transform:translateY(-120px) scale(1.2) rotate(30deg)}}
+.money-sub{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:13px}.money-sub b{color:var(--fg);font-variant-numeric:tabular-nums}
+.money-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px;text-align:left}
+.money-grid div{background:rgba(13,17,24,.7);border:1px solid var(--line);border-radius:14px;padding:10px}
+.money-grid b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.money-grid small{color:var(--muted);font-size:11px}
+.systems{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.sys{position:relative;overflow:hidden;background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:12px 12px 10px}
+.sys .h{display:flex;align-items:center;gap:9px}.sys .h i{flex:0 0 12px;height:12px;border-radius:50%}.sys .h b{font-size:13.5px;letter-spacing:.02em}
+.sys .h .st{margin-left:auto;font-size:10.5px;font-weight:800;letter-spacing:.08em}
+.sys.green{border-color:var(--okd)}.sys.green .h i{background:var(--ok);animation:pulse 1.4s infinite}.sys.green .st{color:var(--ok)}
+.sys.amber .h i{background:var(--warn);animation:pulseA 1.8s infinite}.sys.amber .st{color:var(--warn)}
+.sys.blue .h i{background:var(--blue);animation:pulseB 2s infinite}.sys.blue .st{color:var(--blue)}
+.sys.red{border-color:#4a1820}.sys.red .h i{background:var(--bad);animation:pulseR .9s infinite}.sys.red .st{color:var(--bad)}
+.sys .d{margin-top:7px;font-size:13px}.sys .m{margin-top:3px;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sys.green::after,.sys.busy::after{content:"";position:absolute;left:-40%;bottom:0;height:2px;width:40%;background:linear-gradient(90deg,transparent,var(--ok),transparent);animation:scan 1.8s linear infinite}
+.meter{display:flex;gap:3px;margin-top:8px;height:16px;align-items:flex-end}.meter i{flex:1;border-radius:2px;background:#26304a;transition:height .5s}
+.sys.green .meter i{background:linear-gradient(180deg,var(--ok),#0f7a55)}
+@media (max-width:620px){.money-grid{grid-template-columns:1fr 1fr 1fr}.money-grid b{font-size:16px}.systems{grid-template-columns:1fr}}
