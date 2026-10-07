@@ -104,3 +104,15 @@ def test_listing_diff():
     assert ("C-USD", "NEW_PRODUCT") in ev and ("B-USD", "TRADING_ENABLED") in ev
     assert ListingSentinel.diff({}, new) == []                     # first snapshot is a baseline, not 900 "listings"
     assert ("A-USD", "DELISTED") in {(p, k) for p, k, _, _ in ListingSentinel.diff(new, {"B-USD": new["B-USD"], "C-USD": new["C-USD"]})}
+
+
+def test_genome_schema_drift_is_repaired_not_fatal():
+    from forge.strategies.registry import repair_genome
+    from forge.strategies.seeds import seed_genomes
+    d = seed_genomes()[0].model_dump(mode="json")
+    d["exit"]["lock_frac"] = 0.1784                 # the exact production row that stopped evolution on 2026-10-07
+    d["exit"]["time_stop_bars"] = 99999
+    g, fixes = repair_genome(d)
+    assert g is not None and g.exit.lock_frac == 0.25 and g.exit.time_stop_bars == 2016 and len(fixes) == 2
+    bad = dict(d); bad["entry"] = "nonsense"
+    assert repair_genome(bad)[0] is None

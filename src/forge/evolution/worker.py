@@ -51,7 +51,8 @@ def search_on_raw(raw: dict[str, dict[str, Any]], interval: int, parents: list[d
         return {"candidates": [], "evaluated": 0, "seconds": 0.0, "note": "insufficient data", "where": "local"}
     cost = CostModel(maker_fee=fees.get("maker", 0.005), taker_fee=fees.get("taker", 0.009))
     llm = [Genome.model_validate(p).model_copy(update={"interval_s": interval}) for p in (must_eval or [])]
-    seeds = [Genome.model_validate(p) for p in parents] or seed_genomes()
+    from forge.strategies.registry import repair_genome
+    seeds = [x for x in (repair_genome(dict(p))[0] for p in parents) if x is not None] or seed_genomes()
     seeds = llm + seeds
     if len(seeds) < 6:
         extra = [g for g in seed_genomes() if g.id not in {s.id for s in seeds}]

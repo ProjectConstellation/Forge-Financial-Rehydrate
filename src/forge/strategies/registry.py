@@ -6,7 +6,9 @@ Nothing is ever deleted — retired/hibernating genomes remain queryable and res
 
 from __future__ import annotations
 
+import contextlib
 import json
+import logging
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -14,6 +16,7 @@ from typing import Any
 from forge.persistence.db import Database, dumps
 from forge.strategies.genome import Genome
 
+log = logging.getLogger("forge.registry")
 
 class State(StrEnum):
     PRODUCTION = "PRODUCTION"      # live capital (Earning Loop)
@@ -69,7 +72,22 @@ class StrategyRegistry:
 
     def get(self, sid: str) -> Genome | None:
         r = self.db.query_one("SELECT genome FROM strategies WHERE id = ?", (sid,))
-        return Genome.model_validate(json.loads(r["genome"])) if r else None
+        return self._load(r["genome"], sid) if r else None
+
+    def _load(self, raw: str, sid: str) -> Genome | None:
+        """Schema-drift self-healing: a stored genome that violates a (since tightened) bound is repaired by clamping to the
+        bound and re-saved; an unrepairable genome is quarantined (RETIRED) — one bad row can never stop evolution."""
+        g, repaired = repair_genome(json.loads(raw))
+        if g is None:
+            log.warning("genome %s unrepairable — quarantined (RETIRED)", sid)
+            with contextlib.suppress(Exception):
+                self.db.execute("UPDATE strategies SET population = 'RETIRED' WHERE id = ?", (sid,))
+            return None
+        if repaired:
+            log.warning("genome %s repaired after schema drift: %s", sid, repaired)
+            with contextlib.suppress(Exception):
+                self.db.execute("UPDATE strategies SET genome = ? WHERE id = ?", (g.model_dump_json(), sid))
+        return g
 
     def state(self, sid: str) -> State | None:
         r = self.db.query_one("SELECT population FROM strategies WHERE id = ?", (sid,))
@@ -81,7 +99,12 @@ class StrategyRegistry:
             rows = self.db.query(q, tuple(s.value for s in states))
         else:
             rows = self.db.query("SELECT * FROM strategies")
-        return [(Genome.model_validate(json.loads(r["genome"])), State(r["population"]), r) for r in rows]
+        out = []
+        for r in rows:
+            g = self._load(r["genome"], r["id"])
+            if g is not None:
+                out.append((g, State(r["population"]), r))
+        return out
 
     def exists_dna(self, dna_hash: str) -> str | None:
         r = self.db.query_one("SELECT id FROM strategies WHERE genome_hash = ?", (dna_hash,))
@@ -131,3 +154,34 @@ class StrategyRegistry:
     def counts(self) -> dict[str, int]:
         return {r["population"]: r["n"] for r in self.db.query(
             "SELECT population, COUNT(*) AS n FROM strategies GROUP BY population")}
+
+
+def repair_genome(d: dict[str, Any], max_passes: int = 8) -> tuple[Genome | None, list[str]]:
+    """Validate; on bound violations clamp the offending numeric field to the bound named in the error (ge/le/gt/lt)."""
+    from pydantic import ValidationError
+    fixes: list[str] = []
+    for _ in range(max_passes):
+        try:
+            return Genome.model_validate(d), fixes
+        except ValidationError as e:
+            changed = False
+            for err in e.errors():
+                ctx, loc = err.get("ctx") or {}, err.get("loc") or ()
+                bound = next((ctx[k] for k in ("ge", "le", "gt", "lt") if k in ctx), None)
+                if bound is None or not loc:
+                    continue
+                node: Any = d
+                for k in loc[:-1]:
+                    node = node[k] if isinstance(node, dict | list) else None
+                    if node is None:
+                        break
+                if isinstance(node, dict) and loc[-1] in node:
+                    nb = float(bound) + (1e-9 if "gt" in ctx else -1e-9 if "lt" in ctx else 0.0)
+                    if isinstance(node[loc[-1]], int) and not isinstance(node[loc[-1]], bool):
+                        nb = int(round(nb))
+                    fixes.append(f"{'.'.join(map(str, loc))}: {node[loc[-1]]} → {nb}")
+                    node[loc[-1]] = nb
+                    changed = True
+            if not changed:
+                return None, fixes
+    return None, fixes

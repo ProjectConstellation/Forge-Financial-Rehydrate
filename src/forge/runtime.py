@@ -43,6 +43,7 @@ from forge.research.calibration import CalibrationEngine
 from forge.risk.breakers import BreakerBoard
 from forge.risk.governor import RiskContext, RiskGovernor
 from forge.strategies.genome import Genome, barrier_pcts, chandelier_k, compile_entries, convex_atr
+from forge.strategies.registry import repair_genome
 from forge.strategies.registry import ACTIVE_LIVE, ACTIVE_OBSERVING, State, StrategyRegistry
 from forge.treasury.allocation import (
     SPECIALIST_FAMILIES,
@@ -783,7 +784,14 @@ class Forge:
                 self.last_improvement_ts = time.time()
             except Exception as e:
                 log.exception("improvement cycle failed")
+                self.improvement_failures = getattr(self, "improvement_failures", 0) + 1
                 await self.say("Evolution Arena", f"Improvement cycle error: {e}", level="warn")
+                if self.improvement_failures in (3, 20, 100):          # a loop that is alive but never succeeds is NOT healthy
+                    self.audit.append("IMPROVEMENT_DEGRADED", {"consecutive_failures": self.improvement_failures, "error": str(e)[:300]})
+                    await self.say("Self-Healing", f"Evolution has failed {self.improvement_failures} cycles in a row "
+                                                   f"({type(e).__name__}) — earning loop continues; flagged for diagnosis", level="error")
+            else:
+                self.improvement_failures = 0
             self.improvement_runs += 1
             self.workers["research"] = {"what": "idle between cycles (next in ~30s)", "since": time.time(), "count": 0, "where": "-"}
             self.sup.beat("improvement")
@@ -835,7 +843,9 @@ class Forge:
         self.db.kv_set(f"stats.trials.{interval}", int(self.db.kv_get(f"stats.trials.{interval}", 0) or 0) + self.genomes_last_cycle)
         near = self.db.kv_get("evolution.near_miss", []) or []
         for r in results.get("candidates", []):
-            g = Genome.model_validate(r["genome"])
+            g, _fix = repair_genome(dict(r["genome"]))
+            if g is None:
+                continue
             h = r.get("holdout") or {}
             if not r["passed"] and (h.get("p_positive") or 0) >= 0.70 and (h.get("mean_net") or 0) > 0:
                 near.append({"id": g.id, "interval": interval, "p": h.get("p_positive"), "n": h.get("n"),

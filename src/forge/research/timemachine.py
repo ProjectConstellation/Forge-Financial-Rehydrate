@@ -200,7 +200,8 @@ def tm_job(market_dir: str, genomes: list[dict[str, Any]], evidence: dict[str, d
     except OSError:
         pass
     t0 = time.time()
-    gs = [Genome.model_validate(g) for g in genomes if g.get("interval_s", 300) == interval]
+    from forge.strategies.registry import repair_genome
+    gs = [x for x in (repair_genome(dict(g))[0] for g in genomes if g.get("interval_s", 300) == interval) if x is not None]
     if not gs:
         return {"ok": False, "note": "no validated strategies on this interval"}
     store = CandleStore(Path(market_dir))
