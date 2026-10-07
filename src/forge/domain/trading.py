@@ -20,6 +20,9 @@ class ExitPlan(BaseModel):
     stop_loss_pct: float              # e.g. 0.015 = -1.5% from entry
     time_stop_s: int
     trailing_pct: float | None = None
+    be_trigger_pct: float | None = None
+    be_buffer_pct: float = 0.015
+    lock_frac: float | None = None
     exit_order: Literal["maker_then_taker", "taker", "maker"] = "maker_then_taker"
 
 

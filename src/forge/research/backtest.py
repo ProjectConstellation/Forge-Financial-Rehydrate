@@ -111,7 +111,7 @@ def simulate(g: Genome, symbol: str, bars: dict[str, np.ndarray], f: dict[str, n
             mfe = max(mfe, h[k] / entry - 1)
             if lo[k] <= stop:                                   # stop first (conservative)
                 exit_px = min(stop, o[k]) * (1 - slip) if k > e_idx else stop * (1 - slip)
-                reason = "TRAIL" if trail and stop > entry * (1 - sl) + 1e-12 else "SL"
+                reason = ("LOCK" if stop > entry else "TRAIL") if stop > entry * (1 - sl) + 1e-12 else "SL"
                 x_idx = k
                 break
             if k > e_idx and h[k] >= tp_px * (1 + pen):
@@ -124,9 +124,14 @@ def simulate(g: Genome, symbol: str, bars: dict[str, np.ndarray], f: dict[str, n
             if exit_sig is not None and k > e_idx and exit_sig[k]:
                 exit_px, reason, x_idx = c[k] * (1 - slip), "SIGNAL", k
                 break
+            hi_since = max(hi_since, h[k])
             if trail is not None:
-                hi_since = max(hi_since, h[k])
                 stop = max(stop, hi_since * (1 - trail))
+            fav = hi_since / entry - 1
+            if g.exit.be_trigger_pct is not None and fav >= g.exit.be_trigger_pct:
+                stop = max(stop, entry * (1 + g.exit.be_buffer_pct))
+                if g.exit.lock_frac is not None:
+                    stop = max(stop, entry * (1 + g.exit.lock_frac * fav))
         if exit_px is None:
             exit_px = c[last] * (1 - slip)
         gross = exit_px / entry - 1

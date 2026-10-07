@@ -101,6 +101,7 @@ class Forge:
         self.reconciled_ok = True
         self.cooldown: dict[tuple[str, str], float] = {}
         self.agent_status: dict[str, dict[str, Any]] = {}
+        self.breadth: dict[str, Any] = {"up_frac": 0.0, "n": 0, "btc_regime": "UNKNOWN"}
         self.events: deque[dict[str, Any]] = deque(maxlen=500)
         self.tasks: list[asyncio.Task[Any]] = []
         self.pool: ProcessPoolExecutor | None = None
@@ -316,6 +317,17 @@ class Forge:
     # ================================================================== EARNING LOOP
     async def on_bars(self, interval: int, symbols: list[str]) -> None:
         eng = self.bars[interval]
+        if interval == 300:
+            up = tot = 0
+            for st_ in eng.state.values():
+                if st_.features and "ema_gap_slow" in st_.features:
+                    v1, v2 = st_.features["ema_gap_slow"][-1], st_.features["ret_288"][-1]
+                    if v1 == v1 and v2 == v2:
+                        tot += 1
+                        up += int(v1 > 0 and v2 > 0)
+            btc = eng.state.get("BTC-USD")
+            self.breadth = {"up_frac": up / tot if tot else 0.0, "n": tot,
+                            "btc_regime": btc.regime if btc else "UNKNOWN"}
         self.status("Market Scout", f"{len(symbols)} new {interval // 60}m bars · {len(self.universe)} markets watched")
         strategies = [(g, st) for g, st, _ in self.reg.list(ACTIVE_OBSERVING) if g.interval_s == interval]
         if not strategies:
@@ -382,9 +394,15 @@ class Forge:
             "horizon_s": int(g.exit.time_stop_bars * interval), "expires_ns": now_ns + int(half_life_s * 1e9)})
         await self.bus.publish(Topic.OPPORTUNITY_FOUND, {"id": oid, "symbol": sym, "strategy": g.id, "score": score})
         # ---- routing by state ----
-        if st not in ACTIVE_LIVE or self.gateway is None:
+        tradable = ACTIVE_LIVE + ((State.SHADOW,) if self.book == "paper" else ())
+        if st not in tradable or self.gateway is None:
             self._set_opp(oid, "OBSERVED", f"{st.value}: shadow observation (would-be trade)")
             return
+        if self.db.kv_get(f"strategy.sleeve.{g.id}") == "beta":
+            b = self.breadth
+            if b["up_frac"] < 0.55 or b["btc_regime"] in ("TREND_DOWN", "PANIC_SELLING"):
+                self._set_opp(oid, "REJECTED", f"beta sleeve kill switch: breadth {b['up_frac']:.0%} up, BTC {b['btc_regime']}")
+                return
         if va.adjusted_return <= 0:
             self._set_opp(oid, "REJECTED", va.rationale)
             await self.say("Allocator", f"{sym} {g.family}: WAIT — {va.rationale}", strategy=g.id, opportunity=oid)
@@ -406,6 +424,7 @@ class Forge:
             self._set_opp(oid, "REJECTED", f"size ${sz.notional_usd:.2f} below $1 venue minimum — {sz.explanation}")
             return
         plan = ExitPlan(take_profit_pct=tp, stop_loss_pct=sl, time_stop_s=int(g.exit.time_stop_bars * interval),
+                        be_trigger_pct=g.exit.be_trigger_pct, be_buffer_pct=g.exit.be_buffer_pct, lock_frac=g.exit.lock_frac,
                         trailing_pct=(g.exit.trail_atr * float(self.bars[interval].state[sym].features["atr_14"][-1]))
                         if g.exit.trail_atr else None)
         intent = TradeIntent(id=new_id("int"), ts_ns=time.time_ns(), book=self.book, opportunity_id=oid, strategy_id=g.id,
@@ -462,6 +481,9 @@ class Forge:
 
     async def _exec_event(self, kind: str, data: dict[str, Any]) -> None:
         await self.bus.publish(Topic.ORDER_FILLED if kind == "ORDER_FILLED" else Topic.TIMELINE, data)
+        if kind == "PROFIT_LOCK":
+            await self.say("Execution Engine", f"PROFIT LOCKED on {data['symbol']}: peak +{data['peak_gain']:.2%} → stop raised to "
+                                               f"breakeven+fees or better; this trade can no longer turn into a loss")
         if kind == "POSITION_OPENED":
             await self.say("Execution Engine", f"Position opened {data['symbol']} qty {data['qty']} cost ${float(data['cost']):.2f}")
 
@@ -604,12 +626,16 @@ class Forge:
             if not r["passed"] and (h.get("p_positive") or 0) >= 0.70 and (h.get("mean_net") or 0) > 0:
                 near.append({"id": g.id, "interval": interval, "p": h.get("p_positive"), "n": h.get("n"),
                              "reasons": r.get("reasons", [])[:3]})
-            sid = self.arena.admit(g, r.get("rationale", {}), r["passed"],
+            sleeve = r.get("sleeve")
+            ok = sleeve in ("alpha", "beta")
+            sid = self.arena.admit(g, r.get("rationale", {}), ok,
                                    {"holdout": r["holdout"], "selection": r["selection"], "fitness": r.get("fitness")})
-            if r["passed"]:
+            if ok:
+                self.db.kv_set(f"strategy.sleeve.{sid}", sleeve)
+            if ok:
                 passed += 1
                 h = r["holdout"]
-                await self.say("Evolution Arena", f"NEW SHADOW strategy {sid} ({g.family}, gen {g.generation}): holdout n={h['n']} "
+                await self.say("Evolution Arena", f"NEW {sleeve.upper()}-SLEEVE strategy {sid} ({g.family}, gen {g.generation}) → paper trading now: holdout n={h['n']} "
                                                   f"mean {h['mean_net']:+.2%} P={h['p_positive']:.2f} alpha P={h.get('alpha_p_positive', 0):.2f}",
                                strategy=sid)
         near = sorted({x["id"]: x for x in near}.values(), key=lambda x: -(x["p"] or 0))[:20]

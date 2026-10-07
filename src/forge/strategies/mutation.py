@@ -81,12 +81,16 @@ def _apply(op: str, g: Genome, rng: np.random.Generator, ds: Any, scale: float) 
                       entry=EntryLogic.model_validate(entry))
     if op == "jitter_exit":
         ex = g.exit.model_dump()
-        key = str(rng.choice(["tp_atr", "sl_atr", "time_stop_bars", "tp_min_pct", "trail_atr"]))
+        key = str(rng.choice(["tp_atr", "sl_atr", "time_stop_bars", "tp_min_pct", "trail_atr", "be_trigger_pct", "lock_frac"]))
         old = ex.get(key)
         if key == "time_stop_bars":
             ex[key] = int(min(2016, max(2, round(old * math.exp(rng.normal(0, scale * 1.5))))))
         elif key == "trail_atr":
             ex[key] = None if (old and rng.random() < 0.3) else float(np.clip(_jitter_val(old or 2.0, rng, scale), 0.3, 15))
+        elif key == "be_trigger_pct":
+            ex[key] = None if (old and rng.random() < 0.1) else float(np.clip(_jitter_val(old or 0.022, rng, scale), 0.006, 0.2))
+        elif key == "lock_frac":
+            ex[key] = None if (old and rng.random() < 0.1) else float(np.clip((old or 0.5) + rng.normal(0, 0.12), 0.1, 0.95))
         elif key == "tp_min_pct":
             ex[key] = float(np.clip(_jitter_val(old, rng, scale), 0.008, 0.5))
         else:

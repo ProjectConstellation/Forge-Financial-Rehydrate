@@ -68,6 +68,11 @@ class ExitLogic(BaseModel):
     time_stop_bars: int = Field(48, ge=2, le=2016)
     trail_atr: float | None = Field(None, ge=0.3, le=15)
     exit_all: list[Condition] = Field(default_factory=list)   # signal-decay exit (all true → exit)
+    # Profit Lock Intelligence (operator directive): once a trade has covered its round-trip costs, the stop jumps to
+    # breakeven-plus-fees (a winner can never become a loss) and then ratchets to lock a fraction of peak profit.
+    be_trigger_pct: float | None = Field(0.022, ge=0.004, le=0.5)
+    be_buffer_pct: float = Field(0.015, ge=0.0, le=0.1)      # stop level above entry once armed (≥ round-trip fees)
+    lock_frac: float | None = Field(0.5, ge=0.1, le=0.95)    # keep at least this share of the max favorable excursion
 
 
 class Execution(BaseModel):

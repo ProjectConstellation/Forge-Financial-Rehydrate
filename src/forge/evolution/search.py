@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 
 from forge.research.backtest import CostModel
-from forge.research.evaluate import Dataset, Evaluation, evaluate, promotion_gate, robustness
+from forge.research.evaluate import Dataset, Evaluation, evaluate, promotion_gate, robustness, sleeve_of
 from forge.strategies.genome import Genome
 from forge.strategies.mutation import OPERATORS, crossover, mutate
 
@@ -113,6 +113,7 @@ def adjudicate(res: SearchResult, ds: Dataset, cost: CostModel, top: int = 12, s
         ok, reasons = promotion_gate(el.ev, hold, rob, n_trials=ds.trials)
         out.append({"genome": el.genome, "selection": el.ev.metrics, "fold_positive": el.ev.fold_positive,
                     "holdout": hold.metrics, "robustness": rob, "passed": ok, "reasons": reasons,
+                    "sleeve": sleeve_of(reasons),
                     "rationale": el.rationale})
         rng_seed += 1
     return out

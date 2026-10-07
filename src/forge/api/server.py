@@ -151,7 +151,7 @@ def build_app(forge: Any) -> FastAPI:
             "intelligence": intel, "compute": compute, "improvement_cycles": forge.improvement_runs,
             "hurdle_per_day": forge.hurdle.hurdle(t.get("regime", {}).get("hurdle_multiplier", 1.0)) * 24,
             "uptime_s": round(time.time() - forge.started), "earnings": earnings(), "loops": forge.sup.snapshot(),
-            "deepseek_sentinel": forge.db.kv_get("deepseek.sentinel")})
+            "deepseek_sentinel": forge.db.kv_get("deepseek.sentinel"), "breadth": forge.breadth})
 
     @app.get("/api/opportunities")
     async def opportunities(limit: int = 50) -> Any:

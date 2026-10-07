@@ -29,7 +29,7 @@ class SizeDecision:
     explanation: str
 
 
-STATE_MULT = {"PRODUCTION": 1.0, "CHALLENGER": 0.35}
+STATE_MULT = {"PRODUCTION": 1.0, "CHALLENGER": 0.35, "SHADOW": 0.5}   # SHADOW sizes apply to the PAPER book only
 
 
 def size_position(p_cal: float, win: float, loss: float, n_evidence: int, kelly_mult: float, genome_max: float,

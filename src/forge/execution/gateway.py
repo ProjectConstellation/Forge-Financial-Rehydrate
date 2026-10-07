@@ -270,10 +270,19 @@ class ExecutionGateway:
             stop = entry_px * (1 - plan.stop_loss_pct)
             if plan.trailing_pct:
                 stop = max(stop, hw * (1 - plan.trailing_pct))
+            fav = hw / entry_px - 1 if entry_px > 0 else 0.0
+            if plan.be_trigger_pct is not None and fav >= plan.be_trigger_pct:      # Profit Lock Intelligence
+                stop = max(stop, entry_px * (1 + plan.be_buffer_pct))
+                if plan.lock_frac is not None:
+                    stop = max(stop, entry_px * (1 + plan.lock_frac * fav))
+                if not meta.get("lock_armed"):
+                    meta["lock_armed"] = True
+                    await self._emit("PROFIT_LOCK", {"position": p["id"], "symbol": sym, "locked_stop": stop,
+                                                     "peak_gain": fav})
             age = time.time() - float(meta.get("opened_ts", time.time()))
             reason = None
             if bbo.bid <= stop:
-                reason = "TRAIL" if stop > entry_px * (1 - plan.stop_loss_pct) + 1e-12 else "SL"
+                reason = ("LOCK" if stop > entry_px else "TRAIL") if stop > entry_px * (1 - plan.stop_loss_pct) + 1e-12 else "SL"
             elif age >= plan.time_stop_s:
                 reason = "TIME"
             elif trading_state == "STOPPED" and json.loads(json.dumps(meta)).get("flatten_on_stop"):

@@ -73,6 +73,7 @@ def search_on_raw(raw: dict[str, dict[str, Any]], interval: int, parents: list[d
         sel = {k: v for k, v in r["selection"].items() if k not in ("by_regime",)}
         hold = {k: v for k, v in r["holdout"].items() if k not in ("by_regime",)}
         cands.append({"genome": g.model_dump(mode="json"), "passed": r["passed"], "reasons": r["reasons"],
+                      "sleeve": r.get("sleeve"),
                       "selection": _clean(sel), "holdout": _clean(hold), "robustness": r["robustness"],
                       "rationale": r["rationale"], "fitness": float(res.archive and max(
                           (e.ev.fitness for e in res.archive.values() if e.genome.id == g.id), default=0.0))})

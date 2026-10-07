@@ -212,3 +212,13 @@ def promotion_gate(ev_sel: Evaluation, ev_hold: Evaluation, rob: dict, n_trials:
         if dsr < 0.5:
             reasons.append(f"deflated Sharpe {dsr:.2f} < 0.5 after {n_trials} trials")
     return (not reasons), reasons
+
+
+def sleeve_of(reasons: list[str]) -> str | None:
+    """'alpha' if fully passed; 'beta' if the ONLY failure is alpha-vs-drift (profitable trend/beta capture that must be
+    regime-gated); None otherwise."""
+    if not reasons:
+        return "alpha"
+    if all(r.startswith("holdout alpha vs market drift") for r in reasons):
+        return "beta"
+    return None
