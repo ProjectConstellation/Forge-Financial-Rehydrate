@@ -39,11 +39,11 @@ def cmd_run(args: argparse.Namespace) -> int:
             attach_compute(forge)
         except Exception as e:
             logging.getLogger("forge").warning("modal compute not attached: %s", e)
-        await forge.start()
-        api_task = None
         if not args.no_api:
             from forge.api.server import serve
-            api_task = asyncio.create_task(serve(forge))
+            forge.sup.add("api", lambda: serve(forge), float("inf"))
+        await forge.start()
+        api_task = None
         loop = asyncio.get_running_loop()
         stop = asyncio.Event()
         for sig in (signal.SIGINT, signal.SIGTERM):

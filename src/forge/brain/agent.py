@@ -104,6 +104,17 @@ class Brain:
     async def run(self, forge: Any) -> None:
         await asyncio.sleep(90)
         while not forge.stop_event.is_set():
+            forge.sup.beat("brain")
+            try:
+                await asyncio.wait_for(self._cycle(forge), timeout=2400)
+            except TimeoutError:
+                await forge.say("DeepSeek Brain", "research cycle exceeded 40 min — aborted (meltdown guard)", level="warn")
+            forge.sup.beat("brain")
+            budget_left = self.daily_budget() - self.spent_today()
+            await asyncio.sleep(600 if budget_left > 0.5 else 900 if self.tier == "NORMAL" else 2700)
+
+    async def _cycle(self, forge: Any) -> None:
+        if True:
             try:
                 await self.refresh_balance()
                 if self.tier != "CRITICAL":
@@ -120,8 +131,6 @@ class Brain:
             except Exception as e:
                 log.exception("brain cycle failed")
                 await forge.say("DeepSeek Brain", f"cycle error (engine unaffected): {str(e)[:200]}", level="warn")
-            budget_left = self.daily_budget() - self.spent_today()
-            await asyncio.sleep(600 if budget_left > 0.5 else 900 if self.tier == "NORMAL" else 2700)
 
     def _situation(self) -> dict[str, Any]:
         f = self.f

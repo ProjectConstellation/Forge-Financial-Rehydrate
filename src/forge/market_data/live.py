@@ -221,8 +221,11 @@ class BarEngine:
             if len(st.series):
                 self.store.merge(s, self.interval_s, st.series.arrays())
 
-    async def run(self, symbols_fn: Callable[[], list[str]], stop: asyncio.Event) -> None:
+    async def run(self, symbols_fn: Callable[[], list[str]], stop: asyncio.Event,
+                  beat: Callable[[], None] | None = None) -> None:
         while not stop.is_set():
+            if beat:
+                beat()
             now = time.time()
             nxt = (int(now) // self.interval_s + 1) * self.interval_s + 8      # 8s after the boundary
             try:
@@ -231,7 +234,9 @@ class BarEngine:
             except TimeoutError:
                 pass
             syms = symbols_fn()
-            updated = await self.refresh(syms)
+            updated = await asyncio.wait_for(self.refresh(syms), timeout=max(120, self.interval_s // 2))
+            if beat:
+                beat()
             if updated and self.on_close:
                 await self.on_close(self.interval_s, updated)
             if self.refreshes % 12 == 0:

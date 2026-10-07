@@ -5,7 +5,10 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
+WatchdogSec=180
+TimeoutStartSec=300
 User=forge
 Group=forge
 WorkingDirectory=/srv/forge

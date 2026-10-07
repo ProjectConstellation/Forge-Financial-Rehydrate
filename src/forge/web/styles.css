@@ -26,3 +26,7 @@ button{font:inherit;border-radius:12px;padding:10px 14px;border:1px solid var(--
 .row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}.ghost{background:transparent}
 footer{text-align:center;padding:18px;font-size:12px}
 @media (max-width:620px){.hero{grid-template-columns:1fr}.num{font-size:30px}}
+ .income{border-color:#1d3b2c}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid3 label{color:var(--muted);font-size:11px;text-transform:uppercase}
+.grid3 .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}.doing{margin-top:10px;padding:10px;border-radius:12px;background:#0f1a14;color:#bfe8d0;font-size:14px}
+.tag.ok{border-color:var(--ok);color:var(--ok)}.tag.bad{border-color:var(--bad);color:var(--bad)}
+@media (max-width:620px){.grid3{grid-template-columns:repeat(2,1fr)}}

@@ -23,11 +23,18 @@ async function refresh() {
     $("regime").textContent = `${reg.name || "—"} regime · reserve ${usd(t.reserve_usd)} · cash ${usd(t.cash_usd)}`;
     $("truenet").textContent = usd(t.true_net_usd, 4); $("truenet").className = "num " + cls(t.true_net_usd);
     $("truenet_sub").textContent = `realized ${usd(t.realized_pnl_usd, 4)} · unrealized ${usd(t.unrealized_pnl_usd, 4)} · today ${usd(t.daily_pnl_usd, 4)}`;
+    const e = o.earnings || {};
+    for (const [id, k, d] of [["inc_today", "today_usd", 4], ["inc_hour", "per_hour_today_usd", 4], ["inc_7d", "7d_usd", 4], ["inc_life", "lifetime_true_net_usd", 4]]) {
+      $(id).textContent = usd(e[k], d); $(id).className = "v " + cls(e[k]); }
+    $("inc_trades").textContent = e.trades_today ?? "—"; $("inc_book").textContent = (e.book || "").toUpperCase();
+    $("doing").textContent = e.doing_now || "—";
+    $("loops").innerHTML = (o.loops || []).map(l => `<span class="tag ${l.alive && l.silent_s <= l.limit_s ? "ok" : "bad"}" title="${esc(l.last_error)}">${esc(l.loop)}${l.restarts ? " ↻" + l.restarts : ""}</span>`).join("");
     const intel = o.intelligence || {}, comp = o.compute || {};
     $("kpis").innerHTML = [
       kpi("Deployed", usd(t.deployed_usd)), kpi("Exchange fees", usd(t.fees_usd, 4)),
       kpi("DeepSeek spend", usd(t.opex_inference_usd, 4)), kpi("Modal spend", usd(t.opex_compute_usd, 4)),
       kpi("DeepSeek balance", intel.balance_usd != null ? usd(intel.balance_usd) : "—"),
+      kpi("AI budget today", intel.daily_budget_usd != null ? `${usd(intel.today_usd, 3)} / ${usd(intel.daily_budget_usd, 2)}` : "—"),
       kpi("Modal month", comp.month_usd != null ? `${usd(comp.month_usd)} / ${usd(comp.budget_usd, 0)}` : "—"),
       kpi("Hurdle / day", pct(o.hurdle_per_day)), kpi("Markets watched", o.universe),
       kpi("Opportunities 24h", o.opportunities_24h), kpi("Open positions", (o.positions || []).length),

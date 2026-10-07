@@ -146,6 +146,7 @@ class ComputeGovernor:
 
     async def run(self, forge: Any) -> None:
         while not forge.stop_event.is_set():
+            forge.sup.beat("compute")
             forge.status("Compute Governor", f"Modal {self.budget_state()} · month ${self.month_spend():.2f}/${self.budget:.0f} "
                                              f"· {'available' if self.available else 'unavailable (local fallback)'}")
             await asyncio.sleep(120)

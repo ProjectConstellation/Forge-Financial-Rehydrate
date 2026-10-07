@@ -82,9 +82,11 @@ def build_app(forge: Any) -> FastAPI:
 
     @app.get("/ready")
     async def ready() -> JSONResponse:
-        loops_ok = all(not t.done() for t in forge.tasks) if forge.tasks else False
+        snap = forge.sup.snapshot()
+        loops_ok = bool(snap) and all(x["alive"] and x["silent_s"] <= x["limit_s"] for x in snap if x["critical"])
         feed = forge.stream.quality.healthy(time.time_ns(), 30_000)
-        body = {"ready": loops_ok and feed, "loops": len(forge.tasks), "loops_ok": loops_ok, "market_feed": feed}
+        body = {"ready": loops_ok and feed, "loops": len(snap), "loops_ok": loops_ok, "market_feed": feed,
+                "restarts": sum(x["restarts"] for x in snap)}
         return JSONResponse(body, status_code=200 if body["ready"] else 503)
 
     @app.get("/metrics")
@@ -103,6 +105,34 @@ def build_app(forge: Any) -> FastAPI:
         return PlainTextResponse("\n".join(lines) + "\n")
 
     # ------------------------------------------------------------------ read API
+    def earnings() -> dict[str, Any]:
+        db, book = forge.db, forge.book if forge.book in ("live", "paper") else "paper"
+        def net(since: str) -> float:
+            pos = db.scalar("SELECT COALESCE(SUM(CAST(realized_pnl_usd AS REAL) - CAST(fees_usd AS REAL)),0) FROM positions "
+                            f"WHERE book = ? AND status='CLOSED' AND closed_at > {since}", (book,)) or 0.0
+            opex = db.scalar("SELECT COALESCE(SUM(CAST(amount_usd AS REAL)),0) FROM ledger_entries WHERE book = ? AND "
+                             f"account LIKE 'OPEX:%' AND ts > {since}", (book,)) or 0.0
+            return float(pos) - float(opex)
+        today, d7 = net("date('now')"), net("datetime('now','-7 day')")
+        life = float(forge.treasury.get("true_net_usd") or 0.0)
+        trades_today = db.scalar("SELECT COUNT(*) FROM positions WHERE book = ? AND status='CLOSED' AND closed_at > date('now') "
+                                 "AND CAST(cost_usd AS REAL) > 0", (book,)) or 0
+        hours = max((time.time() - (time.time() // 86400) * 86400) / 3600, 0.25)
+        counts = forge.reg.counts()
+        live_strats = (counts.get("PRODUCTION", 0) or 0) + (counts.get("CHALLENGER", 0) or 0)
+        open_n = db.scalar("SELECT COUNT(*) FROM positions WHERE book = ? AND status != 'CLOSED'", (book,)) or 0
+        near = len(db.kv_get("evolution.near_miss", []) or [])
+        if open_n:
+            doing = f"EARNING — {open_n} position(s) working; {live_strats} validated strategies deployed"
+        elif live_strats:
+            doing = f"HUNTING — {live_strats} validated strategies scanning {len(forge.universe)} markets for their entry signals"
+        else:
+            doing = (f"LEARNING — no strategy has passed the evidence gate yet; capital protected while the Improvement "
+                     f"Loop races {near} near-miss lineages and {counts.get('EXPERIMENTAL', 0)} candidates (paper/live P&L appears here "
+                     "the moment a strategy proves itself)")
+        return {"today_usd": today, "7d_usd": d7, "lifetime_true_net_usd": life, "per_hour_today_usd": today / hours,
+                "trades_today": trades_today, "doing_now": doing, "book": book}
+
     @app.get("/api/overview")
     async def overview() -> Any:
         t = forge.treasury
@@ -120,7 +150,7 @@ def build_app(forge: Any) -> FastAPI:
             "fees": {"maker": float(forge.fees.maker), "taker": float(forge.fees.taker), "tier": forge.fees.tier},
             "intelligence": intel, "compute": compute, "improvement_cycles": forge.improvement_runs,
             "hurdle_per_day": forge.hurdle.hurdle(t.get("regime", {}).get("hurdle_multiplier", 1.0)) * 24,
-            "uptime_s": round(time.time() - forge.started)})
+            "uptime_s": round(time.time() - forge.started), "earnings": earnings(), "loops": forge.sup.snapshot()})
 
     @app.get("/api/opportunities")
     async def opportunities(limit: int = 50) -> Any:

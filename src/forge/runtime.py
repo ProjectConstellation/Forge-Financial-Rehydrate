@@ -29,6 +29,7 @@ from forge.config import Mode, Settings
 from forge.core import state as tstate
 from forge.core.bus import EventBus, Topic
 from forge.core.ids import idempotency_key, new_id
+from forge.core.supervisor import Supervisor
 from forge.domain.market import d
 from forge.domain.trading import ExitPlan, IntentPurpose, RiskVerdict, TradeIntent
 from forge.evolution.arena import Arena
@@ -106,6 +107,7 @@ class Forge:
         self.improvement_runs = 0
         self.brain: Any = None          # attached by forge.brain (DeepSeek) when available
         self.compute: Any = None        # attached by forge.compute (Modal) when available
+        self.sup = Supervisor()
 
     # ================================================================== narration / status
     async def say(self, agent: str, message: str, level: str = "info", **data: Any) -> None:
@@ -134,15 +136,41 @@ class Forge:
             eng.recompute(self.universe)
         self.stream.set_symbols(self.universe[: self.s.venues.coinbase.ws_symbols_max])
         self.pool = ProcessPoolExecutor(max_workers=1)     # research worker (≤1 core; Modal for bursts)
-        loops = [self.stream.run(), self._backfill_loop(), self._exec_loop(), self._treasury_loop(), self._universe_loop(),
-                 self._improvement_loop(), self._review_loop(), self._counterfactual_loop(), self._housekeeping_loop(),
-                 *(eng.run(lambda: self.universe, self.stop_event) for eng in self.bars.values())]
+        B = self.sup.add
+        B("market_stream", self.stream.run, 180, critical=True)
+        B("feed_watch", self._feed_watch, 120)
+        B("execution", self._exec_loop, 90, critical=True)
+        B("treasury", self._treasury_loop, 180, critical=True)
+        B("backfill", self._backfill_loop, 4 * 3600)
+        B("universe", self._universe_loop, 3 * 3600)
+        B("improvement", self._improvement_loop, 1800)
+        B("arena_review", self._review_loop, 1200)
+        B("counterfactual", self._counterfactual_loop, 2400)
+        B("self_review", self._housekeeping_loop, 3 * 3600)
+        for i, eng in self.bars.items():
+            B(f"bars_{i}", (lambda e=eng, n=f"bars_{i}": e.run(lambda: self.universe, self.stop_event,
+                                                                beat=lambda: self.sup.beat(n))), i + 900)
         if self.brain is not None:
-            loops.append(self.brain.run(self))
+            B("brain", lambda: self.brain.run(self), 3600)
         if self.compute is not None:
-            loops.append(self.compute.run(self))
-        self.tasks = [asyncio.create_task(c) for c in loops]
-        await self.say("Forge", f"All loops running: {len(self.tasks)} concurrent tasks — EARNING + IMPROVEMENT loops active")
+            B("compute", lambda: self.compute.run(self), 900)
+        self.sup.on_restart = self._on_loop_restart
+        self.tasks = self.sup.start()
+        self.tasks.append(asyncio.create_task(self.sup.watch(self.stop_event), name="supervisor"))
+        await self.say("Forge", f"All loops running under supervision: {len(self.sup.loops)} loops + watchdog — "
+                                "EARNING + IMPROVEMENT loops active 24/7")
+
+    async def _on_loop_restart(self, name: str, why: str) -> None:
+        await self.say("Supervisor", f"Loop '{name}' restarted automatically: {why}", level="warn")
+        self.audit.append("LOOP_RESTART", {"loop": name, "why": why})
+
+    async def _feed_watch(self) -> None:
+        while not self.stop_event.is_set():
+            q = self.stream.quality
+            if q.last_message_ns and time.time_ns() - q.last_message_ns < 60e9:
+                self.sup.beat("market_stream")
+            self.sup.beat("feed_watch")
+            await asyncio.sleep(10)
 
     async def _discover(self) -> None:
         try:
@@ -244,6 +272,7 @@ class Forge:
         n = 0
         while not self.stop_event.is_set():
             n += 1
+            self.sup.beat("treasury")
             t = self._snapshot_treasury()
             if self.book == "live" and n % 4 == 0:
                 await self._reconcile_live()
@@ -447,6 +476,7 @@ class Forge:
     async def _exec_loop(self) -> None:
         cancelled_for_stop = False
         while not self.stop_event.is_set():
+            self.sup.beat("execution")
             ts = tstate.trading_state(self.db)
             if ts == "STOPPED" and not cancelled_for_stop and self.gateway:
                 n = await self.gateway.cancel_all_entries()
@@ -489,6 +519,7 @@ class Forge:
 
     async def _universe_loop(self) -> None:
         while not self.stop_event.is_set():
+            self.sup.beat("universe")
             await asyncio.sleep(3600)
             await self._discover()
             for eng in self.bars.values():
@@ -506,6 +537,7 @@ class Forge:
                 if todo:
                     self.status("Data Engine", f"backfilling {len(todo)} × {interval // 60}m history")
                 for s in todo:
+                    self.sup.beat("backfill")
                     if self.stop_event.is_set():
                         return
                     try:
@@ -517,6 +549,7 @@ class Forge:
                     self.bars[interval].state.clear()
                     self.bars[interval].load_history(self.universe)
                     self.bars[interval].recompute(self.universe)
+            self.sup.beat("backfill")
             await asyncio.sleep(3600)
 
     # ================================================================== IMPROVEMENT LOOP
@@ -525,6 +558,7 @@ class Forge:
         await asyncio.sleep(60)
         k = 0
         while not self.stop_event.is_set():
+            self.sup.beat("improvement")
             interval = INTERVALS[k % len(INTERVALS)]
             k += 1
             self.status("Evolution Arena", f"evolving {interval // 60}m strategies")
@@ -542,19 +576,20 @@ class Forge:
                     self.db.kv_set("brain.candidate_queue", keep)
                     await self.say("Evolution Arena", f"Evaluating {len(llm)} DeepSeek-designed genomes this cycle")
                 if self.compute is not None and await self.compute.should_burst(self, interval):
-                    results = await self.compute.burst_search(self, interval, parents, llm)
+                    results = await asyncio.wait_for(self.compute.burst_search(self, interval, parents, llm), timeout=1200)
                 else:
                     loop = asyncio.get_running_loop()
                     from forge.evolution.worker import local_search
-                    results = await loop.run_in_executor(self.pool, local_search, str(self.s.market_dir), interval,
+                    results = await asyncio.wait_for(loop.run_in_executor(self.pool, local_search, str(self.s.market_dir), interval,
                                                          [g.model_dump(mode="json") for g in parents],
                                                          {"maker": float(self.fees.maker), "taker": float(self.fees.taker)},
-                                                         240.0, int(time.time()), llm)
+                                                         240.0, int(time.time()), llm), timeout=900)
                 await self._absorb(results, interval)
             except Exception as e:
                 log.exception("improvement cycle failed")
                 await self.say("Evolution Arena", f"Improvement cycle error: {e}", level="warn")
             self.improvement_runs += 1
+            self.sup.beat("improvement")
             await asyncio.sleep(30)
 
     async def _absorb(self, results: dict[str, Any], interval: int) -> None:
@@ -584,6 +619,7 @@ class Forge:
 
     async def _review_loop(self) -> None:
         while not self.stop_event.is_set():
+            self.sup.beat("arena_review")
             await asyncio.sleep(300)
             try:
                 cost = CostModel(maker_fee=float(self.fees.maker), taker_fee=float(self.fees.taker))
@@ -600,6 +636,7 @@ class Forge:
     async def _counterfactual_loop(self) -> None:
         """OP-009 §4: score every opportunity (acted, rejected, observed) after its horizon."""
         while not self.stop_event.is_set():
+            self.sup.beat("counterfactual")
             await asyncio.sleep(600)
             try:
                 await self._score_counterfactuals()
@@ -651,6 +688,7 @@ class Forge:
 
     async def _housekeeping_loop(self) -> None:
         while not self.stop_event.is_set():
+            self.sup.beat("self_review")
             await asyncio.sleep(3600)
             with contextlib.suppress(Exception):
                 await self.say("Self-Review", self.self_review_text())
