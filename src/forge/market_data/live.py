@@ -178,7 +178,10 @@ class BarEngine:
         last_complete = now // self.interval_s * self.interval_s - self.interval_s
         updated = []
         for s in symbols:
-            st = self.state[s]
+            st = self.state.get(s)
+            if st is None:                                   # removed concurrently (data healing rebuild) → reload, next pass
+                self.load_history([s])
+                continue
             have = int(st.series.last("ts")) if len(st.series) else 0
             if have >= last_complete:
                 continue
@@ -205,8 +208,8 @@ class BarEngine:
         bench = self.state.get("BTC-USD")
         btc = bench.series.arrays() if bench and len(bench.series) else None
         for s in symbols:
-            st = self.state[s]
-            if len(st.series) < 300:
+            st = self.state.get(s)
+            if st is None or len(st.series) < 300:
                 continue
             arr = {k: v[-self.window:] for k, v in st.series.arrays().items()}
             f = compute_features(arr, self.interval_s)

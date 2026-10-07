@@ -285,7 +285,9 @@ class SurfaceRegistry:
                 "incremental_cost_to_forge_usd_month": 4.99,      # OP-016 update: deducted from the Coinbase balance → FORGE cost
                 "source": "coinbase.com/one + coinbase.com/usdc (live 2026-10-07)",
                 "notes": "Zero-fee benefit excludes Coinbase Advanced, DEX and derivatives; spread applies on simple trades."}
-        base.update(m)
+        if int(m.get("version", 1)) >= 2:                     # stored config only overrides the current schema version
+            base.update(m)
+        base["version"] = 2
         self.f.db.kv_set("membership.coinbase_one", base)
         return base
 
