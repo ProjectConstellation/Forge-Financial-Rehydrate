@@ -141,3 +141,21 @@ browser protections, puts card-spending power on the server). Implemented instea
 below $5 → ONE "add $10" alert per episode (dashboard banner + optional ntfy push); detects top-ups and books them as inference funding;
 tracks self-funding progress; graceful degradation (engine never stops). Upgrade path: provider-side auto-reload if available, or a
 future programmatic payment rail (e.g. x402-capable inference provider paid from an allowlisted agentic wallet) when authorized.
+
+## OP-012 — 2026-10-07 — FORGE MUST BE SELF-HEALING AT EVERY LAYER (+ corrections)
+Four concurrent healing layers: (1) OPERATIONAL — supervise every process/worker/scheduler/stream/DB/Modal/provider connection; detect crashes,
+hangs, stale heartbeats, memory/resource problems, WS disconnects, abnormal latency; restart/reconnect with exponential backoff + state
+checkpoints; failures isolated from unrelated loops. (2) ECONOMIC — degraded live strategies lose capital automatically; strongest validated
+challenger promoted; failed strategy + evidence preserved; DeepSeek diagnoses WHY; targeted mutations/new families (never random);
+backtest→walk-forward→shadow→challenge→promote; profitable incumbents keep earning while challengers evolve. (3) DATA + EXECUTION — detect
+stale/missing/contradictory/corrupt market & account data; Coinbase wallet/balance/order truth is authoritative; on uncertainty stop only the
+affected execution, reconcile, rebuild local state, resume; every order idempotent. (4) INTELLIGENCE — DeepSeek never a single point of
+failure; Flash for continuous perception; stronger reasoning when value/complexity justifies; if inference unavailable, deterministic
+strategies/risk/execution continue and reasoning work queues for retry.
+Corrections: no fixed concurrency (economic, dynamic: treasury, fees, quality, correlation); no mechanical breakeven exits (keep downside
+protection; regime-aware trailing lets exceptional winners run); 50k candidates only useful with OOS/walk-forward, realistic costs and
+multiple-testing controls; second-opinion model = calibrated evidence (measured on realized outcomes), not an automatic veto; continuous
+probability/evidence-weighted allocation; keep smarter order placement + agreement boosting; Kalshi next after Coinbase is production-ready.
+SELF-HEALING HEALTH SCORE on the dashboard: system, feed, execution, strategy, AI, treasury.
+Operating law: always have a tested replacement strategy waiting whenever reasonably possible.
+The organism is always EARNING, LEARNING, HEALING, or PREPARING TO EARN BETTER.
