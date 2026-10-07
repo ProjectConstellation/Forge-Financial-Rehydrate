@@ -81,7 +81,7 @@ def simulate(g: Genome, symbol: str, bars: dict[str, np.ndarray], f: dict[str, n
     for i in idxs:
         if i < free_at or i + 1 >= end:
             continue
-        a = float(atr[i] / c[i]) if c[i] > 0 else float("nan")
+        a = float(atr[i])                      # atr_14 is already a fraction of price
         if not math.isfinite(a) or a <= 0:
             continue
         tp, sl = barrier_pcts(g, a)
@@ -176,6 +176,11 @@ def metrics(trades: list[Trade], days: float, n_trials: int = 1) -> dict[str, fl
         "post_mean": post["post_mean"],
         "std": post["std"],
         "avg_hold_h": float(np.mean([(t.exit_ts - t.entry_ts) / 3600 for t in trades])),
+        # Capital velocity (OP-008): return per capital-day actually deployed
+        "capital_days": float(sum(max(t.exit_ts - t.entry_ts, 300.0) for t in trades) / 86400),
+        "ret_per_capital_day": float(r.sum() / max(sum(max(t.exit_ts - t.entry_ts, 300.0) for t in trades) / 86400, 1e-9)),
+        "log_per_capital_day": float(np.log1p(np.maximum(r, -0.99)).sum()
+                                     / max(sum(max(t.exit_ts - t.entry_ts, 300.0) for t in trades) / 86400, 1e-9)),
         "fee_drag": float(np.mean([t.fees for t in trades])),
         "by_regime": by_regime,
         "by_reason": by_reason,

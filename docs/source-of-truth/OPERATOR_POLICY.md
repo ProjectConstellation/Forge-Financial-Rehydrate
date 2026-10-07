@@ -88,3 +88,36 @@ Permanent architectural requirement (not optional, not future):
   permanent institutional memory (lineage, assumptions, results, failure reasons, applicable regimes retained).
 - 24/7 = economically and intellectually active, not forced trading. Always at least one of: **EARNING → LEARNING → PREPARING TO EARN BETTER**.
 - Implement by extending the existing architecture (no redesign).
+
+## OP-008 — 2026-10-06 — Capital Regime + Capital Velocity Engine + Opportunity Cost Engine (enhancement, no redesign)
+- Objective: ambitious treasury growth; while capital is small prefer opportunities that return capital + profit quickly for reinvestment.
+  NOT a hard holding-time limit — exceptional longer-duration opportunities remain eligible; time enters scoring, not rules.
+- Score every opportunity on: realistic earnings, confidence, capital required, time capital is unavailable (time-to-profit/liquidity),
+  reinvestment speed, opportunities blocked by locked capital (opportunity cost), and whether smaller/faster compounding is superior.
+- Treasury regimes (starting parameters, learnable/adjustable): SURVIVAL/ACCELERATION < $100 (rapid turnover, high-confidence short duration,
+  intensive research; falling below $100 escalates intelligence/research/opportunity hunting — never reckless gambling) · GROWTH $100–$500
+  (aggressive compounding, moderately longer durations, strengthen reserves + diversification) · EXPANSION $500+ (broader allocation, longer
+  high-EV durations, multiple concurrent strategies, larger research budgets, portfolio construction).
+- Capital Velocity Score in allocation decisions; Opportunity Cost Engine estimates EV lost while capital is locked.
+- Auto-evolve with treasury: reserves, max allocation size, acceptable holding periods, research/inference budget, Modal allocation,
+  concurrent strategies, strategy diversity, liquidity requirements.
+- Never "grow quickly" via false confidence or bad bets; aggression comes from evidence, algorithms, intelligence, faster recycling, discovery.
+- Governing principle: MAKE CAPITAL WORK HARD, RETURN IT QUICKLY WHEN POSSIBLE, REINVEST IT INTELLIGENTLY, AND NEVER LEAVE A BETTER
+  OPPORTUNITY UNEXPLORED SIMPLY BECAUSE THE CURRENT RULES WERE STATIC.
+
+## OP-009 — 2026-10-06 — Final Alpha & Acceleration Directive (enhancements, no redesign)
+Immediate experimental objective: maximize the probability of positive REALIZED NET P&L within the first 24h of live operation while
+preserving unlimited scalability. Never force trades to satisfy it.
+1. Value-of-Information Intelligence Router — Flash continuous; escalate to strongest authorized DeepSeek reasoning when value is high,
+   uncertainty economically significant, major failure diagnosis, potential new family, contradictory signals, or positive EVI. Optimize AI.
+2. Opportunity Half-Life — every opportunity carries an estimated decay/half-life (seconds…days); prioritize by magnitude × urgency.
+3. Execution Alpha — separate optimization of maker/taker, market/limit, entry timing, cancel timing, partial fills, liquidity, spread,
+   slippage, depth, size impact, latency, realized fees. Preserve discovered alpha through execution.
+4. Counterfactual Learning — no-trade, later entry, different size, second-best strategy, rejected-then-profitable, accepted-should-reject.
+5. Confidence Calibration — empirical; recalibrate prediction classes automatically; sizing follows calibrated evidence only.
+6. Evolution Safety — generated strategies run sandboxed and pass validation before meaningful capital. Evolution may NOT rewrite: wallet
+   security, credential handling, immutable hard spending ceilings, emergency-stop behavior, the core Risk Governor.
+7. Mission Treasury — three pools: GROWTH (compounding), SURVIVAL/PROTECTED (organism protection), MISSION (realized profit permanently
+   removed from trading risk to fund North Star Imagine projects such as Ascend). Tiny-capital phase: prioritize compounding; extraction
+   policy begins as growth makes it economically sensible (configurable, evolving).
+8. Permanent operating principle — continuously optimize ALPHA · VELOCITY · INTELLIGENCE · EVOLUTION. No profitable algorithm is "finished".
