@@ -42,6 +42,16 @@ class Dataset:
     n_folds: int = 4
     trials: int = 0                      # hypotheses evaluated on this dataset (multiple-testing counter)
     feature_quantiles: dict[str, np.ndarray] = field(default_factory=dict)
+    index_ts: np.ndarray = field(default_factory=lambda: np.array([]))
+    index_log: np.ndarray = field(default_factory=lambda: np.array([]))   # equal-weighted universe log-index
+
+    def market_return(self, t0: float, t1: float) -> float:
+        """Equal-weighted universe return between two timestamps (drift benchmark)."""
+        if len(self.index_ts) == 0:
+            return 0.0
+        i0 = min(np.searchsorted(self.index_ts, t0), len(self.index_ts) - 1)
+        i1 = min(np.searchsorted(self.index_ts, t1), len(self.index_ts) - 1)
+        return float(np.expm1(self.index_log[i1] - self.index_log[i0]))
 
     @classmethod
     def build(cls, raw: dict[str, dict[str, np.ndarray]], interval_s: int, src_interval_s: int | None = None,
@@ -59,7 +69,21 @@ class Dataset:
             out[s] = SymbolData(s, b, f, p, regime_labels(p))
         ds = cls(interval_s=interval_s, symbols=out, holdout_frac=holdout_frac, n_folds=n_folds)
         ds._quantiles()
+        ds._index()
         return ds
+
+    def _index(self) -> None:
+        all_ts = np.unique(np.concatenate([sd.bars["ts"] for sd in self.symbols.values()]))
+        acc = np.zeros(len(all_ts))
+        cnt = np.zeros(len(all_ts))
+        for sd in self.symbols.values():
+            lc = np.log(np.asarray(sd.bars["close"], dtype=float))
+            r = np.diff(lc, prepend=lc[0])
+            idx = np.searchsorted(all_ts, sd.bars["ts"])
+            acc[idx] += np.clip(r, -0.5, 0.5)
+            cnt[idx] += 1
+        self.index_ts = all_ts
+        self.index_log = np.cumsum(np.where(cnt > 0, acc / np.maximum(cnt, 1), 0.0))
 
     def _quantiles(self) -> None:
         qs = np.linspace(0.02, 0.98, 25)
@@ -111,6 +135,15 @@ def evaluate(g: Genome, ds: Dataset, cost: CostModel, segment: str = "selection"
         trades += simulate(g, sym, sd.bars, sd.f, sd.probs, cost, start=a, end=b, labels=sd.labels).trades
     days = ds.days(segment)
     m = metrics(trades, days)
+    # alpha vs market drift (equal-weighted universe over the identical holding window)
+    if trades:
+        alpha = np.array([t.net - ds.market_return(t.entry_ts, t.exit_ts) for t in trades])
+        from forge.research.stats import edge_posterior
+        ap = edge_posterior(alpha)
+        m["alpha_mean"], m["alpha_p_positive"] = float(alpha.mean()), ap["p_positive"]
+        m["drift_mean"] = float(np.mean([ds.market_return(t.entry_ts, t.exit_ts) for t in trades]))
+    else:
+        m["alpha_mean"], m["alpha_p_positive"], m["drift_mean"] = 0.0, 0.0, 0.0
     # chronological folds (walk-forward consistency)
     fold_means: list[float] = []
     if trades:
@@ -136,9 +169,10 @@ def fitness(m: dict, fold_pos: float, complexity: int, min_trades: int = 40, vel
     growth = m["log_growth"] / max(1.0, n) * 100     # mean log growth per trade, in %
     dd_pen = max(0.0, -m["max_dd"] - 0.25) * 2
     cx_pen = 0.02 * max(0, complexity - 4)
+    alpha_term = 20 * m.get("alpha_mean", 0.0)
     vel = float(np.tanh((m.get("log_per_capital_day", 0.0) - hurdle_per_day) / max(hurdle_per_day, 1e-6)))
     return float(growth + 50 * lb + 0.5 * (fold_pos - 0.5) + 0.3 * min(1.0, m["p_positive"])
-                 + 0.4 * velocity_weight * vel - dd_pen - cx_pen)
+                 + 0.4 * velocity_weight * vel + alpha_term - dd_pen - cx_pen)
 
 
 def robustness(g: Genome, ds: Dataset, cost: CostModel, mutate_fn, n: int = 8, seed: int = 0) -> dict:
@@ -154,7 +188,8 @@ def robustness(g: Genome, ds: Dataset, cost: CostModel, mutate_fn, n: int = 8, s
 
 
 def promotion_gate(ev_sel: Evaluation, ev_hold: Evaluation, rob: dict, n_trials: int,
-                   p_required: float = 0.90, min_trades: int = 30) -> tuple[bool, list[str]]:
+                   p_required: float = 0.90, min_trades: int = 30,
+                   alpha_required: float = 0.60) -> tuple[bool, list[str]]:
     """OP-004 90% rule + anti-self-deception checks. Returns (passed, reasons)."""
     reasons = []
     mh = ev_hold.metrics
@@ -164,6 +199,9 @@ def promotion_gate(ev_sel: Evaluation, ev_hold: Evaluation, rob: dict, n_trials:
         reasons.append(f"holdout P(edge>0)={mh['p_positive']:.3f} < {p_required}")
     if ev_sel.metrics["mean_net"] <= 0:
         reasons.append("selection mean net ≤ 0")
+    if mh.get("alpha_p_positive", 0.0) < alpha_required:
+        reasons.append(f"holdout alpha vs market drift P={mh.get('alpha_p_positive', 0.0):.2f} < {alpha_required} "
+                       f"(net {mh['mean_net']:+.2%} vs drift {mh.get('drift_mean', 0.0):+.2%})")
     if ev_sel.fold_positive < 0.5:
         reasons.append(f"fold consistency {ev_sel.fold_positive:.2f} < 0.5")
     if rob.get("positive_share", 0) < 0.5:
