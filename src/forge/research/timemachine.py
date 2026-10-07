@@ -193,6 +193,20 @@ def tm_job(market_dir: str, genomes: list[dict[str, Any]], evidence: dict[str, d
     for seg in ("holdout", "selection"):
         r = run_portfolio(gs, ds, cost, capital=capital, segment=seg, evidence=evidence).summary()
         out[seg] = {k: (v if not isinstance(v, list) else [(a, float(b)) for a, b in v]) for k, v in r.items()}
+    # elite allocation: rank each strategy stand-alone on the SELECTION period (no peeking), keep those also positive unseen
+    ranking = []
+    for g in gs:
+        a = run_portfolio([g], ds, cost, capital=capital, segment="selection", evidence=evidence).summary()
+        b = run_portfolio([g], ds, cost, capital=capital, segment="holdout", evidence=evidence).summary()
+        ranking.append({"id": g.id, "family": g.family, "selection_return": a.get("return", -1), "holdout_return": b.get("return", -1),
+                        "trades": a.get("trades", 0)})
+    ranking.sort(key=lambda r: -r["selection_return"])
+    elite = [r["id"] for r in ranking if r["holdout_return"] > 0][:3]
+    out["ranking"], out["elite"] = ranking, elite
+    eg = [g for g in gs if g.id in elite]
+    if eg:
+        out["elite_holdout"] = run_portfolio(eg, ds, cost, capital=capital, segment="holdout", evidence=evidence, kelly_mult=1.0).summary()
+        out["elite_selection"] = run_portfolio(eg, ds, cost, capital=capital, segment="selection", evidence=evidence, kelly_mult=1.0).summary()
     out["seconds"] = time.time() - t0
     out["ts"] = time.time()
     return out

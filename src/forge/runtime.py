@@ -495,7 +495,9 @@ class Forge:
             c_o = float(so.features["corr_btc_96"][-1]) if so and "corr_btc_96" in so.features and so.features["corr_btc_96"][-1] == so.features["corr_btc_96"][-1] else 0.6
             rho += max(0.0, c_new * c_o)
         corr_disc = 1.0 / (1.0 + rho)
-        sz = size_position(p, win, loss, ev.n if ev else 0, g.sizing.kelly_mult, g.sizing.max_fraction,
+        elite = self.db.kv_get("allocation.elite") or []
+        kmult = 1.0 if g.id in elite else (0.15 if elite else g.sizing.kelly_mult)      # elite allocation (Time Machine evidence)
+        sz = size_position(p, win, loss, ev.n if ev else 0, kmult, g.sizing.max_fraction,
                            pol.max_position_fraction, deployable * evid * corr_disc, st.value, self.breakers.size_multiplier(),
                            va.capital_velocity_score)
         if sz.notional_usd < 1.0:
@@ -766,6 +768,14 @@ class Forge:
                         pool, tm_job, str(self.s.market_dir), gs, ev, eq,
                         {"maker": float(self.fees.maker), "taker": float(self.fees.taker)}), timeout=1200)
                     self.db.kv_set("timemachine.report", rep)
+                    if rep.get("elite") is not None:
+                        old = self.db.kv_get("allocation.elite") or []
+                        self.db.kv_set("allocation.elite", rep["elite"])
+                        if set(old) != set(rep["elite"]):
+                            eh = rep.get("elite_holdout") or {}
+                            await self.say("Allocator", f"ELITE ALLOCATION → {len(rep['elite'])} strategies get full-strength capital "
+                                                        f"(elite portfolio on unseen days: {eh.get('return', 0):+.1%}, PF "
+                                                        f"{(eh.get('profit_factor') or 0):.2f}); others keep earning evidence at exploratory size")
                     h = rep.get("holdout") or {}
                     if h:
                         await self.say("Time Machine", f"Portfolio replay on {h.get('days', 0):.0f} unseen days: ${rep['capital']:.2f} → "
