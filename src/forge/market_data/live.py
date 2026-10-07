@@ -236,11 +236,14 @@ class BarEngine:
 
     async def run(self, symbols_fn: Callable[[], list[str]], stop: asyncio.Event,
                   beat: Callable[[], None] | None = None) -> None:
+        first = True
         while not stop.is_set():
             if beat:
                 beat()
             now = time.time()
             nxt = (int(now) // self.interval_s + 1) * self.interval_s + 8      # 8s after the boundary
+            if first:                                       # catch up immediately after (re)start: no stale window
+                nxt, first = now + 1, False
             try:
                 await asyncio.wait_for(stop.wait(), timeout=max(1.0, nxt - now))
                 break

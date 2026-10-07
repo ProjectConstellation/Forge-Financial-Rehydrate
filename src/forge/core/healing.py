@@ -182,7 +182,8 @@ class HealthMonitor:
                 if len(st.series) < 300:
                     continue
                 bbo = self.f.market.get_bbo(sym)
-                issues = bar_integrity(st.series.arrays(), interval, time.time(), bbo.mid if bbo else None)
+                warm = getattr(eng, "refreshes", 1) >= 1          # no staleness verdict before the first refresh
+                issues = bar_integrity(st.series.arrays(), interval if warm else None, time.time(), bbo.mid if bbo else None)
                 key = f"{sym}@{interval}"
                 if issues and any(i.startswith("bad print") for i in issues):
                     fixed = await self._repair_bad_prints(eng, sym, st)
