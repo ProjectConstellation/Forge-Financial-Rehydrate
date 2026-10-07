@@ -195,10 +195,13 @@ class HealthMonitor:
                                                      "on this market until the data is consistent", level="warn")
                     # state is NOT dropped: reloading from the store re-imported the same bad bar (quarantine loop,
                     # found by Hermes 2026-10-07); repairs happen in place, fresh bars arrive via the normal refresh
-                elif not issues and key in self.quarantined:
-                    self.quarantined.pop(key, None)
-                    self.f.db.kv_set(f"quarantine.{sym}", None)
-                    await self.f.say("Self-Healing", f"{sym} data healed → market re-enabled")
+                elif not issues:
+                    q = self.f.db.kv_get(f"quarantine.{sym}")
+                    # persisted flags must clear after restarts too (in-memory set resets; DB flag used to stick forever)
+                    if key in self.quarantined or (q and int(q.get("interval", interval)) == interval):
+                        self.quarantined.pop(key, None)
+                        self.f.db.kv_set(f"quarantine.{sym}", None)
+                        await self.f.say("Self-Healing", f"{sym} data healed → market re-enabled")
 
     async def _repair_bad_prints(self, eng: Any, sym: str, st: Any) -> int:
         """Refetch the affected window from Coinbase (authoritative); if the isolated reverting spike is still there it is a
