@@ -748,7 +748,7 @@ class Forge:
                 have = set(self.store.symbols(interval))
                 todo = [s for s in self.universe if s not in have]
                 for s_ in self.universe:
-                    a_ = self.store.load(s_, interval) if s_ in have else None
+                    a_ = await asyncio.to_thread(self.store.load, s_, interval) if s_ in have else None   # off the event loop
                     if a_ is not None and len(a_["ts"]) and a_["ts"][0] > time.time() - days * 86400 * 0.9:
                         todo.append(s_)                                  # deepen history to the full window
                 if todo:

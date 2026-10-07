@@ -10,12 +10,11 @@ import asyncio
 import logging
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-
-from typing import TYPE_CHECKING
 
 from forge.market_data.bars import COLS
 
@@ -38,8 +37,13 @@ class CandleStore:
         if not p.exists():
             return None
         t = pq.read_table(p)
-        return {c: t.column(c).to_numpy().astype(float) if c in t.column_names
-                else np.full(t.num_rows, np.nan) for c in COLS}
+        a = {c: t.column(c).to_numpy().astype(float) if c in t.column_names
+             else np.full(t.num_rows, np.nan) for c in COLS}
+        ts = a["ts"]
+        if len(ts) > 1 and np.any(np.diff(ts) <= 0):        # defensive: never hand out time-scrambled bars
+            _, idx = np.unique(ts, return_index=True)        # sorted unique timestamps (first occurrence)
+            a = {c: v[idx] for c, v in a.items()}
+        return a
 
     def save(self, symbol: str, interval_s: int, arrays: dict[str, np.ndarray]) -> None:
         p = self._path(symbol, interval_s)
@@ -58,7 +62,7 @@ class CandleStore:
         # keep the LAST occurrence per timestamp (newer data wins), sorted
         _, idx = np.unique(ts[::-1], return_index=True)
         keep = len(ts) - 1 - idx
-        keep.sort()
+        keep = keep[np.argsort(ts[keep], kind="stable")]    # sort by TIME (was: by row position → scrambled files)
         merged = {c: cat[c][keep] for c in COLS}
         self.save(symbol, interval_s, merged)
         return merged
@@ -68,12 +72,12 @@ class CandleStore:
         return sorted(p.stem.split("=", 1)[1] for p in d.glob("symbol=*.parquet")) if d.exists() else []
 
 
-async def backfill(rest: "CoinbaseRest", store: CandleStore, symbol: str, interval_s: int, days: float,
+async def backfill(rest: CoinbaseRest, store: CandleStore, symbol: str, interval_s: int, days: float,
                    end: int | None = None) -> int:
     """Fetch missing history (pages of 350 candles). Returns rows now stored."""
     end = end or int(time.time()) // interval_s * interval_s
     start = end - int(days * 86400)
-    existing = store.load(symbol, interval_s)
+    existing = await asyncio.to_thread(store.load, symbol, interval_s)   # parquet I/O off the event loop
     if existing is not None and len(existing["ts"]):
         have_lo, have_hi = int(existing["ts"].min()), int(existing["ts"].max())
         ranges = []
@@ -105,6 +109,6 @@ async def backfill(rest: "CoinbaseRest", store: CandleStore, symbol: str, interv
             "volume": np.array([float(r["volume"]) for r in rows]),
             "buy_volume": np.full(len(rows), np.nan),
         }
-        merged = store.merge(symbol, interval_s, arr)
+        merged = await asyncio.to_thread(store.merge, symbol, interval_s, arr)
         return len(merged["ts"])
     return 0 if existing is None else len(existing["ts"])

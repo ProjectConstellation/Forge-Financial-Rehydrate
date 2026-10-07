@@ -131,3 +131,15 @@ def test_bad_print_detector_and_repair():
     assert any(i.startswith("bad print") for i in bar_integrity(s.arrays()))
     s.repair_bar(380, float(c[379]))
     assert find_bad_prints(s.arrays()["close"]) == [] and not any(i.startswith("bad print") for i in bar_integrity(s.arrays()))
+
+
+def test_candle_store_merge_keeps_time_order(tmp_path):
+    from forge.market_data.history import COLS, CandleStore
+    st = CandleStore(tmp_path)
+    def mk(t0, n):
+        ts = np.arange(n) * 300.0 + t0
+        return {c: (ts if c == "ts" else np.full(n, 1.0)) for c in COLS}
+    st.merge("X-USD", 300, mk(1_000_000, 100))          # recent block first (live data)
+    st.merge("X-USD", 300, mk(1_000_000 - 300 * 500, 600))   # older backfill appended later, overlapping
+    a = st.load("X-USD", 300)
+    assert np.all(np.diff(a["ts"]) > 0) and a["ts"][-1] == 1_000_000 + 300 * 99

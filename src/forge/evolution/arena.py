@@ -84,6 +84,12 @@ class Arena:
         """Insert a researched genome. Gate-passing ones enter SHADOW; others become EXPERIMENTAL stepping stones."""
         dup = self.reg.exists_dna(g.dna_hash())
         if dup:
+            st = self.reg.state(dup)
+            if passed and st in (State.EXPERIMENTAL, State.RETIRED):    # re-discovered DNA re-validated on fresh data
+                self.reg.transition(dup, State.SHADOW, "re-validated on current data (passed promotion gate)")
+                self.reg.record_metrics(dup, "holdout", evidence.get("holdout", {}))
+                self.reg.record_metrics(dup, "selection", evidence.get("selection", {}))
+                self.db.kv_set(f"strategy.activated.{dup}", time.time())
             return dup
         if passed:
             same = self.db.scalar("SELECT COUNT(*) FROM strategies WHERE population IN ('SHADOW','CHALLENGER','PRODUCTION') "

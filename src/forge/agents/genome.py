@@ -243,7 +243,9 @@ class PromptGenomes:
             if not (0.0 <= pv <= 1.0) or (ref and ref in seen):
                 continue
             seen.add(ref)
-            kind = "survive" if ref.startswith("stg_") else "generic"
+            judged = self.db.scalar("SELECT 1 FROM strategies WHERE id = ? AND population IN ('SHADOW','CHALLENGER',"
+                                    "'PRODUCTION','RETIRED')", (ref,)) if ref.startswith("stg_") else None
+            kind = "survive" if ref.startswith("stg_") and not judged else "generic"   # already judged ≠ survival forecast
             self.db.insert("agent_predictions", {"ts": time.time(), "role": role, "prompt_id": pid, "session_id": session_id,
                                                  "ref_id": ref, "kind": kind, "p": pv, "claim": str(p.get("claim", ""))[:300]})
             n_pred += 1
