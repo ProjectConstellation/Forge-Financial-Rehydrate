@@ -639,11 +639,15 @@ class Forge:
     async def _backfill_loop(self) -> None:
         """Keep research history deep: 5m×60d and 1h×365d for the universe (public data, no credentials)."""
         from forge.market_data.history import backfill
-        depth = {300: 60, 3600: 365}
+        depth = {300: 365, 3600: 365}
         while not self.stop_event.is_set():
             for interval, days in depth.items():
                 have = set(self.store.symbols(interval))
                 todo = [s for s in self.universe if s not in have]
+                for s_ in self.universe:
+                    a_ = self.store.load(s_, interval) if s_ in have else None
+                    if a_ is not None and len(a_["ts"]) and a_["ts"][0] > time.time() - days * 86400 * 0.9:
+                        todo.append(s_)                                  # deepen history to the full window
                 if todo:
                     self.status("Data Engine", f"backfilling {len(todo)} × {interval // 60}m history")
                 for s in todo:
