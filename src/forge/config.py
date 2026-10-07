@@ -114,7 +114,8 @@ class DeepSeekConfig(BaseModel):
     peak_windows_utc: list[tuple[int, int]] = Field(default_factory=lambda: [(1, 4), (6, 10)])
     timeout_s: float = 300.0
     max_concurrency: int = 8
-    min_balance_reserve_usd: Decimal = Decimal("0.25")   # never drain the account to zero
+    min_balance_reserve_usd: Decimal = Decimal("0.10")   # tiny floor: a session that dies mid-way wastes its spend (OP-014)
+    spend_runway_days: float = 3.0                        # OP-014: pace ALL available credit over this runway (use it, don't hoard)
 
 
 class CoinbaseConfig(BaseModel):

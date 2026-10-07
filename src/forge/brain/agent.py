@@ -92,7 +92,7 @@ class Brain:
             self.tier = "LEAN"
         elif self.balance <= reserve:
             self.tier = "CRITICAL"
-        elif self.balance < reserve * 4:
+        elif self.balance < reserve * 3:
             self.tier = "LEAN"
         else:
             self.tier = "NORMAL"
@@ -122,7 +122,11 @@ class Brain:
             "SELECT COALESCE(SUM(CAST(realized_pnl_usd AS REAL) - CAST(fees_usd AS REAL)),0) FROM positions "
             "WHERE status='CLOSED' AND closed_at > strftime('%Y-%m-%dT%H:%M:%S','now','-7 day')") or 0.0)
         share = float(self.f.s.treasury.ops_profit_share_default)
-        return bal * burn + max(0.0, profit7) * share * 4      # earnings expand the research budget
+        roi_budget = bal * burn
+        # OP-014: any credit balance is working capital for intelligence — pace the whole available balance over the runway
+        # (never hoard it); ROI-driven burn can still exceed this when measured value is strong; earnings add on top.
+        runway_budget = bal / max(float(getattr(self.f.s.deepseek, "spend_runway_days", 3.0)), 0.5)
+        return max(roi_budget, runway_budget) + max(0.0, profit7) * share * 4
 
     def spent_today(self) -> float:
         return float(self.f.db.scalar("SELECT COALESCE(SUM(CAST(cost_usd AS REAL)),0) FROM inference_calls "

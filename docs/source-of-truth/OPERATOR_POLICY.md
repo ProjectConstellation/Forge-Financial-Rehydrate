@@ -178,3 +178,11 @@ instruments). Open-ended: research anything missed; incorporate and test. "FORGE
 Follow-up instruction (same day): the probability model must be state-of-the-art and built for FORGE's profit — not a mere
 "fair probability" model (implemented: HAR-RV + Garman–Klass (bias-corrected) + variance term structure + intraday seasonality +
 filtered-historical-simulation tails + settlement-averaging + Bayesian stacked calibration vs market + maker-quote shadow).
+
+## OP-014 — 2026-10-07 — Use every available credit (no hoarding), paced
+Operator: "Regardless of whether money can be loaded or not, if there's a credit balance, the system's going to keep earning
+money as best as it can" — use the DeepSeek balance even below the alert threshold; not burn it all at once.
+Implemented: daily intelligence budget = max(ROI-driven burn, (balance − $0.10 floor) / 3-day runway) + earnings share;
+hard floor lowered $0.25 → $0.10 (only to avoid mid-session failures that waste spend); LEAN tier below $0.30.
+At $1.82: ≈ $0.57/day (was ≈ $0.24/day). Top-ups automatically raise the pace. The $5 refill alert (OP-011) stays.
+Trading thresholds (readiness gate, ECR, haircut) are NOT changed by this policy.
