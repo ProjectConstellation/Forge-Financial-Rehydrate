@@ -395,7 +395,7 @@ class SurfaceRegistry:
         k = self.rails.get("kalshi.events")
         if k:
             rows = db.query("SELECT price, fee, pnl, close_ts, ts FROM crossrail_signals WHERE status='SETTLED' "
-                            "AND kind IN ('TAKE','MAKE','LADDER_ARB','RANGE_ARB')")
+                            "AND kind IN ('TAKE','MAKE','LADDER_ARB','RANGE_ARB','SURFACE_RV')")
             if rows:
                 import numpy as np
                 r = np.array([x["pnl"] / max(x["price"] + x["fee"], 1e-6) for x in rows])

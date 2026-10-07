@@ -380,7 +380,7 @@ class CrossRailScanner:
                         sigs.append(s_)
                 for s_ in sigs:
                     n_sig += self._record(s_, series, pid, ref, model, ev, live)
-                self._edge_decay(quotes_now, now)
+                self._edge_decay(quotes_now, now, fitted)
         self.stats["scans"] += 1
         self.stats["markets"] = n_mk
         self.stats["signals"] += n_sig
@@ -441,10 +441,12 @@ class CrossRailScanner:
                         "lag0_corr": sc[0].corr if sc else None}
         return out
 
-    def _edge_decay(self, quotes_now: dict[str, tuple[float, float, KalshiMarket]], now: float) -> None:
-        """Re-measure open taker signals (≤ 30 min old) at the current quote → edge-decay curve per signal."""
+    def _edge_decay(self, quotes_now: dict[str, tuple[float, float, KalshiMarket]], now: float,
+                    fitted: dict[str, float] | None = None) -> None:
+        """Re-measure open taker signals (5 s – 30 min old) at the current quote → edge-decay curve per signal.
+        SURFACE_RV edges are measured against the smoothed SURFACE fair value (model-free), TAKE against the stacked bound."""
         rows = self.f.db.query("SELECT id, ts, ticker, side, kind, fee FROM crossrail_signals WHERE status = 'OPEN' "
-                               "AND kind IN ('TAKE','SURFACE_RV') AND ts > ?", (now - 1800,))
+                               "AND kind IN ('TAKE','SURFACE_RV') AND ts > ? AND ts < ?", (now - 1800, now - 5))
         for r in rows:
             q = quotes_now.get(r["ticker"])
             if q is None:
@@ -453,7 +455,13 @@ class CrossRailScanner:
             ask = m.yes_ask if r["side"] == "yes" else m.no_ask
             if ask is None:
                 continue
-            p_win = plo if r["side"] == "yes" else 1.0 - phi
+            if r["kind"] == "SURFACE_RV":
+                fv = (fitted or {}).get(r["ticker"])
+                if fv is None:
+                    continue
+                p_win = fv if r["side"] == "yes" else 1.0 - fv
+            else:
+                p_win = plo if r["side"] == "yes" else 1.0 - phi
             self.f.db.insert("edge_decay", {"signal_id": r["id"], "dt_s": now - r["ts"],
                                             "edge": p_win - ask - kalshi_fee(ask)})
 
