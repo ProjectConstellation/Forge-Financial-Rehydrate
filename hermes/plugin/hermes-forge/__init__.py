@@ -1,0 +1,96 @@
+"""hermes-forge — the FORGE tool surface inside Hermes (Hermes dossier §4).
+
+Tools are the SAME tools FORGE's own brain uses (fetched from FORGE's agent API at load; static fallback), proxied to
+http://127.0.0.1:8470/api/agent/tool. No exchange keys, no orders. Roles: every cron prompt starts with
+"[forge-role:<role>]" → the pre_llm_call hook maps session → role; tool calls and token usage are attributed per role, so
+FORGE measures each Hermes role's value-per-$ and throttles roles that do not pay for themselves.
+"""
+
+import json
+import os
+import re
+import threading
+import urllib.request
+from pathlib import Path
+
+HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+API = os.environ.get("FORGE_API", "http://127.0.0.1:8470")
+ROLE_RE = re.compile(r"\[forge-role:([a-z_]+)\]")
+_roles: dict[str, str] = {}
+_lock = threading.Lock()
+
+
+def _token() -> str:
+    return (HOME / "forge" / "agent_token").read_text().strip()
+
+
+def _call(method: str, path: str, body: dict | None = None, timeout: float = 30.0) -> dict:
+    req = urllib.request.Request(API + path, method=method, data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Authorization": f"Bearer {_token()}", "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode() or "{}")
+
+
+def _role(session_id: str | None) -> str:
+    with _lock:
+        return _roles.get(session_id or "", "governor")
+
+
+def _schemas() -> list[dict]:
+    try:
+        return [t["function"] for t in _call("GET", "/api/agent/tools").get("tools", [])]
+    except Exception:
+        return [{"name": "get_system_state", "description": "FORGE treasury, regime, fees, population.",
+                 "parameters": {"type": "object", "properties": {}}}]
+
+
+def register(ctx):
+    for fn in _schemas():
+        name = fn["name"]
+        schema = {"name": f"forge_{name}", "description": "[FORGE] " + fn.get("description", ""),
+                  "parameters": fn.get("parameters") or {"type": "object", "properties": {}}}
+
+        def handler(params, session_id=None, _n=name, **kwargs):
+            try:
+                out = _call("POST", "/api/agent/tool", {"name": _n, "args": params or {}, "role": _role(session_id),
+                                                        "session_id": session_id or "na"})
+            except Exception as e:
+                out = {"error": f"FORGE unreachable: {type(e).__name__}: {str(e)[:120]}"}
+            return json.dumps(out, default=str)[:24000]
+
+        ctx.register_tool(name=f"forge_{name}", toolset="forge", schema=schema, handler=handler)
+
+    def on_pre_llm(session_id=None, user_message=None, **kwargs):
+        m = ROLE_RE.search(str(user_message or ""))
+        if m and session_id:
+            with _lock:
+                _roles[session_id] = m.group(1)
+        return None
+
+    def _usage(kind, session_id=None, usage=None, model=None, api_request_id=None, api_duration=None, **kwargs):
+        if not usage:
+            return
+        u = usage if isinstance(usage, dict) else getattr(usage, "__dict__", {})
+        body = {"api_request_id": f"{kind}_{api_request_id or os.urandom(6).hex()}", "role": _role(session_id),
+                "model": model or "deepseek-flash", "usage": u, "session_id": session_id,
+                "latency_ms": int(float(api_duration or 0) * 1000), "purpose": kind}
+        threading.Thread(target=lambda: _safe_post(body), daemon=True).start()
+
+    def on_post_api(**kw):
+        _usage("api", **kw)
+
+    def on_post_aux(**kw):
+        if kw.get("error"):
+            return
+        _usage("aux", **kw)
+
+    ctx.register_hook("pre_llm_call", on_pre_llm)
+    ctx.register_hook("post_api_request", on_post_api)
+    ctx.register_hook("post_auxiliary_call", on_post_aux)
+
+
+def _safe_post(body: dict) -> None:
+    try:
+        _call("POST", "/api/agent/usage", body, timeout=10)
+    except Exception:
+        pass

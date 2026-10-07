@@ -35,6 +35,19 @@ TOOLS = [
                                                           "family": {"type": "string"}}, ["statement", "confidence"]),
     _fn("request_research", "Ask the Improvement Loop to prioritize a horizon/focus next cycle.",
         {"interval_s": {"type": "integer", "enum": [300, 3600]}, "focus": {"type": "string"}}, ["focus"]),
+    # OP-013 / Hermes dossier surfaces (shared by FORGE's brain and Hermes)
+    _fn("get_opportunity_surface", "All income rails: status, executability, blockers, evidence-based score/day, allocator "
+        "plan now vs if-unblocked, fixed costs (Coinbase One).", {}),
+    _fn("get_crossrail_evidence", "Kalshi↔Coinbase prediction engine evidence: Brier model/market/stacked, settled shadow P&L by "
+        "signal kind, lead/lag, edge half-life, RTI-proxy error, calibrator weights.", {}),
+    _fn("get_shadow_rails", "Paper results of non-core rails (stable peg maker, stable triangle, listing discovery).", {}),
+    _fn("get_listing_events", "Recent Coinbase product/listing/status/doc-page discovery events.", {"limit": {"type": "integer"}}),
+    _fn("get_intelligence_budget", "Live DeepSeek balance, 24h pace/headroom, value-per-$ by role (incl. Hermes roles).", {}),
+    _fn("submit_research_lead", "Record a research lead (new rail, fee/rule change, market-structure anomaly, data source) with "
+        "sources; it is triaged by FORGE and valued if it leads to income.",
+        {"title": {"type": "string"}, "body": {"type": "string"}, "category": {"type": "string"},
+         "sources": {"type": "array", "items": {"type": "string"}}, "expected_value_usd_month": {"type": "number"}},
+        ["title", "body", "category"]),
 ]
 
 
@@ -150,6 +163,45 @@ class ToolRouter:
                                      "confidence": float(min(max(confidence, 0), 1)), "created_at": _now()})
         self.artifacts.append({"kind": "lesson", "ref_id": lid})
         return {"lesson_id": lid}
+
+    def t_get_opportunity_surface(self) -> dict[str, Any]:
+        db = self.f.db
+        rails = db.query("SELECT id, category, status, executable, blockers, economics FROM rail_registry ORDER BY id")
+        a = db.kv_get("surface.allocation") or {}
+        return {"rails": [{**dict(r), "blockers": json.loads(r["blockers"] or "[]"),
+                           "economics": json.loads(r["economics"] or "{}")} for r in rails],
+                "now": a.get("now"), "unlock_value": a.get("unlock_value"), "fixed_costs": a.get("fixed_costs_usd_per_day"),
+                "membership": db.kv_get("membership.coinbase_one")}
+
+    def t_get_crossrail_evidence(self) -> dict[str, Any]:
+        sc = self.f.db.kv_get("crossrail.scorecard") or {}
+        return {**sc, "calibrator": self.f.db.kv_get("crossrail.calibrator"),
+                "mapping": (self.f.db.kv_get("crossrail.mapping") or {}).get("mapped")}
+
+    def t_get_shadow_rails(self) -> dict[str, Any]:
+        rows = self.f.db.query("SELECT rail, COUNT(*) n, SUM(pnl_usd) pnl, AVG(pnl_usd / (entry * qty)) mean_ret, "
+                               "AVG(hold_s) hold_s FROM shadow_trades GROUP BY rail")
+        return {"rails": rows, "pegmaker": self.f.db.kv_get("pegmaker.state")}
+
+    def t_get_listing_events(self, limit: int = 30) -> list[dict[str, Any]]:
+        return self.f.db.query("SELECT ts, product_id, product_type, event, after FROM listing_events ORDER BY id DESC LIMIT ?",
+                               (min(int(limit), 200),))
+
+    def t_get_intelligence_budget(self) -> dict[str, Any]:
+        b = getattr(self.f, "brain", None)
+        roles = self.f.db.query("SELECT agent, COUNT(*) n, SUM(CAST(cost_usd AS REAL)) usd FROM inference_calls GROUP BY agent")
+        return {"pace": self.f.db.kv_get("brain.pace"), "balance": getattr(b, "balance", None),
+                "spend_by_agent": roles, "roi": {r: b.roi(r) for r in ("perception", "scientist", "hermes_governor",
+                                                                     "hermes_scout", "hermes_scientist")} if b else None}
+
+    def t_submit_research_lead(self, title: str, body: str, category: str, sources: list[str] | None = None,
+                               expected_value_usd_month: float | None = None) -> dict[str, Any]:
+        lid = new_id("lead")
+        self.f.db.insert("research_notes", {"id": lid, "ts": _now(), "author": self.role, "kind": f"lead:{category[:40]}",
+                                            "title": title[:200], "body": json.dumps({"body": body[:4000], "sources": (sources or [])[:10],
+                                                                                      "ev_usd_month": expected_value_usd_month})})
+        self.artifacts.append({"kind": "lead", "ref_id": lid})
+        return {"lead_id": lid}
 
     def t_request_research(self, focus: str, interval_s: int | None = None) -> dict[str, Any]:
         self.f.db.kv_set("brain.research_focus", {"focus": focus[:300], "interval_s": interval_s, "by": self.call_id})

@@ -237,6 +237,8 @@ def build_app(forge: Any) -> FastAPI:
     app = FastAPI(title="FORGE", docs_url=None, redoc_url=None, openapi_url=None)
     token = operator_token(forge.s.home)
     auth = PortalAuth(forge.s.home)
+    from forge.api.agent_api import agent_token, mount
+    mount(app, forge, agent_token(forge.s.home))
 
     def who(req: Request) -> dict | None:
         authz = req.headers.get("authorization", "")
@@ -247,6 +249,10 @@ def build_app(forge: Any) -> FastAPI:
     @app.middleware("http")
     async def gate(request: Request, call_next):  # type: ignore[no-untyped-def]
         path = request.url.path
+        if path.startswith("/api/agent/"):
+            if _external(request):                                # agent API is loopback-only (never via the tunnel)
+                return JSONResponse({"detail": "not found"}, status_code=404)
+            return await call_next(request)                       # route enforces the agent token
         if path in ("/ready", "/metrics") and not _external(request):
             pass                                                  # local monitoring only
         elif path not in PUBLIC and who(request) is None:
