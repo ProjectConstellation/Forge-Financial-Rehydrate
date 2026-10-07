@@ -9,13 +9,13 @@ SSH="ssh -i $KEY -o BatchMode=yes"
 cd "$(dirname "$0")/.."
 git diff --quiet HEAD -- src tests scripts hermes modal_apps config pyproject.toml uv.lock || {
   echo "uncommitted code changes — commit first (deploys are traceable to a commit)"; exit 1; }
-rsync -a --delete -e "$SSH" --rsync-path="sudo rsync" \
+rsync -rlt --delete --no-owner --no-group -e "$SSH" --rsync-path="sudo rsync" \
   --include=/src/*** --include=/tests/*** --include=/scripts/*** --include=/hermes/*** --include=/modal_apps/*** \
   --include=/config/*** --include=/docs/*** --include=/.git/*** --include=/pyproject.toml --include=/uv.lock \
   --include=/README.md --include=/ARCHITECTURE.md --include=/AGENTS.md --include=/SECURITY.md --exclude='*' \
   ./ "$NEW:/srv/forge/"
-$SSH "$NEW" 'set -e; sudo chown -R forgeadmin:forgeadmin /srv/forge/src /srv/forge/tests /srv/forge/scripts /srv/forge/hermes \
-  /srv/forge/modal_apps /srv/forge/config /srv/forge/docs /srv/forge/.git; sudo chmod -R g+rX /srv/forge/src /srv/forge/hermes \
+$SSH "$NEW" 'set -e; sudo chown forgeadmin:forge /srv/forge; sudo chmod 750 /srv/forge; sudo chown -R forgeadmin:forgeadmin /srv/forge/src /srv/forge/tests /srv/forge/scripts /srv/forge/hermes \
+  /srv/forge/modal_apps /srv/forge/config /srv/forge/docs /srv/forge/.git /srv/forge/pyproject.toml /srv/forge/uv.lock; sudo chmod -R g+rX /srv/forge/src /srv/forge/hermes \
   /srv/forge/scripts; cd /srv/forge && UV_PYTHON_DOWNLOADS=never .tools/uv sync --frozen --quiet; \
   timeout 1200 .venv/bin/pytest -q -p no:warnings -p no:cacheprovider > /tmp/forge-deploy-tests.log 2>&1; rc=$?; \
   tail -3 /tmp/forge-deploy-tests.log; exit $rc' || { echo "TESTS FAILED ON HOST — not restarting (old process keeps running)"; exit 1; }
