@@ -1,8 +1,9 @@
-"""FORGE operator API + PWA host (DIRECTIVE §28–31; DOSSIER §32–34).
+"""FORGE founder portal + API (forge.northstarimagine.com via FORGE's own Cloudflare tunnel → 127.0.0.1:8470).
 
-Bound to 127.0.0.1 (private during build). Read endpoints are open on localhost; controls (STOP ALL TRADING, resume,
-cash-out) always require the operator token. Exchange keys never reach the browser — the frontend talks only to
-this backend. Endpoints: /health /ready /metrics /api/* /api/stream (SSE).
+Real-time: /api/live is a Server-Sent-Events stream that PUSHES a fresh snapshot every second (treasury re-marked to live
+prices, earnings windows, positions with live P&L) plus timeline events the instant they happen — no polling, no refresh.
+Security: everything except the login page requires a signed session (or the operator bearer token for CLI); controls
+additionally require the session's CSRF token. Exchange keys never reach the browser.
 """
 
 from __future__ import annotations
@@ -17,14 +18,17 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from forge.api.auth import PortalAuth
 from forge.core import state as tstate
 
 WEB = Path(__file__).resolve().parents[1] / "web"
+PUBLIC = {"/login", "/auth/login", "/health", "/manifest.webmanifest", "/sw.js", "/static/login.js", "/static/styles.css",
+          "/static/icon.svg"}
 
 
 def operator_token(home: Path) -> str:
@@ -43,8 +47,21 @@ def _j(x: Any) -> Any:
     return json.loads(json.dumps(x, default=lambda o: float(o) if isinstance(o, Decimal) else str(o)))
 
 
+def _ip(req: Request) -> str:
+    return req.headers.get("cf-connecting-ip") or (req.client.host if req.client else "?")
+
+
+def _external(req: Request) -> bool:
+    return "cf-connecting-ip" in req.headers or "x-forwarded-for" in req.headers
+
+
+class LoginBody(BaseModel):
+    username: str
+    password: str
+
+
 class StopBody(BaseModel):
-    reason: str = "operator emergency stop (dashboard)"
+    reason: str = "founder emergency stop (portal)"
     flatten: bool = False
 
 
@@ -57,25 +74,200 @@ class CashoutBody(BaseModel):
     now: bool = False
 
 
+# ---------------------------------------------------------------------------------------------- snapshot builder
+def snapshot(forge: Any) -> dict[str, Any]:
+    t = forge._snapshot_treasury()                       # re-marked to live prices on every call
+    db, book = forge.db, forge.book if forge.book in ("live", "paper") else "paper"
+
+    def window(hours: float) -> dict[str, float]:
+        since = f"datetime('now','-{int(hours * 60)} minutes')"
+        trade = float(db.scalar("SELECT COALESCE(SUM(CAST(realized_pnl_usd AS REAL) - CAST(fees_usd AS REAL)),0) FROM positions "
+                                f"WHERE book = ? AND status='CLOSED' AND closed_at > {since}", (book,)) or 0.0)
+        opex = float(db.scalar("SELECT COALESCE(SUM(CAST(amount_usd AS REAL)),0) FROM ledger_entries WHERE book = ? AND "
+                               f"account LIKE 'OPEX:%' AND ts > {since}", (book,)) or 0.0)
+        n = int(db.scalar(f"SELECT COUNT(*) FROM positions WHERE book = ? AND status='CLOSED' AND closed_at > {since} "
+                          "AND CAST(cost_usd AS REAL) > 0", (book,)) or 0)
+        net = trade - opex
+        return {"net_usd": net, "per_hour_usd": net / hours, "trading_net_usd": trade, "costs_usd": opex, "trades": n}
+
+    windows = {k: window(h) for k, h in (("1h", 1), ("8h", 8), ("12h", 12), ("24h", 24))}
+    marks = forge.market.marks()
+    positions = []
+    for p in db.query("SELECT id, symbol, strategy_id, status, qty, cost_usd, entry_price, opened_at, meta FROM positions "
+                      "WHERE book = ? AND status != 'CLOSED'", (book,)):
+        qty, cost = float(p["qty"]), float(p["cost_usd"])
+        px = marks.get(p["symbol"])
+        val = qty * px if px and qty > 0 else None
+        meta = json.loads(p["meta"] or "{}")
+        positions.append({"symbol": p["symbol"], "status": p["status"], "strategy": p["strategy_id"], "qty": qty,
+                          "cost_usd": cost, "price": px, "value_usd": val,
+                          "live_pnl_usd": (val - cost) if val is not None else None,
+                          "live_pnl_pct": ((val / cost - 1) if val is not None and cost > 0 else None),
+                          "profit_locked": bool(meta.get("lock_armed")), "opened_at": p["opened_at"]})
+    invested_cost = sum(p["cost_usd"] for p in positions)
+    invested_value = sum(p["value_usd"] or p["cost_usd"] for p in positions)
+    closed = db.query_one("SELECT COUNT(*) n, SUM(CASE WHEN CAST(realized_pnl_usd AS REAL) - CAST(fees_usd AS REAL) > 0 THEN 1 ELSE 0 END) w "
+                          "FROM positions WHERE book = ? AND status='CLOSED' AND CAST(cost_usd AS REAL) > 0", (book,)) or {"n": 0, "w": 0}
+    counts = forge.reg.counts()
+    live_strats = (counts.get("PRODUCTION", 0) or 0) + (counts.get("CHALLENGER", 0) or 0)
+    paper_strats = counts.get("SHADOW", 0) or 0
+    if positions:
+        doing = f"EARNING — {len(positions)} position(s) working · {sum(p['profit_locked'] for p in positions)} profit-locked"
+    elif live_strats or (book == "paper" and paper_strats):
+        b = forge.breadth
+        doing = (f"HUNTING — {live_strats + (paper_strats if book == 'paper' else 0)} validated strategies scanning "
+                 f"{len(forge.universe)} markets · market breadth {b.get('up_frac', 0):.0%} up · BTC {b.get('btc_regime')}")
+    else:
+        doing = (f"LEARNING — racing {len(db.kv_get('evolution.near_miss', []) or [])} near-miss lineages and "
+                 f"{counts.get('EXPERIMENTAL', 0)} candidates toward the evidence gate")
+    contributed = float(t.get("contributed_usd") or 0)
+    acct = forge.account
+    return _j({
+        "ts": time.time(), "mode": forge.s.mode.value, "book": book, "live_flag": forge.s.live_trading,
+        "trading": tstate.get_state(db), "doing_now": doing,
+        "account": {"coinbase_total_usd": acct.get("total_usd"), "coinbase_cash_usd": acct.get("cash_usd"),
+                    "coinbase_assets": acct.get("assets"), "age_s": round(time.time() - acct["ts"]) if acct.get("ts") else None},
+        "book_balance": {"equity_usd": t.get("equity_usd"), "cash_usd": t.get("cash_usd"), "reserve_usd": t.get("reserve_usd"),
+                         "contributed_usd": contributed,
+                         "roi": (float(t.get("equity_usd") or 0) / contributed - 1) if contributed > 0 else None},
+        "invested": {"cost_usd": invested_cost, "market_value_usd": invested_value, "positions": len(positions),
+                     "share_of_equity": invested_value / float(t["equity_usd"]) if t.get("equity_usd") else 0.0},
+        "earnings": {**windows, "lifetime_true_net_usd": t.get("true_net_usd"), "realized_usd": t.get("realized_pnl_usd"),
+                     "unrealized_usd": t.get("unrealized_pnl_usd"), "fees_usd": t.get("fees_usd"),
+                     "ai_usd": t.get("opex_inference_usd"), "compute_usd": t.get("opex_compute_usd"),
+                     "trades_closed": closed["n"] or 0, "win_rate": (closed["w"] or 0) / closed["n"] if closed["n"] else None},
+        "positions": positions, "population": counts, "regime": (t.get("regime") or {}).get("name"),
+        "breadth": forge.breadth, "breakers": forge.breakers.snapshot(), "loops": forge.sup.snapshot(),
+        "feed": forge.stream.quality.snapshot(time.time_ns()), "universe": len(forge.universe),
+        "fees": {"maker": float(forge.fees.maker), "taker": float(forge.fees.taker), "tier": forge.fees.tier},
+        "intelligence": forge.brain.spend_summary() if forge.brain else {"available": False},
+        "compute": forge.compute.summary() if forge.compute else {"available": False},
+        "deepseek_sentinel": db.kv_get("deepseek.sentinel"), "improvement_cycles": forge.improvement_runs,
+        "uptime_s": round(time.time() - forge.started), "workers": workers(forge), "lights": lights(forge, positions)})
+
+
+def workers(forge: Any) -> list[dict[str, Any]]:
+    now = time.time()
+    out = [{"name": k, **v, "elapsed_s": round(now - v.get("since", now))} for k, v in forge.workers.items()]
+    q = forge.stream.quality
+    out.append({"name": "market_feed", "what": f"{len(forge.universe)} markets · {q.messages} msgs · {q.reconnects} reconnects",
+                "count": 1 if q.connected else 0, "where": "Coinbase WebSocket", "elapsed_s": round((time.time_ns() - q.connected_since_ns) / 1e9) if q.connected else 0})
+    n_open = forge.db.scalar("SELECT COUNT(*) FROM positions WHERE book = ? AND status != 'CLOSED'", (forge.book,)) or 0
+    out.append({"name": "execution", "what": f"{n_open} position(s) under management · profit-lock armed on winners",
+                "count": 1, "where": "deterministic engine", "elapsed_s": round(now - forge.started)})
+    return out
+
+
+def lights(forge: Any, positions: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
+    """Traffic lights with honest semantics: green = actively doing it right now; amber = ready/limited; red = down/stopped."""
+    snap = forge.sup.snapshot()
+    crit_ok = all(x["alive"] and x["silent_s"] <= x["limit_s"] for x in snap if x["critical"])
+    q = forge.stream.quality
+    feed_ok = q.connected and (time.time_ns() - q.last_message_ns) < 15e9
+    ts = tstate.trading_state(forge.db)
+    counts = forge.reg.counts()
+    deployable = (counts.get("PRODUCTION", 0) or 0) + (counts.get("CHALLENGER", 0) or 0) + \
+        ((counts.get("SHADOW", 0) or 0) if forge.book == "paper" else 0)
+    disc_age = time.time() - forge.last_improvement_ts if forge.last_improvement_ts else 1e9
+    busy = any(w.get("count", 0) for k, w in forge.workers.items() if k in ("research", "modal"))
+    sent = forge.db.kv_get("deepseek.sentinel") or {}
+    last_llm = forge.db.scalar("SELECT MAX(ts) FROM inference_calls") or ""
+    return {
+        "engine": {"state": "green" if crit_ok else "red", "label": "ENGINE ONLINE" if crit_ok else "ENGINE DEGRADED"},
+        "feed": {"state": "green" if feed_ok else "red", "label": "LIVE MARKET DATA" if feed_ok else "FEED DOWN"},
+        "earning": {"state": "red" if ts == "STOPPED" else "green" if positions else "amber" if deployable else "blue",
+                    "label": "TRADING STOPPED" if ts == "STOPPED" else f"EARNING · {len(positions)} POSITION(S)" if positions
+                    else f"HUNTING · {deployable} STRATEGIES" if deployable else "LEARNING · NO VALIDATED EDGE YET"},
+        "discovering": {"state": "green" if busy or disc_age < 900 else "amber",
+                        "label": "DISCOVERING STRATEGIES" if busy or disc_age < 900 else "RESEARCH IDLE"},
+        "brain": {"state": "amber" if sent.get("status") == "LOW" else "green" if last_llm else "amber",
+                  "label": f"AI BRAIN · ${sent.get('balance', 0) or 0:.2f}" + (" · ADD $10" if sent.get("status") == "LOW" else "")},
+        "safety": {"state": "red" if ts == "STOPPED" else "amber" if forge.breakers.blocking() or ts == "OBSERVE_ONLY" else "green",
+                   "label": {"RUNNING": "RISK GOVERNOR ARMED", "STOPPED": "EMERGENCY STOP", "OBSERVE_ONLY": "OBSERVE ONLY"}.get(ts, ts)},
+    }
+
+
+def lists(forge: Any) -> dict[str, Any]:
+    from forge.discovery import catalog
+    opps = forge.db.query("SELECT id, ts, symbol, strategy_id, family, score, expected_net_bps, probability, status, reason, "
+                          "components, outcome FROM opportunities ORDER BY ts_ns DESC LIMIT 25")
+    for r in opps:
+        r["components"] = json.loads(r["components"] or "{}")
+        r["outcome"] = json.loads(r["outcome"]) if r["outcome"] else None
+    return _j({"opportunities": opps, "strategies": forge.arena.summary(), "rails": catalog(forge.db),
+               "agents": forge.agent_status})
+
+
+# ---------------------------------------------------------------------------------------------- app
 def build_app(forge: Any) -> FastAPI:
     app = FastAPI(title="FORGE", docs_url=None, redoc_url=None, openapi_url=None)
     token = operator_token(forge.s.home)
+    auth = PortalAuth(forge.s.home)
 
-    def require_token(authorization: str = Header(default="")) -> None:
-        got = authorization.removeprefix("Bearer ").strip()
-        if not got or not hmac.compare_digest(got, token):
-            raise HTTPException(status_code=401, detail="operator token required")
+    def who(req: Request) -> dict | None:
+        authz = req.headers.get("authorization", "")
+        if authz.startswith("Bearer ") and hmac.compare_digest(authz[7:].strip(), token):
+            return {"u": "operator-token", "csrf": None, "token": True}
+        return auth.session(req.cookies.get(PortalAuth.COOKIE))
 
     @app.middleware("http")
-    async def security_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
+    async def gate(request: Request, call_next):  # type: ignore[no-untyped-def]
+        path = request.url.path
+        if path in ("/ready", "/metrics") and not _external(request):
+            pass                                                  # local monitoring only
+        elif path not in PUBLIC and who(request) is None:
+            if path.startswith("/api/") or request.method != "GET" or path in ("/ready", "/metrics"):
+                return JSONResponse({"detail": "login required"}, status_code=401)
+            return RedirectResponse("/login", status_code=303)
         resp = await call_next(request)
-        resp.headers["X-Content-Type-Options"] = "nosniff"
-        resp.headers["X-Frame-Options"] = "DENY"
-        resp.headers["Referrer-Policy"] = "no-referrer"
-        resp.headers["Content-Security-Policy"] = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+        resp.headers.update({"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",
+                             "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:",
+                             "Strict-Transport-Security": "max-age=31536000", "Permissions-Policy": "geolocation=(), camera=()"})
         return resp
 
-    # ------------------------------------------------------------------ health
+    def require_csrf(request: Request) -> str:
+        s = who(request)
+        if s is None:
+            raise HTTPException(401, "login required")
+        if s.get("token"):
+            return s["u"]
+        if not hmac.compare_digest(request.headers.get("x-csrf", ""), s.get("csrf") or "~"):
+            raise HTTPException(403, "invalid CSRF token")
+        return f"founder:{s['u']}"
+
+    # ------------------------------------------------------------------ auth
+    @app.get("/login")
+    async def login_page() -> FileResponse:
+        return FileResponse(WEB / "login.html", headers={"Cache-Control": "no-store"})
+
+    @app.post("/auth/login")
+    async def login(body: LoginBody, request: Request) -> JSONResponse:
+        ip = _ip(request)
+        if auth.locked(ip) > 0:
+            raise HTTPException(429, f"too many attempts — locked for {auth.locked(ip):.0f}s")
+        if not auth.attempt(ip, body.username, body.password):
+            forge.audit.append("PORTAL_LOGIN_FAILED", {"ip": ip, "user": body.username[:40]})
+            await asyncio.sleep(1.0)
+            raise HTTPException(401, "invalid credentials")
+        cookie, csrf = auth.issue(auth.user)
+        forge.audit.append("PORTAL_LOGIN", {"ip": ip, "user": auth.user})
+        resp = JSONResponse({"ok": True, "csrf": csrf})
+        secure = request.headers.get("x-forwarded-proto") == "https" or "https" in request.headers.get("cf-visitor", "")
+        resp.set_cookie(PortalAuth.COOKIE, cookie, max_age=30 * 86400, httponly=True, secure=secure, samesite="strict", path="/")
+        return resp
+
+    @app.post("/auth/logout")
+    async def logout() -> JSONResponse:
+        resp = JSONResponse({"ok": True})
+        resp.delete_cookie(PortalAuth.COOKIE, path="/")
+        return resp
+
+    @app.get("/api/session")
+    async def session(request: Request) -> Any:
+        s = who(request) or {}
+        return {"user": s.get("u"), "csrf": s.get("csrf")}
+
+    # ------------------------------------------------------------------ health / metrics
     @app.get("/health")
     async def health() -> dict[str, Any]:
         return {"ok": True, "uptime_s": round(time.time() - forge.started)}
@@ -91,80 +283,25 @@ def build_app(forge: Any) -> FastAPI:
 
     @app.get("/metrics")
     async def metrics() -> PlainTextResponse:
-        t = forge.treasury
-        q = forge.stream.quality
-        lines = [
-            f"forge_equity_usd {t.get('equity_usd', 0)}", f"forge_true_net_usd {t.get('true_net_usd', 0)}",
-            f"forge_fees_usd {t.get('fees_usd', 0)}", f"forge_opex_inference_usd {t.get('opex_inference_usd', 0)}",
-            f"forge_opex_compute_usd {t.get('opex_compute_usd', 0)}", f"forge_ws_messages_total {q.messages}",
-            f"forge_ws_reconnects_total {q.reconnects}", f"forge_ws_sequence_gaps_total {q.sequence_gaps}",
-            f"forge_improvement_cycles_total {forge.improvement_runs}",
-        ]
-        for k, v in forge.reg.counts().items():
-            lines.append(f'forge_strategies{{state="{k}"}} {v}')
+        t, q = forge.treasury, forge.stream.quality
+        lines = [f"forge_equity_usd {t.get('equity_usd', 0)}", f"forge_true_net_usd {t.get('true_net_usd', 0)}",
+                 f"forge_ws_messages_total {q.messages}", f"forge_ws_reconnects_total {q.reconnects}",
+                 f"forge_improvement_cycles_total {forge.improvement_runs}"]
+        lines += [f'forge_strategies{{state="{k}"}} {v}' for k, v in forge.reg.counts().items()]
         return PlainTextResponse("\n".join(lines) + "\n")
 
-    # ------------------------------------------------------------------ read API
-    def earnings() -> dict[str, Any]:
-        db, book = forge.db, forge.book if forge.book in ("live", "paper") else "paper"
-        def net(since: str) -> float:
-            pos = db.scalar("SELECT COALESCE(SUM(CAST(realized_pnl_usd AS REAL) - CAST(fees_usd AS REAL)),0) FROM positions "
-                            f"WHERE book = ? AND status='CLOSED' AND closed_at > {since}", (book,)) or 0.0
-            opex = db.scalar("SELECT COALESCE(SUM(CAST(amount_usd AS REAL)),0) FROM ledger_entries WHERE book = ? AND "
-                             f"account LIKE 'OPEX:%' AND ts > {since}", (book,)) or 0.0
-            return float(pos) - float(opex)
-        today, d7 = net("date('now')"), net("datetime('now','-7 day')")
-        life = float(forge.treasury.get("true_net_usd") or 0.0)
-        trades_today = db.scalar("SELECT COUNT(*) FROM positions WHERE book = ? AND status='CLOSED' AND closed_at > date('now') "
-                                 "AND CAST(cost_usd AS REAL) > 0", (book,)) or 0
-        hours = max((time.time() - (time.time() // 86400) * 86400) / 3600, 0.25)
-        counts = forge.reg.counts()
-        live_strats = (counts.get("PRODUCTION", 0) or 0) + (counts.get("CHALLENGER", 0) or 0)
-        open_n = db.scalar("SELECT COUNT(*) FROM positions WHERE book = ? AND status != 'CLOSED'", (book,)) or 0
-        near = len(db.kv_get("evolution.near_miss", []) or [])
-        if open_n:
-            doing = f"EARNING — {open_n} position(s) working; {live_strats} validated strategies deployed"
-        elif live_strats:
-            doing = f"HUNTING — {live_strats} validated strategies scanning {len(forge.universe)} markets for their entry signals"
-        else:
-            doing = (f"LEARNING — no strategy has passed the evidence gate yet; capital protected while the Improvement "
-                     f"Loop races {near} near-miss lineages and {counts.get('EXPERIMENTAL', 0)} candidates (paper/live P&L appears here "
-                     "the moment a strategy proves itself)")
-        return {"today_usd": today, "7d_usd": d7, "lifetime_true_net_usd": life, "per_hour_today_usd": today / hours,
-                "trades_today": trades_today, "doing_now": doing, "book": book}
-
+    # ------------------------------------------------------------------ data
     @app.get("/api/overview")
     async def overview() -> Any:
-        t = forge.treasury
-        st = tstate.get_state(forge.db)
-        opp = forge.db.query_one("SELECT COUNT(*) n FROM opportunities WHERE ts > datetime('now','-1 day')") or {"n": 0}
-        pos = forge.db.query("SELECT symbol, strategy_id, status, qty, cost_usd, opened_at FROM positions "
-                             "WHERE book = ? AND status != 'CLOSED'", (forge.book,))
-        intel = forge.brain.spend_summary() if forge.brain else {"available": False}
-        compute = forge.compute.summary() if forge.compute else {"available": False}
-        return _j({
-            "mode": forge.s.mode.value, "book": forge.book, "live_flag": forge.s.live_trading, "trading": st,
-            "treasury": t, "positions": pos, "population": forge.reg.counts(), "opportunities_24h": opp["n"],
-            "agents": forge.agent_status, "breakers": forge.breakers.snapshot(),
-            "feed": forge.stream.quality.snapshot(time.time_ns()), "universe": len(forge.universe),
-            "fees": {"maker": float(forge.fees.maker), "taker": float(forge.fees.taker), "tier": forge.fees.tier},
-            "intelligence": intel, "compute": compute, "improvement_cycles": forge.improvement_runs,
-            "hurdle_per_day": forge.hurdle.hurdle(t.get("regime", {}).get("hurdle_multiplier", 1.0)) * 24,
-            "uptime_s": round(time.time() - forge.started), "earnings": earnings(), "loops": forge.sup.snapshot(),
-            "deepseek_sentinel": forge.db.kv_get("deepseek.sentinel"), "breadth": forge.breadth})
+        return snapshot(forge)
 
-    @app.get("/api/opportunities")
-    async def opportunities(limit: int = 50) -> Any:
-        rows = forge.db.query("SELECT id, ts, symbol, strategy_id, family, score, expected_net_bps, probability, status, "
-                              "reason, components, outcome FROM opportunities ORDER BY ts_ns DESC LIMIT ?", (min(limit, 500),))
-        for r in rows:
-            r["components"] = json.loads(r["components"] or "{}")
-            r["outcome"] = json.loads(r["outcome"]) if r["outcome"] else None
-        return _j(rows)
+    @app.get("/api/lists")
+    async def get_lists() -> Any:
+        return lists(forge)
 
-    @app.get("/api/strategies")
-    async def strategies() -> Any:
-        return _j(forge.arena.summary())
+    @app.get("/api/timeline")
+    async def timeline(limit: int = 100) -> Any:
+        return _j(forge.db.query("SELECT id, ts, agent, level, message FROM timeline ORDER BY id DESC LIMIT ?", (min(limit, 1000),)))
 
     @app.get("/api/strategies/{sid}")
     async def strategy(sid: str) -> Any:
@@ -172,72 +309,82 @@ def build_app(forge: Any) -> FastAPI:
         if g is None:
             raise HTTPException(404)
         return _j({"genome": g.model_dump(mode="json"), "state": forge.reg.state(sid), "lineage": forge.reg.lineage(sid),
-                   "holdout": forge.reg.latest_metrics(sid, "holdout"), "forward": forge.reg.latest_metrics(sid, "forward"),
-                   "events": forge.db.query("SELECT ts, from_population, to_population, reason FROM strategy_events "
-                                            "WHERE strategy_id = ? ORDER BY id", (sid,))})
+                   "holdout": forge.reg.latest_metrics(sid, "holdout"), "forward": forge.reg.latest_metrics(sid, "forward")})
 
-    @app.get("/api/timeline")
-    async def timeline(limit: int = 100) -> Any:
-        return _j(forge.db.query("SELECT id, ts, agent, level, message FROM timeline ORDER BY id DESC LIMIT ?", (min(limit, 1000),)))
+    @app.get("/api/history")
+    async def history(hours: float = 24) -> Any:
+        rows = forge.db.query("SELECT ts, equity_usd, true_net_usd, account_total_usd, invested_usd FROM equity_series "
+                              "WHERE book = ? AND ts > datetime('now', ?) ORDER BY ts", (forge.book, f"-{int(hours * 60)} minutes"))
+        return _j(rows)
 
     @app.get("/api/calibration")
     async def calibration() -> Any:
         return _j([forge.calib.reliability(c) for c in forge.calib.classes()])
 
-    @app.get("/api/stream")
-    async def stream(request: Request) -> StreamingResponse:
+    @app.get("/api/live")
+    async def live(request: Request) -> StreamingResponse:
+        """Real-time push: snapshot every 1s, lists every 5s, timeline events immediately."""
         async def gen():  # type: ignore[no-untyped-def]
-            last = len(forge.events)
-            yield "retry: 3000\n\n"
+            yield "retry: 2000\n\n"
+            last_ev = len(forge.events)
+            k = 0
             while not await request.is_disconnected():
+                yield f"event: snapshot\ndata: {json.dumps(snapshot(forge))}\n\n"
+                if k % 5 == 0:
+                    yield f"event: lists\ndata: {json.dumps(lists(forge))}\n\n"
                 evs = list(forge.events)
-                if len(evs) > last or (evs and last > len(evs)):
-                    for ev in evs[last:] if last <= len(evs) else evs[-5:]:
-                        yield f"data: {json.dumps(_j(ev))}\n\n"
-                    last = len(evs)
+                if len(evs) < last_ev:
+                    last_ev = 0
+                for ev in evs[last_ev:]:
+                    yield f"event: timeline\ndata: {json.dumps(_j(ev))}\n\n"
+                last_ev = len(evs)
+                k += 1
                 await asyncio.sleep(1.0)
-        return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-store"})
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
 
-    # ------------------------------------------------------------------ controls (token required)
-    @app.post("/api/control/stop", dependencies=[Depends(require_token)])
-    async def stop_all(body: StopBody) -> Any:
-        st = tstate.stop_all(forge.db, forge.audit, actor="operator-dashboard", reason=body.reason,
+    # ------------------------------------------------------------------ controls (session + CSRF, or operator token)
+    @app.post("/api/control/stop")
+    async def stop_all(body: StopBody, request: Request) -> Any:
+        actor = require_csrf(request)
+        st = tstate.stop_all(forge.db, forge.audit, actor=actor, reason=body.reason,
                              safe_stop_policy="flatten_when_safe" if body.flatten else "keep_exits")
-        await forge.say("Operator", f"STOP ALL TRADING — {body.reason}", level="warn")
+        await forge.say("Founder", f"STOP ALL TRADING — {body.reason}", level="warn")
         return st
 
-    @app.post("/api/control/resume", dependencies=[Depends(require_token)])
-    async def resume(body: ResumeBody) -> Any:
+    @app.post("/api/control/resume")
+    async def resume(body: ResumeBody, request: Request) -> Any:
+        actor = require_csrf(request)
         try:
-            st = tstate.resume(forge.db, forge.audit, actor="operator-dashboard", confirm=body.confirm)
+            st = tstate.resume(forge.db, forge.audit, actor=actor, confirm=body.confirm)
         except PermissionError as e:
             raise HTTPException(400, str(e)) from e
-        await forge.say("Operator", "Trading resumed by operator", level="warn")
+        await forge.say("Founder", "Trading resumed", level="warn")
         return st
 
-    @app.post("/api/control/cashout", dependencies=[Depends(require_token)])
-    async def cashout(body: CashoutBody) -> Any:
-        req = {"amount": body.amount, "urgency": "now" if body.now else "patient", "requested_by": "operator-dashboard"}
+    @app.post("/api/control/cashout")
+    async def cashout(body: CashoutBody, request: Request) -> Any:
+        actor = require_csrf(request)
+        req = {"amount": body.amount, "urgency": "now" if body.now else "patient", "requested_by": actor}
         forge.db.kv_set("cashout.request", req)
-        forge.audit.append("CASHOUT_REQUESTED", req, actor="operator-dashboard")
-        await forge.say("Operator", f"Cash-out requested: {body.amount} ({req['urgency']})", level="warn")
+        forge.audit.append("CASHOUT_REQUESTED", req, actor=actor)
+        await forge.say("Founder", f"Cash-out requested: {body.amount} ({req['urgency']})", level="warn")
         return req
 
     # ------------------------------------------------------------------ PWA
-    if WEB.exists():
-        app.mount("/static", StaticFiles(directory=WEB), name="static")
+    app.mount("/static", StaticFiles(directory=WEB), name="static")
 
-        @app.get("/")
-        async def index() -> FileResponse:
-            return FileResponse(WEB / "index.html", headers={"Cache-Control": "no-store"})
+    @app.get("/")
+    async def index() -> FileResponse:
+        return FileResponse(WEB / "index.html", headers={"Cache-Control": "no-store"})
 
-        @app.get("/manifest.webmanifest")
-        async def manifest() -> FileResponse:
-            return FileResponse(WEB / "manifest.webmanifest", media_type="application/manifest+json")
+    @app.get("/manifest.webmanifest")
+    async def manifest() -> FileResponse:
+        return FileResponse(WEB / "manifest.webmanifest", media_type="application/manifest+json")
 
-        @app.get("/sw.js")
-        async def sw() -> FileResponse:
-            return FileResponse(WEB / "sw.js", media_type="application/javascript")
+    @app.get("/sw.js")
+    async def sw() -> FileResponse:
+        return FileResponse(WEB / "sw.js", media_type="application/javascript")
 
     return app
 
@@ -245,5 +392,5 @@ def build_app(forge: Any) -> FastAPI:
 async def serve(forge: Any) -> None:
     import uvicorn
     cfg = uvicorn.Config(build_app(forge), host=forge.s.api_host, port=forge.s.api_port, log_level="warning",
-                         access_log=False, lifespan="off")
+                         access_log=False, lifespan="off", proxy_headers=True, forwarded_allow_ips="127.0.0.1")
     await uvicorn.Server(cfg).serve()

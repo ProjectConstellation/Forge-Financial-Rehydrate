@@ -151,7 +151,11 @@ class Brain:
                 "population": f.reg.counts(), "treasury": {k: f.treasury.get(k) for k in ("equity_usd", "true_net_usd", "daily_pnl_usd")},
                 "capital_regime": (f.treasury.get("regime") or {}).get("name"), "recent_scored_opportunities": recent}
 
+    def _work(self, what: str, count: int = 1) -> None:
+        self.f.workers["brain"] = {"what": what, "count": count, "since": time.time(), "where": "DeepSeek API"}
+
     async def perceive(self) -> dict[str, Any] | None:
+        self._work("Flash perception: reading 30 markets")
         msgs = [{"role": "system", "content": system_prompt("perception")},
                 {"role": "user", "content": "SITUATION PACK:\n" + json.dumps(self._situation(), default=str)}]
         res = await self.c.chat(msgs, agent="perception", purpose="market_perception", effort="low", json_mode=True,
@@ -163,12 +167,14 @@ class Brain:
         for rc in (view.get("regime_calls") or [])[:20]:
             self._artifact(res.call_id, "perception", res.model, "regime_call", rc.get("symbol"), rc.get("p"), rc)
         self.f.status("DeepSeek Brain", f"Flash perception: {str(view.get('market_view', ''))[:120]}")
+        self._work("idle — next perception in ≤15 min", 0)
         await self.f.say("DeepSeek Brain", f"Flash perception (${res.cost_usd:.5f}): {str(view.get('market_view', ''))[:240]}"
                                            + (f" → ESCALATE: {view.get('escalate_reason')}" if view.get("escalate") else ""))
         return view
 
     async def scientist(self, reason: str, focus: list[str] | None = None, critical: bool = False) -> None:
         self.last_scientist = time.time()
+        self._work(f"V4 Pro scientist: designing strategies ({reason[:60]})")
         await self.f.say("DeepSeek Brain", f"Escalating to {self.f.s.deepseek.deep_model} (effort {self.f.s.deepseek.deep_effort if critical else 'high'}) — {reason}")
         user = ("Research mandate: find strategy genomes that clear FORGE's fee hurdle with alpha vs market drift and high "
                 f"capital velocity. Reason for this session: {reason}. Focus hints: {focus or []}. "
@@ -233,6 +239,7 @@ class Brain:
                     pred = q[0].get("predicted_p") if q else None
                 self._artifact(first_id or "?", role, model, a["kind"], a["ref_id"], pred, None)
             n_g = sum(1 for a in router.artifacts if a["kind"] == "genome")
+            self._work("idle", 0)
             await self.f.say("DeepSeek Brain", f"{role} session done (${total:.4f}): {n_g} candidate genomes queued for "
                                                f"evaluation; {str((final or {}).get('diagnosis', ''))[:200]}")
         return final

@@ -104,6 +104,8 @@ class ComputeGovernor:
                                          "cpu": 2.0 * n, "memory_mb": 3072 * n, "status": "RUNNING",
                                          "strategy_ids": dumps([g.id for g in parents][:50])})
         forge.status("Modal Lab", f"{n} workers · evolutionary tournament ({interval // 60}m)")
+        forge.workers["modal"] = {"what": f"evolutionary tournament on {interval // 60}m data", "count": n, "since": time.time(),
+                                  "where": "Modal cloud (2 vCPU-cores each)"}
         await forge.say("Modal Lab", f"Modal burst launched: {n} parallel workers × {self.burst_budget_s:.0f}s evolutionary "
                                      f"tournament on {interval // 60}m data (budget {self.budget_state()}, month ${self.month_spend():.2f}/${self.budget:.0f})")
         # different seeds and parent subsets per container (diversity); LLM genomes go to every container
@@ -140,6 +142,7 @@ class ComputeGovernor:
                 if gid not in seen:
                     seen.add(gid)
                     merged["candidates"].append(c)
+        forge.workers["modal"] = {"what": "scaled to zero (idle)", "count": 0, "since": time.time(), "where": "Modal cloud"}
         await forge.say("Modal Lab", f"Burst complete: {merged['evaluated']} genomes across {len(results)} containers, "
                                      f"{secs:.0f} container-s, est cost ${cost:.4f}")
         return merged

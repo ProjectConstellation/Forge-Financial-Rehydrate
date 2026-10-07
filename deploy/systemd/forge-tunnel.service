@@ -1,0 +1,21 @@
+[Unit]
+Description=FORGE Cloudflare tunnel (forge.northstarimagine.com → 127.0.0.1:8470)
+After=network-online.target forge.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=forge
+Group=forge
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --config /etc/forge/tunnel/config.yml tunnel run
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+CPUQuota=50%
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

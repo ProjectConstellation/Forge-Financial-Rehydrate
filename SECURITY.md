@@ -4,7 +4,8 @@
 - **Coinbase key**: View + Trade only, IP-allowlisted to the server, ECDSA. `can_transfer=false` verified at every start. No transfer code path exists.
 - **LLM containment**: DeepSeek acts only through typed tools; no trade/transfer/risk/stop tools; external text wrapped as `<untrusted_data>`; generated strategies are declarative genomes validated by schema and judged by the deterministic evaluator.
 - **Protected core** (evolution cannot modify): `forge.risk.governor`, `forge.risk.breakers`, `forge.core.state`, `forge.execution.gateway`, `forge.ledger.ledger`, `forge.config`, `forge.venues.coinbase.auth`.
-- **Dashboard**: localhost only; controls require the operator token (constant-time compare); CSP/no-frame headers. Public exposure requires domain + TLS + reverse proxy (operator action).
+- **Founder portal**: https://forge.northstarimagine.com via FORGE's own Cloudflare tunnel (no shared tunnel/proxy touched). Login required for everything except /login and /health; password stored only as scrypt hash in /etc/forge/forge.env; signed HttpOnly+Secure+SameSite=Strict session cookie; CSRF token on every control; 5 failures/15 min per IP → lockout; all logins audited; /ready and /metrics local-only.
+- **Dashboard (legacy note)**: originally localhost only; controls require the operator token (constant-time compare); CSP/no-frame headers. Public exposure requires domain + TLS + reverse proxy (operator action).
 - **Audit**: append-only hash-chained JSONL (`forge verify-audit`); ledger table has DB triggers forbidding UPDATE/DELETE.
 - **systemd hardening**: NoNewPrivileges, ProtectSystem=strict, ProtectHome, PrivateTmp, CPUQuota=300%, MemoryMax=2G.
 - Threats modeled: leaked keys (no transfer perm, IP allowlist), prompt injection (tool-only, untrusted wrapping), duplicate orders (client_order_id + venue dedup + DB unique), stale data (freshness gates), clock drift (NTP), book drift vs wallet (reconciliation breaker).

@@ -102,6 +102,9 @@ class Forge:
         self.cooldown: dict[tuple[str, str], float] = {}
         self.agent_status: dict[str, dict[str, Any]] = {}
         self.breadth: dict[str, Any] = {"up_frac": 0.0, "n": 0, "btc_regime": "UNKNOWN"}
+        self.account: dict[str, Any] = {"total_usd": None, "cash_usd": None, "assets": [], "ts": 0.0}
+        self.workers: dict[str, dict[str, Any]] = {}      # live worker board for the founder portal
+        self.last_improvement_ts = 0.0
         self.events: deque[dict[str, Any]] = deque(maxlen=500)
         self.tasks: list[asyncio.Task[Any]] = []
         self.pool: ProcessPoolExecutor | None = None
@@ -126,6 +129,8 @@ class Forge:
         await self.say("Forge", f"FORGE starting — mode {self.s.mode.value}, book '{self.book}', "
                                 f"live trading flag {'ON' if self.s.live_trading else 'OFF'}")
         self.audit.append("FORGE_START", {"mode": self.s.mode.value, "book": self.book, "pid": os.getpid()})
+        from forge.discovery import seed_catalog
+        seed_catalog(self.db)
         n = self.arena.bootstrap()
         if n:
             await self.say("Evolution Arena", f"Seeded {n} strategy families into the population (EXPERIMENTAL)")
@@ -280,16 +285,41 @@ class Forge:
             t = self._snapshot_treasury()
             if self.book == "live" and n % 4 == 0:
                 await self._reconcile_live()
+            if self.rest.authenticated and n % 4 == 1:
+                await self._refresh_account()
             eq0 = float(self.day["start_equity"] or 0)
             if eq0 > 0 and t["daily_pnl_usd"] / eq0 <= -float(self.s.risk.daily_drawdown_breaker_fraction):
                 if tstate.trading_state(self.db) == "RUNNING":
                     tstate.observe_only(self.db, self.audit, f"daily loss {t['daily_pnl_usd']:.2f} breached limit")
-                    await self.say("Risk Governor", "Daily loss limit reached → OBSERVE_ONLY; Improvement Loop escalated "
+                    await self.say("Risk Governor", "Daily drawdown limit reached → OBSERVE_ONLY; Improvement Loop escalated "
                                                     "(postmortem + challenger research)", level="warn")
                     if self.brain is not None:
                         await self.brain.escalate(self, "daily_loss_limit", {"treasury": t})
             self.status("Accountant", f"equity ${t['equity_usd']:.2f} · true net ${t['true_net_usd']:+.4f}")
+            if n % 4 == 0:
+                self.db.insert("equity_series", {"ts": _now(), "book": self.book, "equity_usd": t["equity_usd"],
+                                                 "true_net_usd": t.get("true_net_usd"), "account_total_usd": self.account.get("total_usd"),
+                                                 "invested_usd": t.get("deployed_usd")})
             await asyncio.sleep(15)
+
+    async def _refresh_account(self) -> None:
+        """The real Coinbase account as a whole (read-only view), marked to live prices."""
+        try:
+            bals = [b for b in await self.coinbase.get_balances() if b.total > 0]
+        except Exception as e:
+            log.warning("account refresh failed: %s", e)
+            return
+        cash = float(sum((b.total for b in bals if b.asset in ("USD", "USDC")), Decimal(0)))
+        assets, total = [], cash
+        for b in bals:
+            if b.asset in ("USD", "USDC"):
+                continue
+            bbo = self.market.get_bbo(f"{b.asset}-USD")
+            px = bbo.mid if bbo else (self.market.products.get(f"{b.asset}-USD").price if self.market.products.get(f"{b.asset}-USD") else 0.0)
+            v = float(b.total) * px
+            total += v
+            assets.append({"asset": b.asset, "qty": float(b.total), "price": px, "value_usd": v})
+        self.account = {"total_usd": total, "cash_usd": cash, "assets": assets, "ts": time.time()}
 
     async def _reconcile_live(self) -> None:
         """Wallet-truth: ledger cash vs Coinbase balances (research lesson: books drift from wallets)."""
@@ -600,6 +630,8 @@ class Forge:
                     keep = [q for q in queue if q["genome"]["id"] not in {g["id"] for g in llm}]
                     self.db.kv_set("brain.candidate_queue", keep)
                     await self.say("Evolution Arena", f"Evaluating {len(llm)} DeepSeek-designed genomes this cycle")
+                self.workers["research"] = {"what": f"evolving {interval // 60}m strategies ({len(parents)} parents, "
+                                                    f"{len(llm)} DeepSeek designs)", "since": time.time(), "count": 1, "where": "local"}
                 if self.compute is not None and await self.compute.should_burst(self, interval):
                     results = await asyncio.wait_for(self.compute.burst_search(self, interval, parents, llm), timeout=1200)
                 else:
@@ -610,10 +642,12 @@ class Forge:
                                                          {"maker": float(self.fees.maker), "taker": float(self.fees.taker)},
                                                          240.0, int(time.time()), llm), timeout=900)
                 await self._absorb(results, interval)
+                self.last_improvement_ts = time.time()
             except Exception as e:
                 log.exception("improvement cycle failed")
                 await self.say("Evolution Arena", f"Improvement cycle error: {e}", level="warn")
             self.improvement_runs += 1
+            self.workers["research"] = {"what": "idle between cycles (next in ~30s)", "since": time.time(), "count": 0, "where": "-"}
             self.sup.beat("improvement")
             await asyncio.sleep(30)
 
@@ -713,7 +747,7 @@ class Forge:
         self.hurdle.flush()
         if rows:
             await self.say("Counterfactual Engine", f"Scored {len(rows)} past opportunities: {missed_win} not-taken winners, "
-                                                    f"{avoided_loss} correctly avoided/observed losers → calibration + hurdle updated")
+                                                    f"{avoided_loss} correctly avoided weak setups → calibration + hurdle updated")
 
     async def _housekeeping_loop(self) -> None:
         while not self.stop_event.is_set():
