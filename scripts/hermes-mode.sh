@@ -12,6 +12,42 @@ if v.get('mode')=='credit': v.setdefault('start', (db.kv_get('hermes.mode') or {
 db.kv_set('hermes.mode', v); print('FORGE hermes.mode =', v)" "$1"; }
 ids_named() { hc cron list 2>/dev/null | awk '/^  [0-9a-f]{12} \[/{id=$1} $1=="Name:" && $2 ~ /^forge-/ {print id}'; }
 MODE="${1:-status}"
+# ---- generic provider swap (zero recode: endpoint + model + key) ------------------------------------------------------
+#   forge-hermes-mode add-provider <name> <base_url> <chat_completions|anthropic_messages> <model> <in_$/M> <out_$/M>
+#        (API key read from STDIN, stored only in Hermes' 0600 .env as HERMES_KEY_<NAME>)
+#   forge-hermes-mode use <name> <model> [credit_usd hours]      (credit_* = free/prepaid pool; omit for DeepSeek-style ROI)
+if [ "$MODE" = "add-provider" ]; then
+  name=$2; url=$3; transport=$4; model=$5; pin=${6:-0}; pout=${7:-0}
+  envvar="HERMES_KEY_$(echo "$name" | tr 'a-z-' 'A-Z_')"
+  key=$(cat)
+  sudo python3 - "$HH/.env" "$envvar" "$key" <<'PY'
+import os, sys
+p, var, key = sys.argv[1:4]
+lines = [l for l in open(p).read().splitlines() if not l.startswith(var + "=")] + [f"{var}={key}"]
+open(p, "w").write("\n".join(lines) + "\n"); os.chmod(p, 0o600)
+PY
+  sudo chown forge-hermes:forge-hermes $HH/.env
+  sudo -u forge-hermes python3 - "$HH/config.yaml" "$name" "$url" "$transport" "$model" "$envvar" <<'PY'
+import sys, yaml
+p, name, url, transport, model, envvar = sys.argv[1:7]
+c = yaml.safe_load(open(p)); c.setdefault("providers", {})[name] = {"name": name, "api": url, "key_env": envvar,
+    "transport": transport, "default_model": model, "models": {model: {}}, "discover_models": False}
+yaml.safe_dump(c, open(p, "w"), sort_keys=False); print("provider", name, "->", url, transport, model)
+PY
+  sudo -u forge env PYTHONPATH=/srv/forge/src /srv/forge/.venv/bin/python -c "
+import sys; from forge.persistence.db import Database
+db=Database('/srv/forge/var/state/forge.sqlite'); p=db.kv_get('hermes.prices') or {}
+p[sys.argv[1]]={'in': float(sys.argv[2]), 'out': float(sys.argv[3]), 'cache': float(sys.argv[2])*0.1}; db.kv_set('hermes.prices', p); print('prices', p)" "$model" "$pin" "$pout"
+  exit 0
+fi
+if [ "$MODE" = "use" ]; then
+  prov=$2; model=$3
+  hc config set model.provider "$prov" >/dev/null; hc config set model.default "$model" >/dev/null
+  hc config set cron.model "$model" >/dev/null; hc config set cron.model_provider "$prov" >/dev/null
+  if [ -n "${4:-}" ]; then kv "{\"mode\": \"credit\", \"model\": \"$model\", \"credit_usd\": $4, \"hours\": ${5:-72}, \"start\": $(date +%s)}"
+  else kv "{\"mode\": \"deepseek\", \"model\": \"$model\"}"; fi
+  sudo systemctl restart forge-hermes; hc config show 2>/dev/null | grep -E "Model:" | head -1; exit 0
+fi
 case "$MODE" in
   opus)
     hc config set model.provider azure-opus >/dev/null; hc config set model.default claude-opus-5-5 >/dev/null

@@ -51,7 +51,7 @@ EXTERNAL_PRICES = {"claude-opus-5-5": {"in": 5.0, "out": 25.0, "cache": 0.5}}
 def hermes_spent_24h(db: Any, external: bool = False) -> float:
     from datetime import UTC, datetime, timedelta
     cut = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
-    cond = "model LIKE 'claude%'" if external else "model NOT LIKE 'claude%'"
+    cond = "model NOT LIKE 'deepseek%'" if external else "model LIKE 'deepseek%'"
     return float(db.scalar("SELECT COALESCE(SUM(CAST(cost_usd AS REAL)),0) FROM inference_calls "
                            f"WHERE agent LIKE 'hermes%' AND {cond} AND ts >= ?", (cut,)) or 0.0)
 
@@ -61,7 +61,7 @@ def credit_allowance(forge: Any, mode: dict[str, Any]) -> dict[str, Any]:
     from datetime import UTC, datetime
     start, hours, credit = float(mode["start"]), float(mode.get("hours", 72)), float(mode.get("credit_usd", 180))
     used = float(forge.db.scalar("SELECT COALESCE(SUM(CAST(cost_usd AS REAL)),0) FROM inference_calls WHERE agent LIKE "
-                                 "'hermes%' AND model LIKE 'claude%' AND ts >= ?",
+                                 "'hermes%' AND model NOT LIKE 'deepseek%' AND ts >= ?",
                                  (datetime.fromtimestamp(start, UTC).isoformat(),)) or 0.0)
     elapsed_h = max((time.time() - start) / 3600, 0.0)
     left_h = max(hours - elapsed_h, 0.0)
@@ -165,7 +165,7 @@ def mount(app: FastAPI, forge: Any, token: str) -> None:
         from forge.agents.genome import canonical_role
         role = canonical_role(str(b.get("role") or "governor"))
         brain = getattr(forge, "brain", None)
-        ext = EXTERNAL_PRICES.get(model)
+        ext = EXTERNAL_PRICES.get(model) or (forge.db.kv_get("hermes.prices") or {}).get(model)
         if ext:      # list-price cost for value measurement; free operator credit → NOT a treasury expense
             cost = ((usage_n["prompt_tokens"] - usage_n["prompt_cache_hit_tokens"]) * ext["in"]
                     + usage_n["prompt_cache_hit_tokens"] * ext["cache"] + usage_n["completion_tokens"] * ext["out"]) / 1e6
