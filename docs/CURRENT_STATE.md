@@ -17,3 +17,17 @@
 - Fixed: ISO timestamp window comparisons (earnings windows were inflated); JS global `history` redeclaration (portal blank).
 - Next upgrades (planned): meta-label filter (calibrated logistic on counterfactual data), data-driven beta kill switch from paper
   exploration, Thompson-sampling capital allocator, consensus boosting, maker repricing/execution alpha, Kalshi rail.
+
+## 2026-10-07 04:00 UTC update (answers tranche + OP-013)
+- Shipped: Convex Exit gene (default OFF, measured worse), ECR gate, haircut H=0.25, sealed exam window + Research Trial Ledger,
+  risk-at-stop cap, breadth/vol/drawdown exposure states, WS L2 sharding (60/60 books), genome schema-drift self-repair
+  (evolution had been failing every cycle 02:09–03:53 — fixed), OP-013 Opportunity Surface Registry + allocator, Listing
+  Sentinel, Kalshi cross-rail engine (probability stack + stacked calibrator + maker shadow), /api/surface.
+- Real money: $28.27 USD, PAPER mode, 0 closed positions. Live blocked by readiness gate (correctly: validated set lost
+  −33…−53% on the earlier 42-day window).
+- Rails: spot SHADOW(executable) · Kalshi SHADOW (no key/funding) · equities CANDIDATE (eligibility+fees unverified) ·
+  futures DATA_ONLY (no CFM acct, leverage policy) · Coinbase prediction UNAVAILABLE (API 500) · USDC rewards CANDIDATE ·
+  CDP onchain/staking BLOCKED · x402 CANDIDATE.
+- Next: settle ≥ 300 Kalshi calibration samples (hourly contracts settle every hour) → refit stacked calibrator → decide
+  Kalshi funding on evidence; equity T-bill (SGOV) idle rail once eligibility verified; barrier model for MAX/MIN series;
+  portal panel for /api/surface.

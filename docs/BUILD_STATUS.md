@@ -18,3 +18,5 @@
 | OP-010 confidence/earnings-scaled AI budget, near-miss racing (16× Modal) | DONE | runtime |
 | ≥1 strategy through gate → SHADOW → CHALLENGER | IN PROGRESS | evolution running 24/7 |
 | LIVE trading | NOT ENABLED | blocked by readiness gate until evidence exists |
+| Answers P0 gates (ECR, haircut, sealed exam, trial ledger, risk cap, exposure states) | DONE | tests/unit/test_features.py |
+| OP-013 Opportunity Surface (registry, allocator, listing sentinel, Kalshi cross-rail shadow) | WORKING (shadow) | tests/unit/test_opportunities.py; /api/surface |
