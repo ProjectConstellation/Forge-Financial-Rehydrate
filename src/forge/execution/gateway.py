@@ -174,6 +174,11 @@ class ExecutionGateway:
             log.warning("get_order %s failed: %s", cid, e)
             return
         if st is None:
+            if self.book == "paper" and o["status"] in (OrderStatus.OPEN.value, OrderStatus.PENDING.value,
+                                                         OrderStatus.PARTIAL.value):
+                # the paper venue keeps resting orders in memory → after a restart they no longer exist anywhere
+                self._set_order(cid, OrderStatus.CANCELLED, reason="paper venue restarted (resting order not carried over)")
+                return
             if o["status"] == OrderStatus.UNKNOWN.value:
                 n = self._unknown_attempts[cid] = self._unknown_attempts.get(cid, 0) + 1
                 if n >= 10:                              # venue has no record after repeated checks → never placed
@@ -204,6 +209,40 @@ class ExecutionGateway:
                                               "position": pos["id"] if pos else None})
             self.audit.append("FILL", {"cid": cid, "trade_id": f.trade_id, "symbol": f.symbol, "side": f.side,
                                        "price": str(f.price), "size": str(f.size), "fee": str(f.fee), "book": self.book})
+
+    def repair_unrecorded_fills(self) -> int:
+        """Idempotent accounting repair: orders the venue reported FILLED (size, avg price, fees on the order row) whose
+        fills were never recorded — paper fill ids used to restart at pt-1 after every FORGE restart, so later fills
+        collided with old ids and were silently dropped. Rebuild one fill per such order from the order's own truth,
+        post it to the ledger and the owning position (CLOSED positions included)."""
+        n = 0
+        rows = self.db.query("SELECT * FROM orders WHERE book = ? AND status = ? AND CAST(filled_size AS REAL) > 0 AND "
+                             "avg_fill_price IS NOT NULL AND NOT EXISTS (SELECT 1 FROM fills f WHERE f.order_id = "
+                             "orders.client_order_id)", (self.book, OrderStatus.FILLED.value))
+        for o in rows:
+            cid = o["client_order_id"]
+            size, px, fee = Decimal(o["filled_size"]), Decimal(o["avg_fill_price"]), Decimal(o["fees"] or "0")
+            tid = f"repair:{cid}"
+            pos = None
+            for p in self.db.query("SELECT id, strategy_id, meta FROM positions WHERE book = ?", (self.book,)):
+                m = json.loads(p["meta"] or "{}")
+                if cid in (m.get("entry_cid"), m.get("tp_cid"), m.get("exit_cid")):
+                    pos = p
+                    break
+            if not self.db.insert("fills", {"order_id": cid, "book": self.book, "venue": o["venue"], "trade_id": tid,
+                                            "symbol": o["symbol"], "side": o["side"], "price": str(px), "size": str(size),
+                                            "fee": str(fee), "liquidity": "taker" if o["order_type"] == "market" else "maker",
+                                            "ts": o["updated_at"] or _now()}, or_ignore=True):
+                continue
+            realized = self.ledger.record_fill(self.book, o["venue"], o["symbol"], o["side"], px, size, fee, tid,
+                                               pos["strategy_id"] if pos else None, cid, quote_asset=o["symbol"].split("-")[1])
+            if pos is not None:
+                self._apply_fill_to_position(pos["id"], o["side"], px, size, fee, realized)
+            self.audit.append("FILL_REPAIRED", {"cid": cid, "symbol": o["symbol"], "side": o["side"], "price": str(px),
+                                                "size": str(size), "fee": str(fee), "realized": str(realized),
+                                                "position": pos["id"] if pos else None, "book": self.book})
+            n += 1
+        return n
 
     def _position_for_order(self, cid: str) -> dict[str, Any] | None:
         for p in self.db.query("SELECT id, strategy_id, meta FROM positions WHERE book = ? AND status != 'CLOSED'", (self.book,)):

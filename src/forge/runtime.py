@@ -332,6 +332,12 @@ class Forge:
                                             MarketView(self.market.get_bbo, self.market.get_rules), self.audit, self.breakers,
                                             on_event=self._exec_event, on_position_closed=self._on_closed,
                                             taker_fee=float(self.fees.taker), maker_fee=float(self.fees.maker))
+            repaired = self.gateway.repair_unrecorded_fills()
+            if repaired:
+                log.warning("accounting repair: rebuilt %d unrecorded fills from order truth", repaired)
+                if self.book == "paper":                       # venue balances must match the repaired ledger
+                    st = self.ledger.state("paper")
+                    self.venue.balances = {"USD": st.cash_usd, **{asset: h.qty for (_, asset), h in st.holdings.items()}}
 
     # ================================================================== treasury truth
     def _snapshot_treasury(self) -> dict[str, Any]:

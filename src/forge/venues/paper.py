@@ -36,6 +36,7 @@ class PaperVenue:
         self.reqs: dict[str, OrderRequest] = {}
         self.fills: dict[str, list[FillReport]] = {}
         self._ids = itertools.count(1)
+        self._run = format(time.time_ns(), "x")        # fill ids unique across restarts (pt-<run>-<n>); was pt-<n> → collisions
         self.pen = penetration_bps / 1e4
         self.slip = extra_slip_bps / 1e4
 
@@ -148,7 +149,7 @@ class PaperVenue:
         else:
             self.balances[rules.base] = self.balances.get(rules.base, Decimal(0)) - size
             self.balances[rules.quote] = self.balances.get(rules.quote, Decimal(0)) + notional - fee
-        tid = f"pt-{next(self._ids)}"
+        tid = f"pt-{self._run}-{next(self._ids)}"
         self.fills.setdefault(req.client_order_id, []).append(FillReport(
             venue=self.name, trade_id=tid, client_order_id=req.client_order_id, venue_order_id=st.venue_order_id,
             symbol=req.symbol, side=req.side, price=px, size=size, fee=fee, liquidity=liq,  # type: ignore[arg-type]
