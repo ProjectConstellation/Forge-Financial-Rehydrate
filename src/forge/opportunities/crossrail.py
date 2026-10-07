@@ -371,7 +371,10 @@ class CrossRailScanner:
                         ps, plo, phi = self.calib.predict(pm, mid, minutes, flow, direction)
                         quotes_now[m.ticker] = (plo, phi, m)
                         self._calib_sample(m, pm, mid, ps, ref, model, minutes, pid, flow, direction, fitted.get(m.ticker))
-                        for s_ in taker_signals(m, plo, phi, "TAKE", fee_type=ft, mult=mult) + \
+                        thresh = taker_signals(m, plo, phi, "TAKE_THRESH", fee_type=ft, mult=mult) \
+                            if m.strike_type in ("greater", "less") else []          # pre-registered 2026-10-07 14:5x UTC
+                        thresh = [x for x in thresh if 0.40 <= x.price <= 0.80]
+                        for s_ in taker_signals(m, plo, phi, "TAKE", fee_type=ft, mult=mult) + thresh + \
                                 maker_quotes(m, plo, phi, fee_type=ft, mult=mult):
                             s_.detail.update(p_model=pm, p_market=mid, p_stacked=ps, p_lo=plo, p_hi=phi, minutes=minutes)
                             sigs.append(s_)

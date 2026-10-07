@@ -1,5 +1,12 @@
 # Research log (institutional memory; newest first)
 
+## 2026-10-07 14:55 UTC — PRE-REGISTERED hypothesis: TAKE_THRESH (Kalshi)
+In-sample (9 h, n=183) TAKE: +3.1¢/contract, ROI +5.4%, P(mean>0)=0.83; positive on threshold (above/below) series and
+prices 0.40–0.80, negative on narrow range series. Because that split was found AFTER looking, it is registered now as a new
+signal kind TAKE_THRESH = TAKE ∩ strike_type ∈ {greater, less} ∩ ask ∈ [0.40, 0.80]. Only TAKE_THRESH results settled after
+this timestamp count as evidence. Kalshi rail economics now use TAKE_THRESH only. Live criterion: n ≥ 150 out-of-sample,
+P(mean>0) ≥ 0.90, mean ≥ +2¢/contract after fees.
+
 ## 2026-10-07 (night) — Data integrity root cause, clean-data results, first cross-rail evidence
 - ROOT CAUSE: CandleStore.merge sorted kept rows by ROW POSITION, not time → after the 365 d backfill 66 history files were
   time-scrambled (HYPE 5m: first 2026-08-07, last 2026-02-05). Effects: stale "latest" bars, quarantine/repair loops, negative
