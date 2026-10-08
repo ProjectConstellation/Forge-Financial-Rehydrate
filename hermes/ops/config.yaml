@@ -7,7 +7,7 @@ approvals:
   single_query_mode: deny
   unattended_mode: deny
 agent:
-  reasoning_effort: medium
+  reasoning_effort: high
   max_turns: 30
   disabled_toolsets:
   - terminal
@@ -23,6 +23,9 @@ agent:
   - kanban
   - connections
   - skills
+  reasoning_overrides:
+    deepseek-flash: high
+    deepseek-v4-pro: high
 memory:
   user_profile_enabled: false
 plugins:
@@ -69,3 +72,6 @@ stt:
   prompt: FORGE, Kalshi, Coinbase, Modal, DeepSeek, Hermes, USDC, PAXG, debrief, treasury
   local:
     model: base
+cron:
+  model: deepseek-flash
+  model_provider: deepseek

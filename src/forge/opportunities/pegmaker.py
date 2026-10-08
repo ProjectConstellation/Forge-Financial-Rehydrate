@@ -89,8 +89,21 @@ class PegMaker:
 
     # ---------------------------------------------------------------- helpers
     def _cap(self) -> float:
-        eq = float(self.f.treasury.get("equity_usd") or 0) if self.capital is None else self.capital
-        return max(eq / len(self.books), 1.0)
+        """PAPER capital-hours: prefer $200–500 band / multiplier from lab.stable_capital_policy when LIVE off."""
+        eq = float(self.f.treasury.get("equity_usd") or 0) if self.capital is None else float(self.capital)
+        try:
+            live = bool(getattr(self.f.s, "live_trading", False) or self.f.db.kv_get("FORGE_LIVE_TRADING"))
+        except Exception:
+            live = False
+        if not live:
+            pol = self.f.db.kv_get("lab.stable_capital_policy") or {}
+            band = pol.get("target_band_usd") or [200, 500]
+            mult = float(pol.get("multiplier") or 3.0)
+            lo, hi = float(band[0]), float(band[1])
+            # Simulated PAPER sleeve: scale evidenced stables without requiring live NAV
+            target = max(lo, min(hi, max(eq, 1.0) * mult * 10))  # ~$280–500 from $28 NAV
+            eq = max(eq, target)
+        return max(eq / max(len(self.books), 1), 1.0)
 
     async def _fees(self) -> None:
         """Measured per pair from Coinbase order PREVIEWS (read-only; commission is returned even without funds)."""

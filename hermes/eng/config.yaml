@@ -34,6 +34,9 @@ agent:
   - discord_admin
   - spotify
   - connections
+  reasoning_overrides:
+    deepseek-flash: high
+    deepseek-v4-pro: high
 memory:
   user_profile_enabled: false
 plugins:

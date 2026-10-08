@@ -1,5 +1,4 @@
-"""Scout pre-check: fetch official pages/feeds that move money (fees, rules, products, announcements); wake the LLM only
-when their normalized text changed (diff excerpts as context) and FORGE grants budget."""
+"""Scout pre-check: URL diffs OR economic telemetry urgency → wake LLM."""
 import hashlib
 import html
 import json
@@ -7,25 +6,7 @@ import re
 import sys
 import urllib.request
 
-
-# --- economic telemetry wake (workforce overhaul) ---
-def _econ_wake():
-    try:
-        d = call("/api/agent/digest?since=0&role=scout")
-        if d.get("urgent") or d.get("recovery_lever") or d.get("open_critical"):
-            return d
-        ed = call("/api/v1/strategies") if False else None
-    except Exception:
-        return None
-    try:
-        # reuse digest urgency only
-        if d.get("meaningful") and (d.get("urgent") or d.get("recovery_lever")):
-            return d
-    except Exception:
-        pass
-    return None
-
-from forge_common import HOME, gate, skip, wake
+from forge_common import HOME, call, gate, skip, wake
 
 WATCH = {
     "coinbase_advanced_fees": "https://help.coinbase.com/en/coinbase/trading-and-funding/advanced-trade/advanced-trade-fees",
@@ -51,6 +32,21 @@ def text(url: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", raw))).strip()[:200000]
 
 
+def econ_wake():
+    try:
+        d = call("/api/agent/digest?since=0&role=scout")
+    except Exception as e:
+        return {"error": str(e)[:200]}
+    if d.get("urgent") or d.get("recovery_lever") or d.get("open_critical") or d.get("pending_handoff") or d.get("sla_breach") or d.get("prelive_block"):
+        return d
+    try:
+        if d.get("meaningful") and float((d.get("treasury") or {}).get("equity_usd") or 0) < 50:
+            return d
+    except Exception:
+        pass
+    return None
+
+
 changes = {}
 for key, url in WATCH.items():
     try:
@@ -65,16 +61,19 @@ for key, url in WATCH.items():
         a, b = set(re.split(r"(?<=[.!?])\s+", old["text"])), re.split(r"(?<=[.!?])\s+", t)
         new_sent = [s for s in b if s not in a][:25]
         changes[key] = {"url": url, "new_or_changed_sentences": new_sent}
-if not changes:
-    ew=_econ_wake()
-    if ew:
-        a=gate('scout',0.01)
-        if a is None:
-            skip(); sys.exit(0)
-        wake({'budget':a,'changes':ew,'wake_reason':'economic_telemetry'}); sys.exit(0)
+
+ew = econ_wake()
+if not changes and not ew:
     skip()
     sys.exit(0)
 if gate("scout", 0.01) is None:
     skip()
     sys.exit(0)
-wake({"changed_sources": changes})
+ctx = {"changed_sources": changes}
+if ew:
+    ctx["economic"] = {k: ew.get(k) for k in (
+        "urgent", "recovery_lever", "open_critical", "pending_handoff", "sla_breach",
+        "prelive_block", "ops_directives", "warnings", "treasury", "meaningful",
+    ) if k in ew}
+    ctx["wake_reason"] = "url_diff+economic" if changes else "economic_telemetry"
+wake(ctx)

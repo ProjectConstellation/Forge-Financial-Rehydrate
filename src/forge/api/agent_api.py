@@ -26,7 +26,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 
 HERMES_ROLES = ("governor", "alpha_inventor", "adversary", "critic", "doctor", "rail_hunter", "architect",
-                "scout", "scientist")    # last two: legacy tags (aliases)
+                "scout", "scientist", "prediction", "execution", "treasury", "intelligence", "ops")
 HERMES_SHARE_PRIOR = 0.40          # share of the Intelligence Treasury pace Hermes may use before its value is measured
 
 
@@ -220,8 +220,24 @@ def mount(app: FastAPI, forge: Any, token: str) -> None:
         check(request)
         a = hermes_allowance(forge)
         credit = a.get("mode") == "credit"
-        a["wake"] = bool(a.get("headroom", 0) >= est_usd) and (credit or getattr(forge.brain, "tier", "") != "CRITICAL")
+        # Hermes DeepSeek budget is separate from FORGE brain CRITICAL. Never silence the
+        # institutional workforce when RED-ZONE recovery / SLA / open critical work exists.
+        d = digest(forge, time.time() - 3600, role or None)
+        urgent = bool(
+            d.get("urgent") or d.get("recovery_lever") or d.get("sla_breach")
+            or d.get("open_critical") or d.get("pending_handoff") or d.get("prelive_block")
+        )
+        headroom = float(a.get("headroom", 0) or 0)
+        balance = float(a.get("balance") or 0)
+        budget_ok = headroom >= float(est_usd)
+        if urgent:
+            a["wake"] = bool(budget_ok or headroom > 0 or balance > 0.05)
+            a["wake_reason"] = "URGENT_OVERRIDE"
+        else:
+            a["wake"] = bool(budget_ok) and (credit or getattr(forge.brain, "tier", "") != "CRITICAL")
+            a["wake_reason"] = "budget" if a["wake"] else "denied_budget_or_critical"
         a["role"] = role
+        a["urgent"] = urgent
         return a
 
     @app.get("/api/agent/digest")

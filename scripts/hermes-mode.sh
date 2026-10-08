@@ -70,8 +70,8 @@ forge-daily-report|0 12 * * *|gate_report.py|boot_report.md"
     # Ensure provider block exists (Hermes built-in deepseek profile + DEEPSEEK_API_KEY)
     hc config set model.provider deepseek >/dev/null; hc config set model.default deepseek-flash >/dev/null
     hc config set cron.model deepseek-flash >/dev/null; hc config set cron.model_provider deepseek >/dev/null
-    hc config set agent.reasoning_effort medium >/dev/null || true
-    EFF=medium
+    hc config set agent.reasoning_effort high >/dev/null || true
+    EFF=high
     JOBS="forge-governor|every 30m|gate_governor.py|boot_governor.md
 forge-alpha-inventor|every 30m|gate_alpha_inventor.py|boot_alpha_inventor.md
 forge-adversary|every 30m|gate_adversary.py|boot_adversary.md
@@ -85,7 +85,7 @@ forge-execution|every 30m|gate_execution.py|boot_execution.md
 forge-treasury|every 30m|gate_treasury.py|boot_treasury.md
 forge-intelligence|every 3h|gate_intelligence.py|boot_intelligence.md
 forge-daily-report|0 12 * * *|gate_report.py|boot_report.md"
-    kv '{"mode": "deepseek", "model": "deepseek-flash", "effort_policy": "medium_everyday_high_hard_extra_high_rare"}' ;;
+    kv '{"mode": "deepseek", "model": "deepseek-flash", "effort_policy": "high_everywhere_max_only_on_critical"}' ;;
   status) hc config show 2>/dev/null | grep -E "Model:" | head -1; hc cron list 2>/dev/null | grep -E "Name:|Schedule:|\[(active|paused)\]" | paste - - - | sed -E "s/[[:space:]]+/ /g"; exit 0 ;;
   *) echo "usage: $0 opus [credit_usd] [hours] | deepseek | status"; exit 1 ;;
 esac

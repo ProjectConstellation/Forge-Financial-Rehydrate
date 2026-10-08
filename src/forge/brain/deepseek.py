@@ -83,7 +83,7 @@ class DeepSeekClient:
             return None
 
     async def chat(self, messages: list[dict[str, Any]], *, agent: str, purpose: str, deep: bool = False,
-                   effort: str = "low", tools: list[dict[str, Any]] | None = None, json_mode: bool = False,
+                   effort: str = "high", tools: list[dict[str, Any]] | None = None, json_mode: bool = False,
                    max_tokens: int = 4000, strategy_id: str | None = None, opportunity_id: str | None = None,
                    prompt_version: str = "v1") -> LLMResult:
         model = self.cfg.deep_model if deep else self.cfg.model

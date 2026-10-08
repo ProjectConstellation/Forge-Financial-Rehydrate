@@ -253,7 +253,7 @@ class Brain:
             return res["json"]
         msgs = [{"role": "system", "content": system_prompt("perception")},
                 {"role": "user", "content": "SITUATION PACK:\n" + json.dumps(self._situation(), default=str)}]
-        res = await self._chat(msgs, agent="perception", purpose="market_perception", effort="low", json_mode=True,
+        res = await self._chat(msgs, agent="perception", purpose="market_perception", effort="high", json_mode=True,
                                 max_tokens=1500, prompt_version=PROMPT_VERSION)
         try:
             view = res.json()
@@ -300,7 +300,7 @@ class Brain:
                     # thinking consumed the budget: ask for the final answer only (prefix-cached → cheap)
                     msgs.append({"role": "assistant", "content": ""})
                     msgs.append({"role": "user", "content": "Output ONLY the final JSON object for your role now."})
-                    res = await self._chat(msgs, agent=role, purpose=f"{role}_finalize", deep=deep, effort="low",
+                    res = await self._chat(msgs, agent=role, purpose=f"{role}_finalize", deep=deep, effort="high",
                                             json_mode=True, max_tokens=12000, strategy_id=strategy_id,
                                             prompt_version=PROMPT_VERSION)
                     total += res.cost_usd
