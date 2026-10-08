@@ -32,7 +32,7 @@ SPORTS = (
     "soccer_usa_mls",
 )
 BANKROLL_START = 400.0  # founder operating band $200–$500
-MAX_STAKE_PCT = 0.04  # still small per-bet; book stays diversified
+MAX_STAKE_PCT = 0.06  # still small per-bet; book stays diversified
 MIN_STAKE = 2.0
 MAX_OPEN = 12  # vast ≠ oversized; fit $200–$500 book
 MIN_BOOKS = 5

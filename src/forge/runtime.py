@@ -299,8 +299,11 @@ class Forge:
         self.prompt_genomes.seed()
         B("prompt_lab", self._prompt_lab_loop, 1800)
         from forge.opportunities.pegmaker import PegMaker
+        from forge.lab.earnings_push import EarningsPush
         self.pegmaker = PegMaker(self)
         B("pegmaker", self.pegmaker.run, 300)
+        self.earnings_push = EarningsPush(self)
+        B("earnings_push", self.earnings_push.run, 180)
         from forge.core.healing import HealthMonitor
         self.health = HealthMonitor(self)
         B("healing", self.health.run, 120, critical=True)

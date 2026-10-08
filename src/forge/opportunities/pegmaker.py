@@ -132,23 +132,57 @@ class PegMaker:
 
     def triangle(self, tops: dict[str, tuple[float, float, float, float]]) -> None:
         """USD ⇄ USDC convert is 1:1 and free → USDT-USD and USDT-USDC must agree. Taker-taker cycle when the gap beats
-        both taker fees + a 0.2 bp safety buffer (sizes bounded by displayed top-of-book and paper capital)."""
+        both taker fees + a safety buffer (sizes bounded by displayed top-of-book and PAPER capital band)."""
         a, b = tops.get("USDT-USD"), tops.get("USDT-USDC")
-        if not a or not b or time.time() - self.tri_last < 30:
+        if not a or not b:
+            return
+        # Under target / RED ZONE: poll opportunities every few seconds, not once/30s
+        nav = float((self.f.db.kv_get("econ.treasury_board") or {}).get("nav") or (self.f.treasury.get("equity_usd") or 0))
+        proven = float(((self.f.db.kv_get("velocity") or {}).get("expected_usd_per_h") or {}).get("proven") or 0)
+        hot = nav < 50.0 or proven < 0.10
+        min_gap = 5.0 if hot else 30.0
+        if time.time() - self.tri_last < min_gap:
             return
         cap = self._cap() * len(self.books)
+        # Prefer placing up to 80% of band when hot so capital-hours actually accumulate
+        if hot:
+            cap = max(cap, float((self.f.db.kv_get("lab.stable_capital_policy") or {}).get("target_band_usd", [200, 500])[1]) * 0.8)
+        min_edge = 0.000015 if hot else 0.00002  # 0.15bp hot / 0.2bp normal (still fee+buffer aware via fees)
+        best = None
         for buy_sym, sell_sym, ask, ask_sz, bid, bid_sz in (("USDT-USDC", "USDT-USD", b[2], b[3], a[0], a[1]),
                                                             ("USDT-USD", "USDT-USDC", a[2], a[3], b[0], b[1])):
             fb, fs = self.fees.get(buy_sym, (0, 0.0001))[1], self.fees.get(sell_sym, (0, 0.0001))[1]
             edge = bid * (1 - fs) - ask * (1 + fb)
-            if edge / ask > 0.00002:
+            if edge / ask > min_edge:
                 qty = min(ask_sz, bid_sz, cap / ask)
+                if qty <= 0:
+                    continue
                 pnl = edge * qty
-                self.tri_last = time.time()
-                self.f.db.insert("shadow_trades", {"ts": time.time(), "rail": "coinbase.stable_triangle", "symbol": f"{buy_sym}>{sell_sym}",
-                                                   "side": "round_trip", "qty": qty, "entry": ask, "exit": bid,
-                                                   "fee_usd": qty * (ask * fb + bid * fs), "pnl_usd": pnl, "hold_s": 2.0,
-                                                   "detail": None})
+                cand = (pnl, buy_sym, sell_sym, ask, bid, qty, fb, fs, edge)
+                if best is None or cand[0] > best[0]:
+                    best = cand
+        if best is None:
+            return
+        pnl, buy_sym, sell_sym, ask, bid, qty, fb, fs, edge = best
+        self.tri_last = time.time()
+        self.f.db.insert("shadow_trades", {"ts": time.time(), "rail": "coinbase.stable_triangle", "symbol": f"{buy_sym}>{sell_sym}",
+                                           "side": "round_trip", "qty": qty, "entry": ask, "exit": bid,
+                                           "fee_usd": qty * (ask * fb + bid * fs), "pnl_usd": pnl, "hold_s": 2.0,
+                                           "detail": None})
+        # Track capital-hours intent for scorecard
+        try:
+            ch = self.f.db.kv_get("lab.stable_capital_hours") or {"hours": 0.0, "notional_usd": 0.0, "n": 0}
+            notional = float(qty) * float(ask)
+            ch["notional_usd"] = float(ch.get("notional_usd") or 0) + notional
+            ch["n"] = int(ch.get("n") or 0) + 1
+            ch["hours"] = float(ch.get("hours") or 0) + (notional / max(cap, 1.0)) * (2.0 / 3600.0)
+            ch["last_pnl"] = pnl
+            ch["last_qty"] = qty
+            ch["hot"] = hot
+            ch["ts"] = time.time()
+            self.f.db.kv_set("lab.stable_capital_hours", ch)
+        except Exception:
+            pass
 
     async def _snapshot(self, b: PegBook) -> tuple[float, float, float, float, list[tuple[float, float, str]]] | None:
         rest = self.f.rest
