@@ -728,9 +728,12 @@ class Forge:
         reserve = self.capital.reserve_usd(eq)
         deployable = max(0.0, float(self.treasury.get("cash_usd") or 0) - reserve)
         if self.book == "paper":
-            # PAPER tournament: don't let sticky reserve starve probes — use most of free cash
-            free = max(0.0, float(self.treasury.get("cash_usd") or 0) - min(reserve, eq * 0.05))
-            deployable = max(deployable, free, float(self.treasury.get("cash_usd") or 0) * 0.85)
+            # PAPER tournament: deploy up to 85% of paper equity (minus open cost) so probes clear $1
+            cash = float(self.treasury.get("cash_usd") or 0)
+            deployed = float(self.treasury.get("deployed_usd") or 0)
+            free = max(0.0, cash - min(reserve, eq * 0.05))
+            deployable = max(deployable, free, cash * 0.85, max(0.0, eq - deployed) * 0.85)
+            deployable = max(deployable, 8.0)  # floor so $1 probes always possible on ~$28 book
         # continuous evidence weighting + correlation discount (no fixed concurrency: capital flows to the best, decorrelated bets)
         evid = min(1.0, max(0.2, ((ev.p_edge if ev else 0.5) - 0.5) / 0.4))
         ss = self.bars[interval].state.get(sym)
@@ -742,7 +745,11 @@ class Forge:
             rho += max(0.0, c_new * c_o)
         corr_disc = 1.0 / (1.0 + rho)
         elite = self.db.kv_get("allocation.elite") or []
-        kmult = 1.0 if g.id in elite else (0.15 if elite else g.sizing.kelly_mult)      # elite allocation (Time Machine evidence)
+        if self.book == "paper":
+            # PAPER tournament: every SHADOW/CHALLENGER probe needs real size to learn fees — no elite starvation
+            kmult = max(float(g.sizing.kelly_mult or 0.5), 0.55)
+        else:
+            kmult = 1.0 if g.id in elite else (0.15 if elite else g.sizing.kelly_mult)      # elite allocation (Time Machine evidence)
         # conditional exposure scaling (answers §10): breadth tiers × volatility gate × high-water drawdown state
         fz = ss.features if ss else {}
         vp = float(fz["vol_pct"][-1]) if "vol_pct" in fz and fz["vol_pct"][-1] == fz["vol_pct"][-1] else None
@@ -777,9 +784,11 @@ class Forge:
             sz = SizeDecision(sz.fraction, rc.max_notional, sz.kelly_raw, sz.shrink, sz.explanation + " | capped: " + rc.explanation)
         sz = SizeDecision(sz.fraction, sz.notional_usd, sz.kelly_raw, sz.shrink,
                           sz.explanation + f" | exposure breadth×{m_breadth:.2f} vol×{m_vol:.2f} dd×{m_dd:.2f}")
-        if self.book == "paper" and 0.50 <= sz.notional_usd < 1.05:
-            # PAPER probes: clear Coinbase $1 min instead of dying at $0.90–$0.99
-            sz = SizeDecision(sz.fraction, 1.05, sz.kelly_raw, sz.shrink, sz.explanation + " | paper_min_$1.05")
+        if self.book == "paper" and 0.01 <= sz.notional_usd < 1.05 and sz.kelly_raw > 0:
+            # PAPER probes: clear Coinbase $1 min — learn fee survival (don't starve at $0.06–$0.99)
+            cap = max(deployable * 0.25, 1.05)
+            n = min(1.25, cap)  # small but tradeable probes
+            sz = SizeDecision(sz.fraction, max(1.05, n), sz.kelly_raw, sz.shrink, sz.explanation + " | paper_min_probe")
         if sz.notional_usd < 1.0:
             self._set_opp(oid, "REJECTED", f"size ${sz.notional_usd:.2f} below $1 venue minimum — {sz.explanation}")
             return
@@ -789,7 +798,10 @@ class Forge:
         trending = regime_now in ("TREND_UP", "BREAKOUT_EXPANSION", "EUPHORIA_BUYING")
         be_trig = g.exit.be_trigger_pct if g.exit.be_trigger_pct >= 0.5 else max(g.exit.be_trigger_pct, 1.5 * atr_now)
         lock_frac = (min(g.exit.lock_frac, 0.35) if trending else g.exit.lock_frac) if be_trig < 0.5 else g.exit.lock_frac
-        plan = ExitPlan(take_profit_pct=tp, stop_loss_pct=sl, time_stop_s=int(g.exit.time_stop_bars * interval),
+        _ts = int(g.exit.time_stop_bars * interval)
+        if self.book == "paper":
+            _ts = min(_ts, 6 * 3600)  # paper_time_cap: recirculate capital within 6h
+        plan = ExitPlan(take_profit_pct=tp, stop_loss_pct=sl, time_stop_s=_ts,
                         be_trigger_pct=be_trig, be_buffer_pct=g.exit.be_buffer_pct, lock_frac=lock_frac,
                         trailing_pct=(g.exit.trail_atr * atr_now) if g.exit.trail_atr else None,
                         **(convex_plan(g, atr_now, interval, self.bars[interval].state[sym].features) if g.exit.convex else {}))
