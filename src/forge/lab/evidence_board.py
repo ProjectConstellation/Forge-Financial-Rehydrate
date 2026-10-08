@@ -29,6 +29,12 @@ class EvidenceBoard:
             wr = float(r["wins"] or 0) / n if n else 0
             card = {"strategy_id": r["strategy_id"], "n": n, "true_net": round(net, 4), "win_rate": round(wr, 3),
                     "source": "paper_positions"}
+            pop = db.scalar("SELECT population FROM strategies WHERE id=?", (r["strategy_id"],))
+            card["population"] = pop
+            if pop in ("RETIRED", "HIBERNATING", "QUARANTINED"):
+                card["status"] = "already_killed"
+                thin.append(card)  # historical — not an active drain
+                continue
             if n < 5:
                 thin.append(card)
             elif net > 0 and wr >= 0.45:
