@@ -9,8 +9,7 @@
   const ago = (s) => s == null ? "—" : s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m`;
   const fmtN = (n) => (n ?? 0).toLocaleString();
 
-  let CSRF = null, equitySeries = [], try { renderFirmTruth(o); } catch (e) { console.warn("firm", e); }
-    lastSnapAt = 0, prevMsgs = null, prevTs = null;
+  let CSRF = null, equitySeries = [], lastSnapAt = 0, prevMsgs = null, prevTs = null;
   const msgRate = [], counter = {shown: 0, target: 0, raf: 0};
 
   async function api(path, opts = {}) {
@@ -101,8 +100,34 @@
 
   /* ---------- snapshot ---------- */
   
+  function renderEvidence(F) {
+    const ev = F.evidence || {};
+    const next = ev.what_to_do_next || [];
+    if ($("ev_next")) $("ev_next").textContent = next.length ? next.join(" · ") : "Lab warming up…";
+    const chip = (x, cls) => {
+      const id = x.strategy_id || x.rail || "?";
+      const net = x.true_net != null ? x.true_net : x.true_net_24h;
+      return `<span class="chip ${cls}">${esc(String(id).slice(0, 28))} · ${usd(net, 3)} · n=${x.n || 0}</span>`;
+    };
+    if ($("ev_works")) $("ev_works").innerHTML = (ev.works || []).slice(0, 6).map(x => chip(x, "ok")).join("")
+      || `<span class="muted tiny">No fee-surviving winners yet (except shadow stables when present).</span>`;
+    if ($("ev_fails")) $("ev_fails").innerHTML = (ev.doesnt_work || []).slice(0, 6).map(x => chip(x, "bad")).join("")
+      || `<span class="muted tiny">No confirmed drains yet.</span>`;
+    const sb = ev.family_scoreboard || {};
+    const kpi = (l, v) => `<div class="kpi"><label>${esc(l)}</label><div class="v">${v}</div></div>`;
+    if ($("ev_fams")) {
+      const rows = Object.entries(sb).slice(0, 10).map(([f, v]) => {
+        const n = (v.experimental || 0) + (v.shadow || 0) + (v.challenger || 0);
+        const extra = v.paper_bridged_net != null ? ` · bridged ${usd(v.paper_bridged_net, 3)}` : "";
+        return kpi(f, `${n} probes${extra}`);
+      });
+      $("ev_fams").innerHTML = rows.join("") || "";
+    }
+  }
+
   function renderFirmTruth(o) {
     const F = o.firm || {};
+    try { renderEvidence(F); } catch (e) { console.warn("evidence", e); }
     const truth = F.treasury_truth || {};
     const trial = F.trial_8h || {};
     const sc = trial.scorecard || {};
@@ -164,6 +189,7 @@
     $("cash").textContent = usd(b.cash_usd); $("res_s").textContent = `reserve ${usd(b.reserve_usd)}`;
     $("doing").textContent = o.doing_now || "—";
     equitySeries.push({t: o.ts, v: b.equity_usd}); if (equitySeries.length > 3000) equitySeries.shift(); drawChart();
+    try { renderFirmTruth(o); } catch (e) { console.warn("firm", e); }
     renderSystems(o);
     const H = o.health || {};
     if (H.overall != null) {

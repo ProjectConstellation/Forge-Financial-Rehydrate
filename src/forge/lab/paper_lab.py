@@ -218,11 +218,39 @@ class PaperLab:
                 log.debug("promote %s: %s", sid, e)
         return out
 
+
+    def kill_confirmed_drains(self) -> list[dict[str, Any]]:
+        """Hibernate PAPER strategies with sequential losing closes (n>=5, net<0, wr=0)."""
+        from forge.strategies.registry import State
+        db = self.f.db
+        rows = db.query(
+            "SELECT strategy_id, COUNT(*) n, "
+            "SUM(CAST(realized_pnl_usd AS REAL)-CAST(fees_usd AS REAL)) net, "
+            "SUM(CASE WHEN CAST(realized_pnl_usd AS REAL)-CAST(fees_usd AS REAL) > 0 THEN 1 ELSE 0 END) wins "
+            "FROM positions WHERE book='paper' AND status='CLOSED' GROUP BY strategy_id"
+        ) or []
+        out = []
+        for r in rows:
+            n, net, wins = int(r["n"] or 0), float(r["net"] or 0), int(r["wins"] or 0)
+            if n < 5 or net >= 0 or wins > 0:
+                continue
+            sid = r["strategy_id"]
+            st = self.f.reg.state(sid)
+            if st in (State.EXPERIMENTAL, State.SHADOW, State.CHALLENGER):
+                try:
+                    self.f.reg.transition(sid, State.HIBERNATING,
+                                          f"paper lab: confirmed drain n={n} net={net:.3f} wr=0")
+                    out.append({"hibernated": sid, "n": n, "net": round(net, 4)})
+                except Exception:
+                    pass
+        return out
+
     def tick(self) -> dict[str, Any]:
         self.ensure_stable_strategies()
         div = self.diversify_experimental()
         bridged = self.bridge_stable_shadow_to_paper()
         promoted = self.promote_paper_probes()
+        killed = self.kill_confirmed_drains()
         # Signal runtime to allow more concurrent paper positions
         self.f.db.kv_set("lab.paper_aggression", {
             "ts": time.time(),
@@ -236,6 +264,7 @@ class PaperLab:
             "diversity_actions": len(div.get("actions") or []),
             "stable_bridged": bridged,
             "promoted": promoted,
+            "hibernated_drains": killed,
             "stable_pnl": self.f.db.kv_get("lab.paper_stable_pnl"),
             "families": div.get("families"),
         }

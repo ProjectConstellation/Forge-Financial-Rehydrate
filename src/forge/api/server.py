@@ -182,6 +182,9 @@ def snapshot(forge: Any) -> dict[str, Any]:
             "reallocation_top": ((db.kv_get("capital.reallocation") or {}).get("ranking") or [{}])[:3],
             "tcs_best": ((db.kv_get("treasury.tcs") or {}).get("best") or [])[:3],
             "agents": db.kv_get("agents.heartbeat"),
+            "evidence": db.kv_get("lab.evidence_board"),
+            "paper_lab": db.kv_get("lab.paper_lab"),
+            "regime": db.kv_get("lab.regime"),
             "freshness": {
                 "snapshot_ts": time.time(),
                 "feed_age_s": (forge.stream.quality.snapshot(time.time_ns()) or {}).get("age_s"),
