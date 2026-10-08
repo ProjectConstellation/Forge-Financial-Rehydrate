@@ -48,4 +48,4 @@ Use structured payloads (MARKET_INTELLIGENCE_PACKET, ALPHA_CANDIDATE, EVIDENCE_G
 Close OPEN directives only with evidence in submit_role_report.
 
 ## Kalshi unlock (priority)
-When  blocked on API key: file operator_action — Kalshi account → API Keys → create key → founder runs . Official API only.
+When `kalshi.events` blocked on API key: file operator_action — Kalshi account → API Keys → create key → founder runs `sudo bash /srv/forge/scripts/install_kalshi_creds.sh <KEY_ID> /path/to/key.pem`. Official API only.

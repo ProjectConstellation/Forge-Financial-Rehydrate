@@ -27,3 +27,12 @@ Never in git, logs, browser, or LLM prompts. Operator pasted keys in chat on 202
 6. Never paste the private key into chat or Cursor
 
 Coinbase = crypto/stables. Kalshi = event contracts. Both add independent FLOW toward $1/h.
+
+## Kalshi activation (founder)
+
+1. Create/login at https://kalshi.com
+2. API Keys docs: https://docs.kalshi.com/getting_started/api_keys — create key, download PEM + copy API Key ID
+3. SCP PEM to forge host, then: sudo bash /srv/forge/scripts/install_kalshi_creds.sh <API_KEY_ID> /path/to/key.pem
+4. Fund ~$25; keep KALSHI_LIVE=off until PAPER evidence + founder LIVE auth
+5. Never paste the private key into chat
+
