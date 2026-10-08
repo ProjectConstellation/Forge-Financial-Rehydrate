@@ -244,6 +244,13 @@ class Forge:
         from forge.lab.position_vigil import PositionVigil
         self.position_vigil = PositionVigil(self)
         B("position_vigil", self.position_vigil.run, 45)
+        from forge.lab.officer_dispatch import OfficerDispatch
+        self.officer_dispatch = OfficerDispatch(self)
+        B("officer_dispatch", self.officer_dispatch.run, 60)
+        from forge.intel.feeds import ExternalFeeds
+        self.external_feeds = ExternalFeeds(self)
+        B("external_feeds", self.external_feeds.run, 900)
+
 
         async def _trial_scorecard_loop():
             import asyncio

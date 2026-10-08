@@ -17,6 +17,7 @@ MAX_HOLD_S = 6 * 3600
 MAX_UNREALIZED_PCT = -0.04          # -4% mark → cut
 RETIRED_POPS = frozenset({"RETIRED", "HIBERNATING", "QUARANTINED"})
 COOLDOWN_CHALLENGER_S = 300
+FAMILY_CHALLENGER_COOLDOWN_S = 45 * 60  # intelligent: one invent thesis per family / 45m
 
 
 class PositionVigil:
@@ -85,6 +86,10 @@ class PositionVigil:
         last = float((db.kv_get("vigil.last_challenger_ts") or {}).get(dead_sid) or 0)
         if now - last < COOLDOWN_CHALLENGER_S:
             return
+        fam_mark = db.kv_get("vigil.family_challenger_ts") or {}
+        last_fam = float(fam_mark.get(family) or 0)
+        # Still hibernate/exit always; only throttle LLM invent directives per family
+        skip_invent_llm = (now - last_fam) < FAMILY_CHALLENGER_COOLDOWN_S
         instruction = (
             f"CHALLENGER REQUIRED NOW (Position Vigil). Dead/draining strategy {dead_sid} "
             f"family={family}. Reason: {why}. Invent/mutate a replacement genome; "
@@ -92,22 +97,29 @@ class PositionVigil:
             f"PAPER first. Report challenger id."
         )
         try:
-            db.execute(
-                "INSERT INTO ops_directives (ts, role, instruction, priority, status, requested_by) VALUES (?,?,?,?,?,?)",
-                (now, "alpha_inventor", instruction[:1900], "critical", "OPEN", "position_vigil"),
-            )
+            if not skip_invent_llm:
+                db.execute(
+                    "INSERT INTO ops_directives (ts, role, instruction, priority, status, requested_by) VALUES (?,?,?,?,?,?)",
+                    (now, "alpha_inventor", instruction[:1900], "critical", "OPEN", "position_vigil"),
+                )
+                fam_mark[family] = now
+                db.kv_set("vigil.family_challenger_ts", fam_mark)
+            else:
+                # Still page governor for realloc; invent waits for intelligent spacing
+                log.info("vigil: skip inventor LLM for family=%s (cooldown)", family)
             db.execute(
                 "INSERT INTO ops_directives (ts, role, instruction, priority, status, requested_by) VALUES (?,?,?,?,?,?)",
                 (now, "governor",
                  f"REALLOCATE after vigil cut of {dead_sid} ({why}). Prefer higher marginal PAPER streams; keep investing under $1/h target.",
                  "high", "OPEN", "position_vigil"),
             )
-            db.execute(
-                "INSERT INTO ops_directives (ts, role, instruction, priority, status, requested_by) VALUES (?,?,?,?,?,?)",
-                (now, "adversary",
-                 f"Postmortem {dead_sid}: why did this drain? Fee? regime? false signal? One paragraph + kill criterion.",
-                 "high", "OPEN", "position_vigil"),
-            )
+            if not skip_invent_llm:
+                db.execute(
+                    "INSERT INTO ops_directives (ts, role, instruction, priority, status, requested_by) VALUES (?,?,?,?,?,?)",
+                    (now, "adversary",
+                     f"Postmortem {dead_sid}: why did this drain? Fee? regime? false signal? One paragraph + kill criterion.",
+                     "high", "OPEN", "position_vigil"),
+                )
         except Exception as e:
             log.warning("directive: %s", e)
         # Local regen: spawn diversity probes for that family immediately

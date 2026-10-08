@@ -196,3 +196,6 @@ With simulated money we test **many** fee-aware investment kinds in parallel to 
 
 ## Position Vigil (always on)
 An always-running desk loop cuts stuck/losing PAPER inventory, hibernates the drain, and demands a CHALLENGER from Quinn immediately. Ask `ops_vigil` for the last cuts. The firm does not leave capital rotting in a dead strategy.
+
+## Officer Dispatch (24/7 goals, not 24/7 inference)
+Deterministic loops (Position Vigil, External Feeds) run continuously. Hermes officers wake on *events* and quiet-interval gates — local PAPER regen first; Quinn invents a new thesis at most ~once per family / 45m. Ask `ops_dispatch` and `ops_intel_feeds`. Founder must paste Twelve Data + The Odds API keys via the one-time setup links when ready.

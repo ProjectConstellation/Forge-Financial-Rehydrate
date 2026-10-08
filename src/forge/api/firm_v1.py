@@ -106,6 +106,20 @@ def mount_firm_v1(app: FastAPI, forge: Any) -> None:
     async def v1_vigil() -> Any:
         return _j(forge.db.kv_get("lab.position_vigil") or {"error": "not_ready"})
 
+    @app.get("/api/v1/lab/dispatch")
+    async def v1_dispatch() -> Any:
+        return _j(forge.db.kv_get("lab.officer_dispatch") or {"error": "not_ready"})
+
+    @app.get("/api/v1/intel/feeds")
+    async def v1_intel_feeds() -> Any:
+        return _j({
+            "board": forge.db.kv_get("intel.feeds"),
+            "edgar": forge.db.kv_get("intel.edgar"),
+            "twelve_data": forge.db.kv_get("intel.twelve_data"),
+            "odds_api": forge.db.kv_get("intel.odds_api"),
+            "cred_links": forge.db.kv_get("ops.cred_pending_links"),
+        })
+
     @app.get("/api/v1/trial/current")
     async def v1_trial() -> Any:
         return _j({

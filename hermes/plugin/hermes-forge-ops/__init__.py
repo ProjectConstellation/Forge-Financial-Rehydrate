@@ -263,6 +263,22 @@ def register(ctx):
     def h_vigil(params, session_id=None, **kw):
         _audit("vigil", params, "OK", session_id=session_id)
         return _out(_call("GET", "/api/v1/lab/vigil", actor=_actor(session_id)))
+    
+    def h_dispatch(params, session_id=None, **kw):
+        _audit("dispatch", params, "OK", session_id=session_id)
+        return _out(_call("GET", "/api/v1/lab/dispatch", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_dispatch", toolset="forge_ops", handler=h_dispatch, schema=_schema(
+        "ops_dispatch",
+        "[FORGE EXEC] Officer Dispatch: event-wakes titled Hermes roles on justified events "
+        "(local regen first; LLM only with cooldowns). 24/7 goals without 24/7 inference.", {}))
+
+    def h_intel(params, session_id=None, **kw):
+        _audit("intel_feeds", params, "OK", session_id=session_id)
+        return _out(_call("GET", "/api/v1/intel/feeds", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_intel_feeds", toolset="forge_ops", handler=h_intel, schema=_schema(
+        "ops_intel_feeds",
+        "[FORGE EXEC] External SaaS/public intel board: EDGAR, Twelve Data, Odds API status + signup links.", {}))
+
     ctx.register_tool(name="ops_vigil", toolset="forge_ops", handler=h_vigil, schema=_schema(
         "ops_vigil",
         "[FORGE EXEC] Position Vigil: stuck/losing cuts, hibernations, challenger demands. "
