@@ -101,7 +101,7 @@ class ModelPrice(BaseModel):
 class DeepSeekConfig(BaseModel):
     base_url: str = "https://api.deepseek.com"
     model: str = "deepseek-flash"            # fast brain: high-frequency tool loops
-    deep_model: str = "deepseek-v4-pro"      # deep brain: invention, critique, postmortems (OP-004)
+    deep_model: str = "deepseek-flash"        # cheapest frontier; depth via effort=max, not Pro (cost discipline)
     deep_effort: str = "max"
     starting_budget_usd: Decimal = Decimal("5")
     prices: dict[str, ModelPrice] = Field(default_factory=lambda: {

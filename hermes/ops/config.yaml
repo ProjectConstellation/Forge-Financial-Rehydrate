@@ -1,13 +1,14 @@
 model:
-  provider: azure-opus
-  default: claude-opus-5-5
+  provider: deepseek
+  default: deepseek-flash
 approvals:
   mode: manual
   cron_mode: deny
   single_query_mode: deny
   unattended_mode: deny
 agent:
-  reasoning_effort: medium
+  # STANDARD intelligence: high (DeepSeek Flash). Deterministic facts use no LLM.
+  reasoning_effort: high
   max_turns: 25
   disabled_toolsets:
     - terminal
@@ -48,8 +49,19 @@ platform_toolsets:
     - session_search
     - todo
 providers:
+  deepseek:
+    name: DeepSeek V4.1 Flash (cheapest frontier; selective reasoning)
+    api: https://api.deepseek.com
+    key_env: DEEPSEEK_API_KEY
+    transport: chat_completions
+    default_model: deepseek-flash
+    models:
+      deepseek-flash:
+        context_length: 1000000
+    discover_models: false
+  # Retired Opus route retained disabled for rollback metadata only — never active.
   azure-opus:
-    name: Claude Opus 5.5 (Microsoft Azure, operator credit)
+    name: RETIRED Claude Opus 5.5 (Azure) — do not use
     api: https://matt-6083-resource.services.ai.azure.com/anthropic
     key_env: AZURE_ANTHROPIC_API_KEY
     transport: anthropic_messages

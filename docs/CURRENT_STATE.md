@@ -1,3 +1,15 @@
+# CURRENT STATE — 2026-10-08 15:29 UTC
+- **Mode:** PAPER_REAL_MARKET_SIM_MONEY (algorithmic LIVE OFF). Portal: https://forge.northstarimagine.com
+- **Intelligence:** DeepSeek V4.1 Flash everywhere (Opus retired). Cognitive=high · else=medium.
+- **Firm:** Mara (ops) + mapped Hermes workforce; Profit Recovery auto-opens grow_profit when below floor.
+- **Bars:** floor **$0.50/h** · stretch **$1.00/h** PAPER true-net.
+- **24h PAPER trial:** RUNNING (see kv `paper_trial`). Maximize Coinbase stables + Kalshi shadow; USDC idle LIVE parking only.
+- **Top lever now:** coinbase.stable_triangle (EXCEPTIONAL shadow +EV). Kalshi auth awaiting founder key.
+- Continuity docs: `docs/FIRM_CAPABILITY_MATRIX.md`. Do not flip LIVE without founder auth.
+
+
+---
+
 # CURRENT STATE — 2026-10-07 (read AGENTS.md → OPERATOR_POLICY → this → BUILD_STATUS)
 - Founder portal LIVE: https://forge.northstarimagine.com (tunnel service `forge-tunnel`, config /etc/forge/tunnel/). Real-time SSE /api/live (1 s snapshots).
 - `forge.service` (systemd, user forge) RUNNING in **PAPER** mode on live Coinbase data; FORGE_HOME=/srv/forge/var; API 127.0.0.1:8470.

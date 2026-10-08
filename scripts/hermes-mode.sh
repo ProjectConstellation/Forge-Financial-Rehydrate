@@ -65,9 +65,11 @@ forge-architect|every 3h|gate_architect.py|boot_architect.md
 forge-daily-report|0 12 * * *|gate_report.py|boot_report.md"
     kv "{\"mode\": \"credit\", \"model\": \"claude-opus-5-5\", \"credit_usd\": ${2:-180}, \"hours\": ${3:-72}}" ;;
   deepseek)
+    # Ensure provider block exists (Hermes built-in deepseek profile + DEEPSEEK_API_KEY)
     hc config set model.provider deepseek >/dev/null; hc config set model.default deepseek-flash >/dev/null
     hc config set cron.model deepseek-flash >/dev/null; hc config set cron.model_provider deepseek >/dev/null
-    EFF=low
+    hc config set agent.reasoning_effort high >/dev/null || true
+    EFF=medium
     JOBS="forge-governor|every 3h|gate_governor.py|boot_governor.md
 forge-alpha-inventor|0 */6 * * *|gate_alpha_inventor.py|boot_alpha_inventor.md
 forge-adversary|0 3,9,15,21 * * *|gate_adversary.py|boot_adversary.md
@@ -77,13 +79,16 @@ forge-rail-hunter|every 12h|gate_rail_hunter.py|boot_rail_hunter.md
 forge-scout|every 2h|forge_scout.py|boot_scout.md
 forge-architect|0 5 * * *|gate_architect.py|boot_architect.md
 forge-daily-report|0 12 * * *|gate_report.py|boot_report.md"
-    kv '{"mode": "deepseek", "model": "deepseek-flash"}' ;;
+    kv '{"mode": "deepseek", "model": "deepseek-flash", "effort_policy": "high_cognitive_medium_else"}' ;;
   status) hc config show 2>/dev/null | grep -E "Model:" | head -1; hc cron list 2>/dev/null | grep -E "Name:|Schedule:|\[(active|paused)\]" | paste - - - | sed -E 's/\s+/ /g'; exit 0 ;;
   *) echo "usage: $0 opus [credit_usd] [hours] | deepseek | status"; exit 1 ;;
 esac
 for id in $(ids_named); do hc cron remove "$id" >/dev/null 2>&1 || true; done
 while IFS='|' read -r name sched gate boot; do
-  e=$EFF; case "$name" in forge-alpha-inventor|forge-adversary|forge-architect) e=high ;; esac
+  e=$EFF; case "$name" in
+    forge-alpha-inventor|forge-adversary|forge-architect) e=high ;;  # cognitive invention / critique invention / prompt evolution
+    *) e=medium ;;  # everything else
+  esac
   hc cron create "$sched" "$(cat $P/$boot)" --name "$name" --script "$gate" --reasoning-effort "$e" \
      --deliver local --failure-deliver local >/dev/null && echo "  job $name [$sched, $e]"
 done <<< "$JOBS"

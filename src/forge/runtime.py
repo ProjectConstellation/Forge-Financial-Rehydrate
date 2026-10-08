@@ -222,6 +222,16 @@ class Forge:
         await self.say("Forge", f"All loops running under supervision: {len(self.sup.loops)} loops + watchdog — "
                                 "EARNING + IMPROVEMENT loops active 24/7")
 
+        try:
+            from forge.treasury.paper_trial import start_trial, snapshot
+            if not self.db.kv_get("paper_trial"):
+                st = start_trial(self, 24.0)
+                await self.say("Firm", f"PAPER 24h full-dress trial started — mode {st['mode']} · floor $0.50/h · stretch $1.00/h · LIVE money OFF")
+            else:
+                snapshot(self)
+        except Exception as _e:
+            pass
+
     async def _prompt_lab_loop(self) -> None:
         """Agent cognitive architecture: score forecasts vs real gate outcomes, evaluate paired prompt runs, promote/archive
         prompt genomes, open blind panels for high-stakes items. Deterministic; no LLM spend."""

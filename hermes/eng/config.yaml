@@ -1,9 +1,9 @@
 model:
-  provider: azure-opus
-  default: claude-opus-5-5
+  provider: deepseek
+  default: deepseek-flash
 cron:
-  model: claude-opus-5-5
-  model_provider: azure-opus
+  model: deepseek-flash
+  model_provider: deepseek
 approvals:
   mode: "off"
   cron_mode: approve
@@ -23,7 +23,8 @@ terminal:
   backend: local
   cwd: /srv/forge/runtime/eng/repo
 agent:
-  reasoning_effort: xhigh
+  # STANDARD=high; escalate to max only for hard tickets (not default — cost discipline on $28 treasury)
+  reasoning_effort: high
   max_turns: 120
   disabled_toolsets:
     - browser
@@ -52,8 +53,18 @@ platform_toolsets:
     - memory
     - session_search
 providers:
+  deepseek:
+    name: DeepSeek V4.1 Flash (cheapest frontier; selective reasoning)
+    api: https://api.deepseek.com
+    key_env: DEEPSEEK_API_KEY
+    transport: chat_completions
+    default_model: deepseek-flash
+    models:
+      deepseek-flash:
+        context_length: 1000000
+    discover_models: false
   azure-opus:
-    name: Claude Opus 5.5 (Microsoft Azure, operator credit)
+    name: RETIRED Claude Opus 5.5 (Azure) — do not use
     api: https://matt-6083-resource.services.ai.azure.com/anthropic
     key_env: AZURE_ANTHROPIC_API_KEY
     transport: anthropic_messages

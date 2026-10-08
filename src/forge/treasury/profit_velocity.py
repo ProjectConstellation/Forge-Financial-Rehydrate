@@ -37,7 +37,8 @@ DELTA = 0.05
 UTIL_MAX = 0.95
 N0_SHRINK = 5.0
 Z90 = 1.2816
-OPERATOR_MIN_TARGET = 1.0                     # $/h, operator bar
+OPERATOR_FLOOR_TARGET = 0.50                   # $/h operational floor (bootstrap)
+OPERATOR_MIN_TARGET = 1.0                     # $/h stretch / ratchet bar
 KALSHI_DEPTH_UNITS = 20.0                     # contracts per signal assumed fillable at the quoted ask (until WS depth)
 MEMBERSHIP_USD_PER_H = 4.99 / (30 * 24)       # Coinbase One fee is a FORGE cost
 OPUS_FREE_UNTIL = 1791348927.5 + 72 * 3600    # OP-018 credit window
@@ -321,6 +322,11 @@ class VelocityEngine:
             "streams": [{"id": s.id, "venue": s.venue, "live": s.live, "note": s.note,
                          **{k: (round(v, 6) if isinstance(v, float) else v) for k, v in st.items()}} for s, st in with_stats],
             "priorities": pri[:12], "diagnosis": diag,
+            "floor_usd_per_h": OPERATOR_FLOOR_TARGET,
+            "stretch_usd_per_h": OPERATOR_MIN_TARGET,
+            "mode_label": "PAPER_REAL_MARKET_SIM_MONEY" if getattr(self.f, "book", "paper") != "live" else "LIVE_REAL_MARKET_REAL_MONEY",
+            "below_floor": (realized["1h"]["usd_per_h"] < OPERATOR_FLOOR_TARGET and realized["24h"]["usd_per_h"] < OPERATOR_FLOOR_TARGET),
+            "below_stretch": f_proven["usd_per_h"] < OPERATOR_MIN_TARGET,
         }
         self.report = rep
         return rep
@@ -341,14 +347,19 @@ class VelocityEngine:
                         "potential_usd_per_h": rep["expected_usd_per_h"]["potential"], "target": rep["target_usd_per_h"],
                         "rewards_usdc": float((self.f.db.kv_get("yield.usdc") or {}).get("rewards_usdc") or 0),
                         "payload": json.dumps({k: rep[k] for k in ("regime", "diagnosis", "priorities")}, default=str)})
+                try:
+                    from forge.treasury.profit_recovery import maybe_open_recovery
+                    maybe_open_recovery(self.f, rep)
+                except Exception as re:
+                    log.warning("profit_recovery: %s", re)
                 if time.time() - self._last_note >= 3600:
                     self._last_note = time.time()
                     e = rep["expected_usd_per_h"]
                     await self.f.say("Profit Velocity",
-                                     f"realized 1h ${rep['realized']['1h']['usd_per_h']:+.3f}/h · 24h "
-                                     f"${rep['realized']['24h']['usd_per_h']:+.3f}/h | expected live ${e['live_now']:.3f}/h · "
-                                     f"proven ${e['proven']:.3f}/h · potential ${e['potential']:.3f}/h | target "
-                                     f"${rep['target_usd_per_h']:.2f}/h | {rep['regime']['regime']} | top lever: "
+                                     f"{rep.get('mode_label','PAPER')} · realized 1h ${rep['realized']['1h']['usd_per_h']:+.3f}/h · 24h "
+                                     f"${rep['realized']['24h']['usd_per_h']:+.3f}/h | floor ${rep.get('floor_usd_per_h',0.5):.2f}/h · "
+                                     f"stretch ${rep.get('stretch_usd_per_h',1):.2f}/h | proven ${e['proven']:.3f}/h · potential "
+                                     f"${e['potential']:.3f}/h | {rep['regime']['regime']} | top lever: "
                                      f"{rep['priorities'][0]['action'] if rep['priorities'] else '—'}")
             except Exception as e:
                 log.warning("velocity: %s", e, exc_info=True)

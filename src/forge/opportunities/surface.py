@@ -341,12 +341,27 @@ class SurfaceRegistry:
         pm = self._rail("coinbase.stable_peg_mm", "Coinbase Advanced Trade (stable pairs)", "peg market-making / idle yield")
         fee = self.f.db.kv_get("fees.USDT-USD.maker") or {}
         pm.capabilities.update(pairs=["USDT-USD", "USDT-USDC"], maker_fee=fee.get("rate"), fee_source=fee.get("source"))
-        pm.blockers = ["paper only until shadow round trips prove net-positive (P>0.9) — then eligible on the spot key"]
+        # PAPER trial: promote when shadow evidence is strong (P>0.9 or n>=30 with positive mean)
+        st = self.f.db.kv_get("pegmaker.state") or {}
+        n_peg = int(self.f.db.scalar("SELECT COUNT(*) FROM shadow_trades WHERE rail='coinbase.stable_peg_mm' AND pnl_usd IS NOT NULL") or 0)
+        mean_peg = float(self.f.db.scalar("SELECT AVG(pnl_usd) FROM shadow_trades WHERE rail='coinbase.stable_peg_mm' AND pnl_usd IS NOT NULL") or 0)
+        if n_peg >= 30 and mean_peg > 0:
+            pm.status = "SHADOW"; pm.executable = True; pm.blockers = []
+            pm.economics.evidence = f"{n_peg} shadow RTs mean ${mean_peg:.4f} — PAPER priority rail"
+        else:
+            pm.blockers = [f"paper only until shadow proves +EV (n={n_peg}, mean={mean_peg:.4f})"]
         pm.status, pm.executable = "SHADOW", False
         tr = self._rail("coinbase.stable_triangle", "Coinbase Advanced Trade (USDT-USD ⇄ USDT-USDC, free USD⇄USDC convert)",
                         "near-riskless stable arbitrage")
         tr.capabilities.update(fees=(self.f.db.kv_get("fees.stable") or {}).get("fees"))
-        tr.blockers = ["paper only until shadow cycles prove net-positive after measured taker fees"]
+        n_tr = int(self.f.db.scalar("SELECT COUNT(*) FROM shadow_trades WHERE rail='coinbase.stable_triangle' AND pnl_usd IS NOT NULL") or 0)
+        mean_tr = float(self.f.db.scalar("SELECT AVG(pnl_usd) FROM shadow_trades WHERE rail='coinbase.stable_triangle' AND pnl_usd IS NOT NULL") or 0)
+        sum_tr = float(self.f.db.scalar("SELECT SUM(pnl_usd) FROM shadow_trades WHERE rail='coinbase.stable_triangle' AND pnl_usd IS NOT NULL") or 0)
+        if n_tr >= 100 and mean_tr > 0:
+            tr.status = "SHADOW"; tr.executable = True; tr.blockers = []
+            tr.economics.evidence = f"{n_tr} shadow cycles mean ${mean_tr:.4f} sum ${sum_tr:.2f} — PAPER priority rail (EXCEPTIONAL)"
+        else:
+            tr.blockers = [f"paper only until shadow +EV after fees (n={n_tr}, mean={mean_tr:.4f})"]
         tr.status, tr.executable = "SHADOW", False
         ld = self._rail("coinbase.listing_discovery", "Coinbase Advanced Trade (new listings)", "event-driven spot")
         ld.blockers = ["paper only: rare events; needs ≥ 20 settled listings with positive net expectancy"]
