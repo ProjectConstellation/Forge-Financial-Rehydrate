@@ -1,3 +1,10 @@
+
+function forgeStale(ts, maxAgeS){
+  if(ts==null||ts===undefined||ts==='') return 'STALE';
+  const age = Date.now()/1000 - Number(ts);
+  if(!Number.isFinite(age) || age > (maxAgeS||180)) return 'STALE';
+  return null;
+}
 /* FORGE founder portal v3 — all numbers are pushed by the engine every second (SSE /api/live). Nothing is invented client-side. */
 (() => {
   "use strict";

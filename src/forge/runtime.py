@@ -250,6 +250,13 @@ class Forge:
         from forge.intel.feeds import ExternalFeeds
         self.external_feeds = ExternalFeeds(self)
         B("external_feeds", self.external_feeds.run, 900)
+        from forge.opportunities.paper_bets import PaperBetDesk
+        self.paper_bets = PaperBetDesk(self)
+        B("paper_bets", self.paper_bets.run, 900)
+        from forge.treasury.econ_orchestrator import EconOrchestrator
+        self.econ_orchestrator = EconOrchestrator(self)
+        B("econ_orchestrator", self.econ_orchestrator.run, 300)
+
 
 
         async def _trial_scorecard_loop():
@@ -287,7 +294,9 @@ class Forge:
                                 "EARNING + IMPROVEMENT loops active 24/7")
 
         try:
-            from forge.treasury.paper_trial import start_trial, snapshot
+            from forge.treasury.paper_trial import start_trial, start_8h_trial, snapshot
+            if not self.db.kv_get("paper_trial"):
+                start_8h_trial(self)
             if not self.db.kv_get("paper_trial"):
                 st = start_trial(self, 24.0)
                 await self.say("Firm", f"PAPER trial started — {st['mode']} · PRIMARY TARGET $1.00/h TRUE-NET · $0.50/h diagnostic only · LIVE money OFF · continuous (does not stop at window end)")

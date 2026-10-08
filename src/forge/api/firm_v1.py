@@ -106,6 +106,25 @@ def mount_firm_v1(app: FastAPI, forge: Any) -> None:
     async def v1_vigil() -> Any:
         return _j(forge.db.kv_get("lab.position_vigil") or {"error": "not_ready"})
 
+    @app.get("/api/v1/econ/tournament")
+    async def v1_econ_tournament() -> Any:
+        return _j({
+            "trial": forge.db.kv_get("paper_trial"),
+            "board": forge.db.kv_get("econ.treasury_board"),
+            "orchestrator": forge.db.kv_get("lab.econ_orchestrator"),
+            "reallocation": forge.db.kv_get("capital.reallocation"),
+            "edge_decay": forge.db.kv_get("edge_decay"),
+            "paper_bets": forge.db.kv_get("lab.paper_bets"),
+            "modal": forge.db.kv_get("econ.modal_research"),
+            "modal_attribution": forge.db.kv_get("econ.modal_attribution"),
+            "prefer_rails": forge.db.kv_get("econ.prefer_rails"),
+        })
+
+    @app.get("/api/v1/lab/paper_bets")
+    async def v1_paper_bets() -> Any:
+        return _j(forge.db.kv_get("lab.paper_bets") or {"error": "not_ready"})
+
+
     @app.get("/api/v1/lab/dispatch")
     async def v1_dispatch() -> Any:
         return _j(forge.db.kv_get("lab.officer_dispatch") or {"error": "not_ready"})

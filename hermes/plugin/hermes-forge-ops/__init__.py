@@ -279,6 +279,22 @@ def register(ctx):
         "ops_intel_feeds",
         "[FORGE EXEC] External SaaS/public intel board: EDGAR, Twelve Data, Odds API status + signup links.", {}))
 
+    
+    def h_econ(params, session_id=None, **kw):
+        _audit("econ_tournament", params, "OK", session_id=session_id)
+        return _out(_call("GET", "/api/v1/econ/tournament", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_econ_tournament", toolset="forge_ops", handler=h_econ, schema=_schema(
+        "ops_econ_tournament",
+        "[FORGE EXEC] 8h PAPER economic tournament scoreboard: treasury board, realloc, edge decay, "
+        "paper bets, Modal research, proven $/h, constraints to $1/h. Use for 'how are we doing economically'.", {}))
+
+    def h_paper_bets(params, session_id=None, **kw):
+        _audit("paper_bets", params, "OK", session_id=session_id)
+        return _out(_call("GET", "/api/v1/lab/paper_bets", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_paper_bets", toolset="forge_ops", handler=h_paper_bets, schema=_schema(
+        "ops_paper_bets",
+        "[FORGE EXEC] PAPER event-bet desk (Odds intelligence, fake money): open bets, edges, bankroll, settlements.", {}))
+
     ctx.register_tool(name="ops_vigil", toolset="forge_ops", handler=h_vigil, schema=_schema(
         "ops_vigil",
         "[FORGE EXEC] Position Vigil: stuck/losing cuts, hibernations, challenger demands. "

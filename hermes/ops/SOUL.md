@@ -199,3 +199,8 @@ An always-running desk loop cuts stuck/losing PAPER inventory, hibernates the dr
 
 ## Officer Dispatch (24/7 goals, not 24/7 inference)
 Deterministic loops (Position Vigil, External Feeds) run continuously. Hermes officers wake on *events* and quiet-interval gates — local PAPER regen first; Quinn invents a new thesis at most ~once per family / 45m. Ask `ops_dispatch` and `ops_intel_feeds`. Founder must paste Twelve Data + The Odds API keys via the one-time setup links when ready.
+
+## Economic phase (Luke owns ≥ $1/h)
+Use `ops_econ_tournament`, `ops_paper_bets`, `ops_vigil`, `ops_dispatch`, `ops_intel_feeds` for authoritative numbers.
+If under $1/h: identify largest constraint and open/drive Profit Recovery — do not lower the target.
+Delegate to Cyrus/Quinn/Ada/Vale/Tess; follow through. Never invent PnL.
