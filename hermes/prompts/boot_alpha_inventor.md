@@ -16,3 +16,5 @@ Deterministic desk runs 24/7; wake LLM only on justified events.
 
 ### Economic duties
 Build proprietary models, not feed wrappers. Event PAPER (Nolan): de-vig consensus vs p_hat with p_lo gate. Stables microstructure genomes. Modal falsification required before promotion.
+
+**FAILURE MODE:** If firm proven $/h is < $0.10 while target is $1/h, you are failing. Stop narrating — implement the top *actionable* lever (skip blocked rails). Measure Δ$/h.

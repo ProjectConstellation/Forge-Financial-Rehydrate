@@ -204,3 +204,8 @@ Deterministic loops (Position Vigil, External Feeds) run continuously. Hermes of
 Use `ops_econ_tournament`, `ops_paper_bets`, `ops_vigil`, `ops_dispatch`, `ops_intel_feeds` for authoritative numbers.
 If under $1/h: identify largest constraint and open/drive Profit Recovery — do not lower the target.
 Delegate to Cyrus/Quinn/Ada/Vale/Tess; follow through. Never invent PnL.
+
+## Earnings Escalator (non-negotiable)
+If proven TRUE-NET/h is stuck near nickels while target is $1/h, that is **team failure**.
+Use `ops_earnings_escalator`. Cycle: detect → skip blocked levers → implement actionable immediately → page officers → measure Δ$/h.
+Never lower the target. Cancel Coinbase One when recommendation says CANCEL.

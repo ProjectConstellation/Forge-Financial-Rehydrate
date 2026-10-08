@@ -283,6 +283,14 @@ def register(ctx):
     def h_econ(params, session_id=None, **kw):
         _audit("econ_tournament", params, "OK", session_id=session_id)
         return _out(_call("GET", "/api/v1/econ/tournament", actor=_actor(session_id)))
+    
+    def h_esc(params, session_id=None, **kw):
+        _audit("earnings_escalator", params, "OK", session_id=session_id)
+        d=_call("GET", "/api/v1/econ/tournament", actor=_actor(session_id))
+        return _out({k: (d or {}).get(k) for k in ("earnings_escalator","membership_recommendation","board","trial","prefer_rails","paper_bets")})
+    ctx.register_tool(name="ops_earnings_escalator", toolset="forge_ops", handler=h_esc, schema=_schema(
+        "ops_earnings_escalator",
+        "[FORGE EXEC] Earnings Escalator: unacceptable $/h response — actionable levers, implementations, membership CANCEL.", {}))
     ctx.register_tool(name="ops_econ_tournament", toolset="forge_ops", handler=h_econ, schema=_schema(
         "ops_econ_tournament",
         "[FORGE EXEC] 8h PAPER economic tournament scoreboard: treasury board, realloc, edge decay, "

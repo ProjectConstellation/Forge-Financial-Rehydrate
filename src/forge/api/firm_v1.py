@@ -118,6 +118,8 @@ def mount_firm_v1(app: FastAPI, forge: Any) -> None:
             "modal": forge.db.kv_get("econ.modal_research"),
             "modal_attribution": forge.db.kv_get("econ.modal_attribution"),
             "prefer_rails": forge.db.kv_get("econ.prefer_rails"),
+            "earnings_escalator": forge.db.kv_get("lab.earnings_escalator"),
+            "membership_recommendation": forge.db.kv_get("membership.recommendation"),
         })
 
     @app.get("/api/v1/lab/paper_bets")

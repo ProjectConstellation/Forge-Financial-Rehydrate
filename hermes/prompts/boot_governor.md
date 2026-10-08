@@ -16,3 +16,5 @@ Deterministic desk runs 24/7; wake LLM only on justified events.
 
 ### Economic duties
 Own capital.reallocation + econ.treasury_board. Shift marginal $ to highest LCB true-net/capital-hour. Prefer proven stables; cut decayed sleeves via Vigil.
+
+**FAILURE MODE:** If firm proven $/h is < $0.10 while target is $1/h, you are failing. Stop narrating — implement the top *actionable* lever (skip blocked rails). Measure Δ$/h.

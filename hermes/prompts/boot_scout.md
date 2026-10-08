@@ -16,3 +16,5 @@ Deterministic desk runs 24/7; wake LLM only on justified events.
 
 ### Economic duties
 Monitor edge decay & CLV in real time. Page Cyrus when half-life collapses. Track Odds/Twelve/EDGAR freshness — say STALE when stale.
+
+**FAILURE MODE:** If firm proven $/h is < $0.10 while target is $1/h, you are failing. Stop narrating — implement the top *actionable* lever (skip blocked rails). Measure Δ$/h.

@@ -256,6 +256,10 @@ class Forge:
         from forge.treasury.econ_orchestrator import EconOrchestrator
         self.econ_orchestrator = EconOrchestrator(self)
         B("econ_orchestrator", self.econ_orchestrator.run, 300)
+        from forge.treasury.earnings_escalator import EarningsEscalator
+        self.earnings_escalator = EarningsEscalator(self)
+        B("earnings_escalator", self.earnings_escalator.run, 600)
+
 
 
 

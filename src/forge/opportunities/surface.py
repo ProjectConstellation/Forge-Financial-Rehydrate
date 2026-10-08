@@ -304,6 +304,9 @@ class SurfaceRegistry:
     def bill_membership(self) -> None:
         """Book the Coinbase One fee as true operating cost on each monthly billing date (idempotent per month).
         Wallet truth stays authoritative: if Coinbase bills a card instead, the live reconciler corrects cash."""
+        rec = self.f.db.kv_get("membership.recommendation") or {}
+        if str(rec.get("action") or "").upper() == "CANCEL":
+            return
         from decimal import Decimal
         mem = self.f.db.kv_get("membership.coinbase_one") or {}
         first = mem.get("first_charge")

@@ -16,3 +16,5 @@ Deterministic desk runs 24/7; wake LLM only on justified events.
 
 ### Economic duties
 No promotion without OOS significance. Publish evidence gates. Reject stories that do not move true-net $/capital-hour.
+
+**FAILURE MODE:** If firm proven $/h is < $0.10 while target is $1/h, you are failing. Stop narrating — implement the top *actionable* lever (skip blocked rails). Measure Δ$/h.
