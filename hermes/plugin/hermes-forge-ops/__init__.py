@@ -285,7 +285,7 @@ def register(ctx):
     def h_ticket(params, session_id=None, **kw):
         return _out(_call("POST", "/api/ops/action", {"action": "file_ticket", "params": params}, _actor(session_id)))
     ctx.register_tool(name="ops_engineer", toolset="forge_ops", handler=h_ticket, schema=_schema(
-        "ops_engineer", "[FORGE EXEC] Give the FORGE ENGINEER (sandboxed coding agent, Opus 5.5 xhigh) a code task: "
+        "ops_engineer", "[FORGE EXEC] Give the FORGE ENGINEER (sandboxed coding agent, DeepSeek V4.1 Flash, high reasoning) a code task: "
         "upgrade/debug/advance an algorithm or engine, build a platform adapter, fix a bug, add telemetry. Write a precise "
         "spec: goal, evidence, acceptance criteria, expected $/h effect. It picks it up within ~10 min, writes code + "
         "tests, submits; the root deployer policy-scans, tests in a sandbox, deploys, watches health 10 min and rolls back "
@@ -452,7 +452,7 @@ def register(ctx):
                                                    {k: getattr(usage, k) for k in dir(usage)
                                                     if k.endswith("tokens") and not k.startswith("_")})
         body = {"api_request_id": f"ops_{kind}_{session_id}_{api_request_id}_{os.urandom(4).hex()}"[:120], "usage": u,
-                "model": model or "claude-opus-5-5", "session_id": session_id, "purpose": f"ops_{kind}",
+                "model": model or "deepseek-flash", "session_id": session_id, "purpose": f"ops_{kind}",
                 "latency_ms": int(float(api_duration or 0) * 1000)}
         threading.Thread(target=lambda: _call("POST", "/api/ops/usage", body, "ops-usage", 10), daemon=True).start()
 

@@ -590,7 +590,7 @@ def mount_ops(app: FastAPI, forge: Any, token: str, etoken: str | None = None) -
                           + [f"ops_{t}" for t in READ_TOOLS],
             "engineering": {"open_tickets": db.scalar("SELECT COUNT(*) FROM eng_tickets WHERE status IN ('OPEN','IN_PROGRESS','SUBMITTED')"),
                             "awaiting_owner": db.scalar("SELECT COUNT(*) FROM eng_tickets WHERE deploy_status = 'AWAITING_OWNER'"),
-                            "engineer": "FORGE ENGINEER (Hermes, Opus 5.5 xhigh, sandboxed): writes code + tests from ops_engineer "
+                            "engineer": "FORGE ENGINEER (Hermes, DeepSeek V4.1 Flash high-reasoning, sandboxed): writes code + tests from ops_engineer "
                                         "tickets; root deployer scans, tests, deploys, watches, rolls back"},
             "treasury": v.get("treasury"), "regime": (v.get("regime") or {}).get("regime"),
             "target_usd_per_h": v.get("target_usd_per_h"),

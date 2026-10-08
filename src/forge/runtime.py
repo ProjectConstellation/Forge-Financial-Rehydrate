@@ -627,6 +627,17 @@ class Forge:
         if st not in tradable or self.gateway is None:
             self._set_opp(oid, "OBSERVED", f"{st.value}: shadow observation (would-be trade)")
             return
+        # Continuous kill/realloc gate — decay PAUSE / realloc REDUCE blocks new size immediately
+        ed = self.db.kv_get("edge_decay") or {}
+        for a in (ed.get("actions") or []):
+            if a.get("strategy_id") == g.id and a.get("state") in ("PAUSE", "REDUCE"):
+                self._set_opp(oid, "REJECTED", f"edge_decay {a.get('state')}: capital withdrawn — hunt next edge")
+                return
+        realloc = self.db.kv_get("capital.reallocation") or {}
+        for a in (realloc.get("actions") or []):
+            if a.get("strategy") == g.id and a.get("type") in ("PAUSE", "REDUCE"):
+                self._set_opp(oid, "REJECTED", f"reallocator {a.get('type')}: rotate to higher marginal value")
+                return
         comps["breadth_at_entry"] = self.breadth.get("up_frac")
         if self.db.kv_get(f"strategy.sleeve.{g.id}") == "beta":
             b = self.breadth

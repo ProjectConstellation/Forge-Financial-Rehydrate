@@ -1,6 +1,6 @@
 # FORGE OPS COMMANDER — runbook (OP-023)
 Owner-only remote operations agent (Hermes v0.21.5, profile `/srv/forge/runtime/ops/home`, user `forge-ops`,
-unit `forge-ops.service`, model = Opus 5.5 credit → DeepSeek later, same provider config as the research Hermes).
+unit `forge-ops.service`, model = DeepSeek V4.1 Flash credit → DeepSeek later, same provider config as the research Hermes).
 
 ## Activate Telegram (once)
 1. Telegram: message **@BotFather** → `/newbot` → name it (e.g. "FORGE OPS") → copy the bot token.

@@ -13,7 +13,7 @@ slice `forge.slice` = FORGE's 4 vCPU / 4 GB envelope). It has NO exchange keys a
 
 ## Swap (one command each)
 ```bash
-forge-hermes-mode opus 180 72        # Claude Opus 5.5 (Azure, operator credit $180 over 72 h, high reasoning, fast cadence)
+# forge-hermes-mode opus  — RETIRED        # DeepSeek V4.1 Flash (Azure, operator credit $180 over 72 h, high reasoning, fast cadence)
 forge-hermes-mode deepseek           # DeepSeek V4.1 Flash (deepseek-flash), ROI-measured budget, lean cadence
 forge-hermes-mode status             # current model + jobs
 
@@ -22,7 +22,7 @@ echo "$API_KEY" | forge-hermes-mode add-provider my-llm https://host/v1 chat_com
 forge-hermes-mode use my-llm my-model            # ROI-budget mode
 forge-hermes-mode use my-llm my-model 100 48     # prepaid/free credit pool: $100 over 48 h
 ```
-Keys live only in `/srv/forge/runtime/hermes/home/.env` (0600, forge-hermes). Both Opus (`azure-opus`) and DeepSeek
+Keys live only in `/srv/forge/runtime/hermes/home/.env` (0600, forge-hermes). DeepSeek Flash only (Opus/`azure-opus` retired)
 (`deepseek`) providers stay configured permanently; swapping only changes the active provider/model + cadence.
 
 ## Verify after a swap

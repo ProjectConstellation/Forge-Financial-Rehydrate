@@ -17,9 +17,9 @@ from typing import Any
 log = logging.getLogger("forge.edge_decay")
 
 ADVERSE_WINDOWS_TO_PAUSE = 3
-CUSUM_H = 3.0       # decision threshold (in residual σ units)
+CUSUM_H = 2.5       # decision threshold (in residual σ units)
 CUSUM_K = 0.5       # allowance
-MIN_TRADES = 6
+MIN_TRADES = 3
 
 
 def _f(x: Any, d: float = 0.0) -> float:
@@ -141,26 +141,46 @@ class EdgeDecayMonitor:
         }
         db = self.f.db
         if st in ("REDUCE", "PAUSE"):
-            # mark strategy reason; request challenger from alpha_inventor
+            sid = card["strategy_id"]
             try:
                 db.execute(
                     "UPDATE strategies SET status_reason=? WHERE id=?",
-                    (f"edge_decay:{st}:cusum={card.get('cusum')}", card["strategy_id"]),
+                    (f"edge_decay:{st}:cusum={card.get('cusum')}", sid),
                 )
             except Exception:
                 pass
+            # PAPER: actuate immediately — do not wait for human/Hermes to notice
+            book = getattr(self.f, "book", "paper")
+            try:
+                from forge.strategies.registry import State
+                cur = self.f.reg.state(sid)
+                if book == "paper" and cur in (State.SHADOW, State.CHALLENGER, State.EXPERIMENTAL):
+                    if st == "PAUSE":
+                        self.f.reg.transition(
+                            sid, State.HIBERNATING,
+                            f"edge_decay PAUSE: cusum={card.get('cusum')} — drop until challenger beats it",
+                        )
+                        action["transition"] = "HIBERNATING"
+                    elif st == "REDUCE" and cur == State.CHALLENGER:
+                        self.f.reg.transition(
+                            sid, State.SHADOW,
+                            f"edge_decay REDUCE: demote challenger cusum={card.get('cusum')}",
+                        )
+                        action["transition"] = "SHADOW"
+            except Exception as e:
+                action["transition_error"] = str(e)[:120]
             try:
                 db.execute(
                     "INSERT INTO ops_directives (ts, role, instruction, priority, status, requested_by) VALUES (?,?,?,?,?,?)",
                     (now, "alpha_inventor",
-                     f"CHALLENGER needed: {card['strategy_id']} state={st} decay={card['edge_decay_score']} "
+                     f"CHALLENGER needed: {sid} state={st} decay={card['edge_decay_score']} "
                      f"cusum={card.get('cusum')}. Invent replacement; do not revive milched edge.",
                      "high", "OPEN", "edge_decay"),
                 )
                 db.execute(
                     "INSERT INTO ops_directives (ts, role, instruction, priority, status, requested_by) VALUES (?,?,?,?,?,?)",
                     (now, "governor",
-                     f"REALLOCATE away from {card['strategy_id']} ({st}). Prefer higher marginal-value PAPER rails.",
+                     f"REALLOCATE away from {sid} ({st}). Prefer higher marginal-value PAPER rails.",
                      "high", "OPEN", "edge_decay"),
                 )
                 action["directives"] = True

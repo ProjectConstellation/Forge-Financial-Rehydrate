@@ -48,7 +48,7 @@
   verified hourly from wallet truth; live-start guard converts USDC→USD before any live spot session).
 - Spot: PAPER. 6 SHADOW breakout (beta-sleeve) strategies passed validation + sealed exam on clean data; they paper-trade on
   live data; promotion to CHALLENGER needs forward evidence → readiness gate (only remaining gaps: ≥1 CHALLENGER, live flag).
-- Hermes v0.21.5 (forge-hermes.service, forge.slice) on Claude Opus 5.5 (operator Azure credit, $180/72 h, used ≈ $0.2):
+- Hermes v0.21.5 (forge-hermes.service, forge.slice) on DeepSeek V4.1 Flash (operator Azure credit, $180/72 h, used ≈ $0.2):
   9 jobs, 7 role genomes v1 (governor, alpha_inventor, adversary, critic, doctor, rail_hunter, architect) served by FORGE
   (Prompt Genome System: versions, paired identical-snapshot challengers, calibrated KPIs, blind panels). Swap:
   `forge-hermes-mode deepseek|opus|use|add-provider` (docs/HERMES.md).

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Swap Hermes between Opus 5.5 (operator credit, high reasoning, fast cadence) and DeepSeek V4.1 Flash (measured-ROI budget).
+# Hermes model mode: DeepSeek V4.1 Flash only (Opus/Azure retired).
 #   forge-hermes-mode opus [credit_usd] [hours]   |   forge-hermes-mode deepseek   |   forge-hermes-mode status
 # Prompts are thin bootstraps; the real role genomes live in FORGE (prompt_genomes) and evolve there.
 set -euo pipefail
@@ -12,6 +12,7 @@ if v.get('mode')=='credit': v.setdefault('start', (db.kv_get('hermes.mode') or {
 db.kv_set('hermes.mode', v); print('FORGE hermes.mode =', v)" "$1"; }
 ids_named() { hc cron list 2>/dev/null | awk '/^  [0-9a-f]{12} \[/{id=$1} $1=="Name:" && $2 ~ /^forge-/ {print id}'; }
 MODE="${1:-status}"
+if [ "$MODE" = "opus" ]; then echo "REFUSED: Opus/Azure retired. Use: forge-hermes-mode deepseek|status"; exit 2; fi
 # ---- generic provider swap (zero recode: endpoint + model + key) ------------------------------------------------------
 #   forge-hermes-mode add-provider <name> <base_url> <chat_completions|anthropic_messages> <model> <in_$/M> <out_$/M>
 #        (API key read from STDIN, stored only in Hermes' 0600 .env as HERMES_KEY_<NAME>)
@@ -50,8 +51,8 @@ if [ "$MODE" = "use" ]; then
 fi
 case "$MODE" in
   opus)
-    hc config set model.provider azure-opus >/dev/null; hc config set model.default claude-opus-5-5 >/dev/null
-    hc config set cron.model claude-opus-5-5 >/dev/null; hc config set cron.model_provider azure-opus >/dev/null
+# RETIRED: hc config set model.provider azure-opus >/dev/null; hc config set model.default claude-opus-5-5 >/dev/null
+# RETIRED: hc config set cron.model claude-opus-5-5 >/dev/null; hc config set cron.model_provider azure-opus >/dev/null
     EFF=high
     # name | schedule | gate script | bootstrap
     JOBS="forge-governor|every 1h|gate_governor.py|boot_governor.md
@@ -63,7 +64,7 @@ forge-rail-hunter|every 2h|gate_rail_hunter.py|boot_rail_hunter.md
 forge-scout|every 1h|forge_scout.py|boot_scout.md
 forge-architect|every 3h|gate_architect.py|boot_architect.md
 forge-daily-report|0 12 * * *|gate_report.py|boot_report.md"
-    kv "{\"mode\": \"credit\", \"model\": \"claude-opus-5-5\", \"credit_usd\": ${2:-180}, \"hours\": ${3:-72}}" ;;
+# RETIRED: kv "{\"mode\": \"credit\", \"model\": \"claude-opus-5-5\", \"credit_usd\": ${2:-180}, \"hours\": ${3:-72}}" ;;
   deepseek)
     # Ensure provider block exists (Hermes built-in deepseek profile + DEEPSEEK_API_KEY)
     hc config set model.provider deepseek >/dev/null; hc config set model.default deepseek-flash >/dev/null

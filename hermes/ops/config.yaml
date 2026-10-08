@@ -7,47 +7,46 @@ approvals:
   single_query_mode: deny
   unattended_mode: deny
 agent:
-  # Everyday: medium. Escalate HIGH / EXTRA HIGH (max) via cognitive governor + cron job effort.
   reasoning_effort: medium
   max_turns: 30
   disabled_toolsets:
-    - terminal
-    - code_execution
-    - file
-    - browser
-    - computer_use
-    - image_gen
-    - homeassistant
-    - discord
-    - discord_admin
-    - spotify
-    - kanban
-    - connections
-    - skills
+  - terminal
+  - code_execution
+  - file
+  - browser
+  - computer_use
+  - image_gen
+  - homeassistant
+  - discord
+  - discord_admin
+  - spotify
+  - kanban
+  - connections
+  - skills
 memory:
   user_profile_enabled: false
 plugins:
   enabled:
-    - hermes-forge-ops
+  - hermes-forge-ops
   disabled:
-    - hermes-forge
+  - hermes-forge
 platforms:
   telegram:
     gateway_restart_notification: false
 platform_toolsets:
   telegram:
-    - forge_ops
-    - memory
-    - session_search
-    - todo
-    - clarify
-    - cronjob
-    - delegation
+  - forge_ops
+  - memory
+  - session_search
+  - todo
+  - clarify
+  - cronjob
+  - delegation
   cli:
-    - forge_ops
-    - memory
-    - session_search
-    - todo
+  - forge_ops
+  - memory
+  - session_search
+  - todo
 providers:
   deepseek:
     name: DeepSeek V4.1 Flash (cheapest frontier; selective reasoning)
@@ -59,25 +58,14 @@ providers:
       deepseek-flash:
         context_length: 1000000
     discover_models: false
-  # Retired Opus route retained disabled for rollback metadata only — never active.
-  azure-opus:
-    name: RETIRED Claude Opus 5.5 (Azure) — do not use
-    api: https://matt-6083-resource.services.ai.azure.com/anthropic
-    key_env: AZURE_ANTHROPIC_API_KEY
-    transport: anthropic_messages
-    default_model: claude-opus-5-5
-    models:
-      claude-opus-5-5:
-        context_length: 1000000
-    discover_models: false
 tools:
   tool_search:
-    enabled: "off"
+    enabled: 'off'
 stt:
   enabled: true
   echo_transcripts: true
-  provider: "local"
-  language: "en"
-  prompt: "FORGE, Kalshi, Coinbase, Modal, DeepSeek, Hermes, USDC, PAXG, debrief, treasury"
+  provider: local
+  language: en
+  prompt: FORGE, Kalshi, Coinbase, Modal, DeepSeek, Hermes, USDC, PAXG, debrief, treasury
   local:
-    model: "base"
+    model: base

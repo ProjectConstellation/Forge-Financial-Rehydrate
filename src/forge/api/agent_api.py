@@ -45,7 +45,7 @@ def is_agent_request(req: Request, token: str) -> bool:
 
 
 # External (non-DeepSeek) model list prices, USD per 1M tokens — used to MEASURE value-per-$ even when compute is free.
-EXTERNAL_PRICES = {"claude-opus-5-5": {"in": 5.0, "out": 25.0, "cache": 0.5}}
+EXTERNAL_PRICES = {"deepseek-flash": {"in": 0.14, "out": 0.28, "cache": 0.014}}  # approx; live prices in hermes.prices
 
 
 def hermes_spent_24h(db: Any, external: bool = False) -> float:
@@ -57,7 +57,7 @@ def hermes_spent_24h(db: Any, external: bool = False) -> float:
 
 
 def credit_allowance(forge: Any, mode: dict[str, Any]) -> dict[str, Any]:
-    """Free operator credit (e.g. Opus 5.5 for 72 h): not a FORGE expense, but paced so it lasts the whole window."""
+    """Free operator credit window (legacy; DeepSeek Flash is the active workforce): not a FORGE expense, but paced so it lasts the whole window."""
     from datetime import UTC, datetime
     start, hours, credit = float(mode["start"]), float(mode.get("hours", 72)), float(mode.get("credit_usd", 180))
     used = float(forge.db.scalar("SELECT COALESCE(SUM(CAST(cost_usd AS REAL)),0) FROM inference_calls WHERE agent LIKE "

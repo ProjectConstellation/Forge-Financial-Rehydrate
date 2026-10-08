@@ -89,7 +89,9 @@ def assess(p_win: float, win_return: float, loss_return: float, expected_hold_h:
     oc = hurdle_per_h * expected_hold_h * pressure
     adj = er - oc
     # squash velocity into 0..1 relative to the hurdle (score 0.5 == exactly the hurdle)
-    score = 1 / (1 + math.exp(-(vel_h - hurdle_per_h) / max(hurdle_per_h, 1e-6)))
+    _z = -(vel_h - hurdle_per_h) / max(hurdle_per_h, 1e-6)
+    _z = max(-60.0, min(60.0, float(_z)))  # prevent OverflowError on extreme paper probes
+    score = 1 / (1 + math.exp(_z))
     why = (f"E[r]={er:+.3%} over ~{expected_hold_h:.1f}h → {vel_h * 24:+.3%}/day vs hurdle {hurdle_per_h * 24:.3%}/day; "
            f"opportunity cost {oc:.3%} (pressure {pressure:.2f}) → adjusted {adj:+.3%}")
     return VelocityAssessment(er, expected_hold_h, vel_h, vel_h * 24, hurdle_per_h, oc, adj, score, why)

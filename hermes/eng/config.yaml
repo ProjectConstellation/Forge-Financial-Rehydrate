@@ -5,53 +5,52 @@ cron:
   model: deepseek-flash
   model_provider: deepseek
 approvals:
-  mode: "off"
+  mode: 'off'
   cron_mode: approve
   single_query_mode: approve
   unattended_mode: approve
   deny:
-    - "sudo *"
-    - "systemctl *"
-    - "ssh *"
-    - "scp *"
-    - "*forge.env*"
-    - "*/etc/forge*"
-    - "*ops_token*"
-    - "*agent_token*"
-    - "*operator_token*"
+  - sudo *
+  - systemctl *
+  - ssh *
+  - scp *
+  - '*forge.env*'
+  - '*/etc/forge*'
+  - '*ops_token*'
+  - '*agent_token*'
+  - '*operator_token*'
 terminal:
   backend: local
   cwd: /srv/forge/runtime/eng/repo
 agent:
-  # STANDARD=high; escalate to max only for hard tickets (not default — cost discipline on $28 treasury)
   reasoning_effort: high
   max_turns: 120
   disabled_toolsets:
-    - browser
-    - computer_use
-    - image_gen
-    - homeassistant
-    - discord
-    - discord_admin
-    - spotify
-    - connections
+  - browser
+  - computer_use
+  - image_gen
+  - homeassistant
+  - discord
+  - discord_admin
+  - spotify
+  - connections
 memory:
   user_profile_enabled: false
 plugins:
   enabled:
-    - hermes-forge-eng
+  - hermes-forge-eng
   disabled:
-    - hermes-forge
-    - hermes-forge-ops
+  - hermes-forge
+  - hermes-forge-ops
 platform_toolsets:
   cron:
-    - forge_eng
-    - terminal
-    - file
-    - code_execution
-    - todo
-    - memory
-    - session_search
+  - forge_eng
+  - terminal
+  - file
+  - code_execution
+  - todo
+  - memory
+  - session_search
 providers:
   deepseek:
     name: DeepSeek V4.1 Flash (cheapest frontier; selective reasoning)
@@ -63,16 +62,6 @@ providers:
       deepseek-flash:
         context_length: 1000000
     discover_models: false
-  azure-opus:
-    name: RETIRED Claude Opus 5.5 (Azure) — do not use
-    api: https://matt-6083-resource.services.ai.azure.com/anthropic
-    key_env: AZURE_ANTHROPIC_API_KEY
-    transport: anthropic_messages
-    default_model: claude-opus-5-5
-    models:
-      claude-opus-5-5:
-        context_length: 1000000
-    discover_models: false
 tools:
   tool_search:
-    enabled: "off"
+    enabled: 'off'

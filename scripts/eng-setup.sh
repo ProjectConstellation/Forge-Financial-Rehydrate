@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # FORGE Engineering Cell setup (OP-025). Run on the FORGE host as root:  sudo bash scripts/eng-setup.sh   (idempotent)
-# forge-eng user + sandboxed Hermes Engineer (Opus 5.5 xhigh, terminal/file tools inside its own repo only) + root
+# forge-eng user + sandboxed Hermes Engineer (DeepSeek V4.1 Flash high-reasoning, terminal/file tools inside its own repo only) + root
 # deployer timer (the ONLY path from AI-written code to production).
 set -euo pipefail
 F=/srv/forge; H=$F/runtime/hermes; E=$F/runtime/eng; EH=$E/home; R=$E/repo
@@ -110,6 +110,6 @@ sleep 10
 HC="sudo -u forge-eng env HOME=$EH HERMES_HOME=$EH $H/app/venv/bin/hermes"
 for id in $($HC cron list 2>/dev/null | awk '/^  [0-9a-f]{12} \[/{id=$1} $1=="Name:" && $2=="forge-engineer" {print id}'); do $HC cron remove "$id" >/dev/null 2>&1 || true; done
 cd $R && $HC cron create "every 10m" "$(cat $F/hermes/eng/boot_engineer.md)" --name forge-engineer --script gate_engineer.py \
-  --reasoning-effort xhigh --deliver local --failure-deliver local >/dev/null
+  --reasoning-effort high --deliver local --failure-deliver local >/dev/null
 systemctl restart forge-eng
 echo "forge-eng: $(systemctl is-active forge-eng) · deployer timer: $(systemctl is-active forge-deployer.timer)"
