@@ -7,6 +7,24 @@ import re
 import sys
 import urllib.request
 
+
+# --- economic telemetry wake (workforce overhaul) ---
+def _econ_wake():
+    try:
+        d = call("/api/agent/digest?since=0&role=scout")
+        if d.get("urgent") or d.get("recovery_lever") or d.get("open_critical"):
+            return d
+        ed = call("/api/v1/strategies") if False else None
+    except Exception:
+        return None
+    try:
+        # reuse digest urgency only
+        if d.get("meaningful") and (d.get("urgent") or d.get("recovery_lever")):
+            return d
+    except Exception:
+        pass
+    return None
+
 from forge_common import HOME, gate, skip, wake
 
 WATCH = {
@@ -48,6 +66,12 @@ for key, url in WATCH.items():
         new_sent = [s for s in b if s not in a][:25]
         changes[key] = {"url": url, "new_or_changed_sentences": new_sent}
 if not changes:
+    ew=_econ_wake()
+    if ew:
+        a=gate('scout',0.01)
+        if a is None:
+            skip(); sys.exit(0)
+        wake({'budget':a,'changes':ew,'wake_reason':'economic_telemetry'}); sys.exit(0)
     skip()
     sys.exit(0)
 if gate("scout", 0.01) is None:

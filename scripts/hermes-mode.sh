@@ -65,23 +65,28 @@ forge-scout|every 1h|forge_scout.py|boot_scout.md
 forge-architect|every 3h|gate_architect.py|boot_architect.md
 forge-daily-report|0 12 * * *|gate_report.py|boot_report.md"
 # RETIRED: kv "{\"mode\": \"credit\", \"model\": \"claude-opus-5-5\", \"credit_usd\": ${2:-180}, \"hours\": ${3:-72}}" ;;
+    ;;
   deepseek)
     # Ensure provider block exists (Hermes built-in deepseek profile + DEEPSEEK_API_KEY)
     hc config set model.provider deepseek >/dev/null; hc config set model.default deepseek-flash >/dev/null
     hc config set cron.model deepseek-flash >/dev/null; hc config set cron.model_provider deepseek >/dev/null
     hc config set agent.reasoning_effort medium >/dev/null || true
     EFF=medium
-    JOBS="forge-governor|every 3h|gate_governor.py|boot_governor.md
-forge-alpha-inventor|0 */6 * * *|gate_alpha_inventor.py|boot_alpha_inventor.md
-forge-adversary|0 3,9,15,21 * * *|gate_adversary.py|boot_adversary.md
-forge-critic|0 7 * * *|gate_critic.py|boot_critic.md
+    JOBS="forge-governor|every 30m|gate_governor.py|boot_governor.md
+forge-alpha-inventor|every 30m|gate_alpha_inventor.py|boot_alpha_inventor.md
+forge-adversary|every 30m|gate_adversary.py|boot_adversary.md
+forge-critic|every 30m|gate_critic.py|boot_critic.md
 forge-doctor|every 30m|gate_doctor.py|boot_doctor.md
-forge-rail-hunter|every 12h|gate_rail_hunter.py|boot_rail_hunter.md
-forge-scout|every 2h|forge_scout.py|boot_scout.md
-forge-architect|0 5 * * *|gate_architect.py|boot_architect.md
+forge-rail-hunter|every 2h|gate_rail_hunter.py|boot_rail_hunter.md
+forge-scout|every 30m|forge_scout.py|boot_scout.md
+forge-architect|every 3h|gate_architect.py|boot_architect.md
+forge-prediction|every 30m|gate_prediction.py|boot_prediction.md
+forge-execution|every 30m|gate_execution.py|boot_execution.md
+forge-treasury|every 30m|gate_treasury.py|boot_treasury.md
+forge-intelligence|every 3h|gate_intelligence.py|boot_intelligence.md
 forge-daily-report|0 12 * * *|gate_report.py|boot_report.md"
     kv '{"mode": "deepseek", "model": "deepseek-flash", "effort_policy": "medium_everyday_high_hard_extra_high_rare"}' ;;
-  status) hc config show 2>/dev/null | grep -E "Model:" | head -1; hc cron list 2>/dev/null | grep -E "Name:|Schedule:|\[(active|paused)\]" | paste - - - | sed -E 's/\s+/ /g'; exit 0 ;;
+  status) hc config show 2>/dev/null | grep -E "Model:" | head -1; hc cron list 2>/dev/null | grep -E "Name:|Schedule:|\[(active|paused)\]" | paste - - - | sed -E "s/[[:space:]]+/ /g"; exit 0 ;;
   *) echo "usage: $0 opus [credit_usd] [hours] | deepseek | status"; exit 1 ;;
 esac
 for id in $(ids_named); do hc cron remove "$id" >/dev/null 2>&1 || true; done
@@ -89,7 +94,7 @@ while IFS='|' read -r name sched gate boot; do
   e=$EFF; case "$name" in
     # HIGH: invention, falsification, prompt evolution, governor, rail, critic
     # EXTRA HIGH (max): never default on cron — only event/LIVE-gate style wakes
-    forge-alpha-inventor|forge-adversary|forge-architect|forge-governor|forge-rail-hunter|forge-critic) e=high ;;
+    forge-alpha-inventor|forge-adversary|forge-architect|forge-governor|forge-rail-hunter|forge-critic|forge-prediction|forge-execution|forge-treasury|forge-intelligence) e=high ;;
     *) e=medium ;;  # normal minimum
   esac
   hc cron create "$sched" "$(cat $P/$boot)" --name "$name" --script "$gate" --reasoning-effort "$e" \

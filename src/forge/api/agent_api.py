@@ -107,13 +107,40 @@ def digest(forge: Any, since: float, role: str | None = None) -> dict[str, Any]:
     sc = db.kv_get("crossrail.scorecard") or {}
     directives = db.query("SELECT id, role, priority, instruction FROM ops_directives WHERE status = 'OPEN' AND role IN (?, 'all')",
                           (role,)) if role else []
+    crit = db.query(
+        "SELECT id, role, priority, instruction FROM ops_directives WHERE status IN ('OPEN','DISPATCHED') "
+        "AND priority IN ('critical','high') AND role IN (?, 'all')", (role,)) if role else []
+    pending_handoff = 0
+    try:
+        pending_handoff = int(db.scalar(
+            "SELECT COUNT(*) FROM agent_handoffs WHERE to_role=? AND status='PENDING'", (role,)) or 0) if role else 0
+    except Exception:
+        pending_handoff = 0
+    emp = db.kv_get("agents.employment") or db.kv_get("agents.heartbeat") or {}
+    sla_breach = False
+    for r in (emp.get("detailed") or emp.get("roster") or []):
+        if r.get("role") == role and (r.get("state") == "STALE_SLA_BREACH" or r.get("employment") == "STALE"):
+            sla_breach = True
+    vel = db.kv_get("velocity") or {}
+    proven = float(vel.get("proven_usd_per_h") or 0)
+    recovery_lever = bool(proven < 0.10 and role in (
+        "governor", "alpha_inventor", "critic", "adversary", "scout", "treasury", "prediction", "execution", "ops"))
+    prelive = db.kv_get("lab.prelive_proof") or {}
+    prelive_block = str(prelive.get("verdict") or "").startswith("NO") and role in (
+        "governor", "alpha_inventor", "doctor", "scout", "critic", "adversary")
+    ed = db.kv_get("edge_decay") or {}
+    decay_hit = bool(ed.get("actions")) and role in ("scout", "governor", "critic", "alpha_inventor")
+    urgent = bool(crit or pending_handoff or sla_breach or prelive_block or decay_hit)
+    meaningful = bool(ev or tr or st or settled >= 10 or directives or urgent or recovery_lever)
     return {"since": since, "now": time.time(), "listing_events": ev, "warnings": tr, "strategy_events": st,
-            "ops_directives": directives,
+            "ops_directives": directives, "open_critical": crit, "pending_handoff": pending_handoff,
+            "sla_breach": sla_breach, "urgent": urgent, "recovery_lever": recovery_lever,
+            "prelive_block": prelive_block,
             "crossrail_settled_since": settled,
             "crossrail": {k: sc.get(k) for k in ("calibration_n", "brier_model", "brier_market", "brier_stacked",
                                                  "model_weight_share", "signals")},
             "treasury": {k: forge.treasury.get(k) for k in ("equity_usd", "true_net_usd", "daily_pnl_usd")},
-            "meaningful": bool(ev or tr or st or settled >= 10 or directives)}
+            "meaningful": meaningful}
 
 
 def record_usage(forge: Any, b: dict[str, Any], role_override: str | None = None) -> dict[str, Any]:

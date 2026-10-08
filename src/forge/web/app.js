@@ -295,6 +295,7 @@ function forgeStale(ts, maxAgeS){
   /* ---------- boot ---------- */
   (async () => {
     try { CSRF = (await api("/api/session")).csrf; } catch (e) { return; }
+    await refreshWorkforce();
     connect();                                                   // live data first
     try { equitySeries = (await api("/api/history?hours=24")).map(r => ({t: Date.parse(r.ts) / 1000, v: r.equity_usd})); drawChart(); } catch (e) {}
     try { (await api("/api/timeline?limit=150")).reverse().forEach(addFeed); } catch (e) {}

@@ -47,6 +47,16 @@ def mount_firm_v1(app: FastAPI, forge: Any) -> None:
             "velocity_priorities": (forge.db.kv_get("velocity") or {}).get("priorities"),
         })
 
+    @app.get("/api/v1/workforce")
+    async def v1_workforce() -> Any:
+        return _j({
+            "employment": forge.db.kv_get("agents.employment") or forge.db.kv_get("agents.heartbeat"),
+            "dispatch": forge.db.kv_get("lab.officer_dispatch"),
+            "workflow": forge.db.kv_get("lab.workflow_engine"),
+            "events": forge.db.kv_get("lab.economic_events"),
+            "ts": time.time(),
+        })
+
     @app.get("/api/v1/agents")
     async def v1_agents() -> Any:
         return _j(forge.db.kv_get("agents.heartbeat") or {})

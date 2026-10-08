@@ -262,6 +262,15 @@ class Forge:
         from forge.treasury.prelive_proof import PreLiveProof
         self.prelive_proof = PreLiveProof(self)
         B("prelive_proof", self.prelive_proof.run, 300)
+        from forge.agents.employment_accountability import EmploymentAccountability
+        self.employment = EmploymentAccountability(self)
+        B("employment_accountability", self.employment.run, 300)
+        from forge.agents.workflow_engine import WorkflowEngine
+        self.workflow_engine = WorkflowEngine(self)
+        B("workflow_engine", self.workflow_engine.run, 120)
+        from forge.agents.economic_events import EconomicEventRouter
+        self.economic_events = EconomicEventRouter(self)
+        B("economic_events", self.economic_events.run, 180)
 
 
 
