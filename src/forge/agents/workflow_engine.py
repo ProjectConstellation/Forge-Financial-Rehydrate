@@ -171,11 +171,11 @@ class WorkflowEngine:
         return True
 
     def _wake_role(self, role: str) -> None:
-        """Event-wake: mark urgent so cron gate allows immediate fire."""
+        """Event-wake: mark urgent + pull Hermes cron next_run forward (results > schedule)."""
         try:
             db = self.f.db
-            db.kv_set(f"lab.wake_urgent.{role}", {"ts": time.time(), "reason": "orchestration_handoff"})
-            # employment / officer_dispatch hooks
+            now = time.time()
+            db.kv_set(f"lab.wake_urgent.{role}", {"ts": now, "reason": "orchestration_handoff"})
             for attr in ("officer_dispatch", "employment"):
                 obj = getattr(self.f, attr, None)
                 if obj and hasattr(obj, "force_wake"):
@@ -183,6 +183,33 @@ class WorkflowEngine:
                         obj.force_wake(role)
                     except Exception:
                         pass
+            # Pull matching forge-* cron job next_run_at to now
+            job_map = {
+                "scout": "forge-scout", "critic": "forge-critic", "adversary": "forge-adversary",
+                "alpha_inventor": "forge-alpha-inventor", "governor": "forge-governor",
+                "treasury": "forge-treasury", "execution": "forge-execution", "ops": "forge-daily-report",
+                "doctor": "forge-doctor", "rail_hunter": "forge-rail-hunter", "architect": "forge-architect",
+            }
+            name = job_map.get(role)
+            if name:
+                import json
+                from pathlib import Path
+                jp = Path("/srv/forge/runtime/hermes/home/cron/jobs.json")
+                try:
+                    raw = jp.read_text()
+                    data = json.loads(raw)
+                    jobs = data.get("jobs", data) if isinstance(data, dict) else data
+                    for job in jobs:
+                        if job.get("name") == name:
+                            job["next_run_at"] = now
+                            break
+                    if isinstance(data, dict) and "jobs" in data:
+                        data["jobs"] = jobs
+                        jp.write_text(json.dumps(data, indent=2) + "\n")
+                    else:
+                        jp.write_text(json.dumps(jobs, indent=2) + "\n")
+                except Exception:
+                    pass
         except Exception:
             pass
 
