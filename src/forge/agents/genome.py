@@ -14,6 +14,9 @@
 
 from __future__ import annotations
 
+import logging
+log = logging.getLogger("forge.genome")
+
 import json
 import math
 import re
@@ -154,6 +157,19 @@ class PromptGenomes:
                                  "binds). In submit_role_report include directives=[{id, status: DONE|BLOCKED, result}].",
                 "open": dirs}
         panels = self.open_panels_for(role)
+        try:
+            mem = self.db.kv_get("lab.opportunity_memory")
+            if not mem:
+                from forge.agents.opportunity_memory import OpportunityMemory
+                mem = OpportunityMemory(type("F", (), {"db": self.db})()).brief_for_scout()
+            if mem and role in ("scout", "alpha_inventor", "ops", "governor", "critic", "adversary", "execution", "treasury"):
+                world["OPPORTUNITY_MEMORY"] = mem
+                from forge.agents.workflow_engine import WorkflowEngine
+                eng = WorkflowEngine(type("F", (), {"db": self.db})())
+                world["PENDING_ORCHESTRATION"] = eng.pending_for(role)[:5]
+                world["LUKE_BOARD"] = (self.db.kv_get("lab.luke_orchestration") or {}).get("open_workflows") or []
+        except Exception as _e:
+            world["OPPORTUNITY_MEMORY_ERROR"] = str(_e)[:160]
         text = render(role, json.loads(genome["sections"]), genome["id"], world, self.memory(role), panels)
         return {"prompt_id": genome["id"], "role": role, "replay_of_run": paired, "snapshot_id": snap_id, "brief": text}
 
@@ -246,6 +262,88 @@ class PromptGenomes:
         return out
 
     # ---------------------------------------------------------------- reports + predictions
+
+    def _maybe_advance_orchestration(self, role: str, report: dict[str, Any], report_id: int) -> None:
+        """Advance INCOME/DIAGNOSTIC/INFRA/legacy workflows when officer files matching stage payload."""
+        db = self.db
+        pending = db.query(
+            "SELECT h.handoff_id, h.workflow_id, h.payload_type, w.type AS wf_type "
+            "FROM agent_handoffs h JOIN agent_workflows w ON w.workflow_id=h.workflow_id "
+            "WHERE h.to_role=? AND h.status='PENDING' AND w.status='OPEN' "
+            "ORDER BY h.created_at ASC LIMIT 3",
+            (role,),
+        ) or []
+        if not pending:
+            return
+        from forge.agents.workflow_engine import WorkflowEngine, CHAINS
+        stage_for: dict[str, list[str]] = {}
+        for _wtype, chain in CHAINS.items():
+            for r, ptype in chain:
+                stage_for.setdefault(r, []).append(ptype)
+        expected = stage_for.get(role) or []
+        payload_type = None
+        orch = str(report.get("orchestration") or report.get("payload_type") or "")
+        known = {
+            "OPPORTUNITY_PROPOSAL", "EVIDENCE_SCREEN", "RISK_ANALYSIS", "CAPITAL_ALLOCATION",
+            "CAPITAL_COMMIT", "EXECUTION_PLAN", "MEASURE_RESULT", "MARKET_INTELLIGENCE_PACKET",
+            "POST_ACTION_ECONOMIC_RESULT", "EVIDENCE_GATE", "RISK_GATE", "ALLOCATION_DECISION",
+            "ANOMALY_DETECT", "STRATEGY_ALGORITHM", "EARLY_EXEC_FEASIBILITY", "CLOSE_LEARN",
+            "UNCERTAINTY_IDENTIFY", "TEST_DESIGN", "SAFETY_REVIEW", "MEASUREMENT_FIDELITY",
+            "MEASURE_INTERPRET", "MEMORY_UPDATE", "CAPABILITY_ASK", "DESIGN", "PRIORITY", "TRACK",
+        }
+        if orch in known:
+            payload_type = orch
+        elif report.get("anomaly") and role == "scout":
+            pc = str(report.get("proposal_class") or "DIAGNOSTIC").upper()
+            payload_type = "ANOMALY_DETECT" if pc == "INCOME" else "UNCERTAINTY_IDENTIFY"
+        elif report.get("strategy") and report.get("algorithm") and role == "alpha_inventor":
+            payload_type = "STRATEGY_ALGORITHM"
+        class _F:
+            pass
+        f = _F(); f.db = db
+        eng = WorkflowEngine(f)
+        scout_stages = {
+            "OPPORTUNITY_PROPOSAL", "MEASURE_RESULT", "MARKET_INTELLIGENCE_PACKET",
+            "POST_ACTION_ECONOMIC_RESULT", "ANOMALY_DETECT", "UNCERTAINTY_IDENTIFY", "MEASURE_INTERPRET",
+        }
+        for h in pending:
+            h = dict(h)
+            if payload_type and payload_type != h["payload_type"]:
+                if not (role == "scout" and h["payload_type"] in scout_stages):
+                    continue
+            if h["payload_type"] not in expected and role not in (
+                "scout", "critic", "adversary", "governor", "treasury", "execution", "ops",
+                "alpha_inventor", "architect",
+            ):
+                continue
+            result_type = str(report.get("result_type") or report.get("status") or "DECISION_MADE")
+            if result_type.upper() == "ACTED":
+                result_type = "ACTION_TAKEN"
+            if result_type.upper() == "SILENT":
+                result_type = "NO_ACTION_JUSTIFIED"
+            payload = {
+                "from_report_id": report_id,
+                "summary": report.get("summary"),
+                "opportunity": report.get("opportunity"),
+                "anomaly": report.get("anomaly"),
+                "strategy": report.get("strategy"),
+                "algorithm": report.get("algorithm"),
+                "capacity": report.get("capacity"),
+                "proposal_class": report.get("proposal_class"),
+                "evidence_refs": report.get("artifacts") or report.get("evidence_refs") or [],
+                "economic_attribution": report.get("economic_attribution") or {},
+                "decisions": report.get("decisions") or [],
+                "verdicts": report.get("verdicts") or [],
+                "confidence": report.get("confidence"),
+                "terminal": bool(report.get("terminal")) or result_type in ("VETO", "REJECTED"),
+                "next_action": report.get("next_action"),
+                "measure_verdict": report.get("measure_verdict"),
+                "delta_usd_per_h": report.get("delta_usd_per_h"),
+            }
+            eng.advance(h["workflow_id"], role, h["payload_type"], payload,
+                        result_type=result_type, confidence=float(report.get("confidence") or 0.5))
+            break
+
     def submit_report(self, role: str, session_id: str, report: dict[str, Any]) -> dict[str, Any]:
         role = canonical_role(role)
         run = self.db.query_one("SELECT * FROM prompt_runs WHERE session_id = ? ORDER BY id DESC LIMIT 1", (session_id,))
@@ -253,6 +351,11 @@ class PromptGenomes:
         status = "SILENT" if str(report.get("status", "")).upper() == "SILENT" else "ACTED"
         rid = self.db.insert_id("role_reports", {"ts": time.time(), "role": role, "prompt_id": pid, "session_id": session_id,
                                                  "status": status, "report": json.dumps(report, default=str)[:20000]})
+
+        try:
+            self._maybe_advance_orchestration(role, report if isinstance(report, dict) else {}, rid)
+        except Exception as e:
+            log.warning("orchestration advance: %s", e)
         for d in (report.get("directives") or [])[:20]:
             try:
                 did = int(d.get("id"))

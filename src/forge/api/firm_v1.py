@@ -54,6 +54,9 @@ def mount_firm_v1(app: FastAPI, forge: Any) -> None:
             "results": forge.db.kv_get("lab.results_enforcer") or forge.db.kv_get("agents.results_scorecard"),
             "dispatch": forge.db.kv_get("lab.officer_dispatch"),
             "workflow": forge.db.kv_get("lab.workflow_engine"),
+            "opportunity_memory": forge.db.kv_get("lab.opportunity_memory"),
+            "luke_orchestration": forge.db.kv_get("lab.luke_orchestration"),
+            "money_scorecard": forge.db.kv_get("lab.money_scorecard"),
             "events": forge.db.kv_get("lab.economic_events"),
             "ts": time.time(),
         })

@@ -60,11 +60,32 @@ def register(ctx):
 
         ctx.register_tool(name=f"forge_{name}", toolset="forge", schema=schema, handler=handler)
 
+    JOB_ROLE = {
+        "forge-governor": "governor", "forge-alpha-inventor": "alpha_inventor",
+        "forge-adversary": "adversary", "forge-critic": "critic", "forge-doctor": "doctor",
+        "forge-rail-hunter": "rail_hunter", "forge-scout": "scout", "forge-architect": "architect",
+        "forge-prediction": "prediction", "forge-execution": "execution",
+        "forge-treasury": "treasury", "forge-intelligence": "intelligence",
+        "forge-daily-report": "ops",
+    }
+
     def on_pre_llm(session_id=None, user_message=None, **kwargs):
-        m = ROLE_RE.search(str(user_message or ""))
-        if m and session_id:
+        msg = str(user_message or "")
+        role = None
+        m = ROLE_RE.search(msg)
+        if m:
+            role = m.group(1)
+        if not role:
+            for job, r in JOB_ROLE.items():
+                if job in msg:
+                    role = r
+                    break
+        # Explicit Tess/scout identity — never collapse to rail_hunter
+        if role == "rail_hunter" and ("Callsign:** Tess" in msg or "Director of Strategic Opportunity" in msg):
+            role = "scout"
+        if role and session_id:
             with _lock:
-                _roles[session_id] = m.group(1)
+                _roles[session_id] = role
         return None
 
     def _usage(kind, session_id=None, usage=None, model=None, api_request_id=None, api_duration=None, **kwargs):

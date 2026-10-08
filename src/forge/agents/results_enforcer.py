@@ -147,10 +147,20 @@ class ResultsEnforcer:
 
     def _page(self, role: str, instruction: str, priority: str = "critical") -> None:
         try:
+            now = time.time()
+            # Coalesce: skip if identical-prefix OPEN page in last 30m
+            prefix = (instruction or "")[:80]
+            exists = self.f.db.scalar(
+                "SELECT id FROM ops_directives WHERE role=? AND status='OPEN' AND requested_by='results_enforcer' "
+                "AND instruction LIKE ? AND ts > ? LIMIT 1",
+                (role, prefix + "%", now - 1800),
+            )
+            if exists:
+                return
             self.f.db.execute(
                 "INSERT INTO ops_directives (ts, role, instruction, priority, status, requested_by) "
                 "VALUES (?,?,?,?,?,?)",
-                (time.time(), role, instruction[:1900], priority, "OPEN", "results_enforcer"),
+                (now, role, instruction[:1900], priority, "OPEN", "results_enforcer"),
             )
         except Exception as e:
             log.warning("page %s: %s", role, e)

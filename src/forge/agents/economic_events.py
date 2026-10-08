@@ -107,6 +107,28 @@ class EconomicEventRouter:
                     eid = self.emit("stale_role", {"role": r.get("role"), "age_h": r.get("age_h")}, "critical")
                     emitted.append(eid)
                     break  # one per tick
+        # Seed DIAGNOSTIC if stables contaminated and no open diagnostic for that family
+        try:
+            from forge.agents.workflow_engine import WorkflowEngine
+            eng = getattr(self.f, "workflow_engine", None) or WorkflowEngine(self.f)
+            mem = getattr(self.f, "opportunity_memory", None)
+            if mem:
+                mem.tick()
+            open_diag = db.scalar(
+                "SELECT COUNT(*) FROM agent_workflows WHERE status='OPEN' AND "
+                "(type='DIAGNOSTIC_ORCHESTRATION' OR proposal_class='DIAGNOSTIC')"
+            ) or 0
+            if int(open_diag) == 0 and proven < 0.50:
+                wid = eng.start_diagnostic(
+                    "ECON_EVENT: resolve economic uncertainty blocking proven $/h",
+                    {"rail": "coinbase.stable_triangle", "family": "stable_triangle",
+                     "mechanism_key": "ledger_contamination", "needs_safety_review": True,
+                     "needs_early_exec": False, "max_diagnostic_usd": 50},
+                )
+                emitted.append(wid)
+        except Exception as e:
+            log.warning("diagnostic seed: %s", e)
+
         # Modal candidate
         modal = db.kv_get("econ.modal_research") or {}
         for j in (modal.get("recent_jobs") or [])[:2]:

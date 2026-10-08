@@ -97,10 +97,12 @@ class EarningsPush:
                     except Exception as e:
                         actions.append({f"paper_bets.{name}": f"err:{e}"[:100]})
 
-        # Advance stuck scout workflows with deterministic MARKET_INTELLIGENCE_PACKET
+        # Feed Tess evidence — NEVER auto-advance OPPORTUNITY_ORCHESTRATION past her proposal.
+        # Only auto-advance ALPHA_GENERATION MARKET_INTELLIGENCE_PACKET if truly stuck (>25m).
         pending = db.query(
-            "SELECT h.handoff_id, h.workflow_id, h.to_role, h.payload_type FROM agent_handoffs h "
-            "WHERE h.status='PENDING' AND h.to_role='scout' LIMIT 5"
+            "SELECT h.handoff_id, h.workflow_id, h.to_role, h.payload_type, h.created_at, w.type AS wf_type "
+            "FROM agent_handoffs h LEFT JOIN agent_workflows w ON w.workflow_id=h.workflow_id "
+            "WHERE h.status='PENDING' AND h.to_role='scout' LIMIT 8"
         ) or []
         stable = db.kv_get("lab.paper_stable_pnl") or {}
         tri = (stable.get("by_rail") or {}).get("coinbase.stable_triangle") or {}
@@ -121,7 +123,27 @@ class EarningsPush:
         }
         wf_engine = getattr(self.f, "workflow_engine", None)
         for h in pending:
-            if wf_engine and hasattr(wf_engine, "advance"):
+            h = dict(h)
+            wtype = h.get("wf_type") or ""
+            ptype = h.get("payload_type") or ""
+            # Opportunity masterpiece: leave for Tess; inject evidence into workflow inputs + directive
+            if wtype == "OPPORTUNITY_ORCHESTRATION" or ptype in ("OPPORTUNITY_PROPOSAL", "MEASURE_RESULT"):
+                db.kv_set("lab.scout_evidence_feed", {**packet, "ts": now, "for_workflow": h["workflow_id"]})
+                db.execute(
+                    "INSERT INTO ops_directives(ts,role,instruction,priority,status,requested_by) "
+                    "VALUES(?,?,?,?,?,?)",
+                    (now, "scout",
+                     f"EVIDENCE_FEED for {h['workflow_id']} ({ptype}): stables triangle n={tri.get('n')} "
+                     f"net={tri.get('net')} proven={proven}/h nav={nav}. Propose fundable "
+                     f"STRATEGY|ALGORITHM|INVESTMENT|REALLOCATION — do not skip risk/capital gates. "
+                     f"role=scout only.",
+                     "high", "OPEN", "earnings_push"),
+                )
+                actions.append({"scout_evidence_feed": h["workflow_id"]})
+                continue
+            # Alpha path only: auto-advance MARKET_INTELLIGENCE if stuck >25m
+            age = now - float(h.get("created_at") or now)
+            if ptype == "MARKET_INTELLIGENCE_PACKET" and age > 1500 and wf_engine and hasattr(wf_engine, "advance"):
                 try:
                     out = wf_engine.advance(
                         h["workflow_id"], "scout", "MARKET_INTELLIGENCE_PACKET",
@@ -130,22 +152,6 @@ class EarningsPush:
                     actions.append({"workflow_advance": out})
                 except Exception as e:
                     actions.append({"workflow_advance_err": str(e)[:120]})
-            else:
-                # Fallback: mark handoff done + page alpha_inventor
-                db.execute(
-                    "UPDATE agent_handoffs SET status='DONE', completed_at=? WHERE handoff_id=?",
-                    (now, h["handoff_id"]),
-                )
-                db.execute(
-                    "INSERT INTO ops_directives(ts,role,instruction,priority,status,requested_by) "
-                    "VALUES(?,?,?,?,?,?)",
-                    (now, "alpha_inventor",
-                     f"EARNINGS_PUSH INTEL: stables triangle is the only +EV sleeve "
-                     f"(n={tri.get('n')} net={tri.get('net')}). Invent fee-aware stables challengers ONLY. "
-                     f"Do not invent spot drains. Measure Δ$/h.",
-                     "critical", "OPEN", "earnings_push"),
-                )
-                actions.append({"fallback_handoff_done": h["handoff_id"]})
 
         # Direct pages — IMPLEMENT not analyze
         if proven < 0.10:
@@ -154,7 +160,7 @@ class EarningsPush:
                 ("alpha_inventor", "EARNINGS_PUSH: only stables microstructure challengers. No alt breakout genomes until proven≥$0.25/h."),
                 ("execution", "EARNINGS_PUSH: Reid — ensure pegmaker/triangle path is the active execution sleeve; abort fee-toxic spot."),
                 ("treasury", "EARNINGS_PUSH: Ellis — opportunity cost of $1 off stables is the binding constraint. Prefer stables band $200–500."),
-                ("scout", "EARNINGS_PUSH: Tess — POST_ACTION_ECONOMIC_RESULT on stables capital-hours, not URL diffs."),
+                ("scout", "EARNINGS_PUSH: Tess — if OPPORTUNITY_PROPOSAL pending, propose fundable ask using stables evidence; else MEASURE_RESULT on capital-hours. role=scout."),
             ):
                 db.execute(
                     "INSERT INTO ops_directives(ts,role,instruction,priority,status,requested_by) "

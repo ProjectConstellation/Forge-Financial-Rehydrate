@@ -269,8 +269,11 @@ class Forge:
         self.results_enforcer = ResultsEnforcer(self)
         B("results_enforcer", self.results_enforcer.run, 180)
         from forge.agents.workflow_engine import WorkflowEngine
+        from forge.agents.opportunity_memory import OpportunityMemory
+        self.opportunity_memory = OpportunityMemory(self)
         self.workflow_engine = WorkflowEngine(self)
-        B("workflow_engine", self.workflow_engine.run, 120)
+        B("opportunity_memory", self.opportunity_memory.run, 180)
+        B("workflow_engine", self.workflow_engine.run, 90)
         from forge.agents.economic_events import EconomicEventRouter
         self.economic_events = EconomicEventRouter(self)
         B("economic_events", self.economic_events.run, 180)
