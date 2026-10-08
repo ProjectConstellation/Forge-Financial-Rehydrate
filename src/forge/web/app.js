@@ -154,9 +154,12 @@ function forgeStale(ts, maxAgeS){
       const top = (F.reallocation_top || []).map(r => r.id || r.rail).filter(Boolean).slice(0, 3).join(" · ");
       $("f_realloc").textContent = top ? ("Capital ranking: " + top) : "";
       const roster = ((F.agents || {}).roster || []);
-      $("f_agents").innerHTML = roster.slice(0, 12).map(a =>
-        `<span class="chip ${a.employment === "STALE" || a.employment === "REVIEW" ? "warn" : ""}">${esc(a.role)} · ${esc(a.employment)}</span>`
-      ).join("");
+      $("f_agents").innerHTML = roster.slice(0, 12).map(a => {
+        const g = a.results_grade || "";
+        const bad = a.employment === "STALE" || a.employment === "REVIEW" || g === "REPORT_ONLY" || a.missed_fire;
+        const label = g ? `${esc(a.role)} · ${esc(a.employment)} · ${esc(g)}` : `${esc(a.role)} · ${esc(a.employment)}`;
+        return `<span class="chip ${bad ? "warn" : ""}">${label}</span>`;
+      }).join("");
     }
     // freshness from server timestamp (stale if >5s)
     const snapTs = ((F.freshness || {}).snapshot_ts) || (Date.now() / 1000);

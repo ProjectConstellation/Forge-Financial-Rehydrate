@@ -265,6 +265,9 @@ class Forge:
         from forge.agents.employment_accountability import EmploymentAccountability
         self.employment = EmploymentAccountability(self)
         B("employment_accountability", self.employment.run, 300)
+        from forge.agents.results_enforcer import ResultsEnforcer
+        self.results_enforcer = ResultsEnforcer(self)
+        B("results_enforcer", self.results_enforcer.run, 180)
         from forge.agents.workflow_engine import WorkflowEngine
         self.workflow_engine = WorkflowEngine(self)
         B("workflow_engine", self.workflow_engine.run, 120)
