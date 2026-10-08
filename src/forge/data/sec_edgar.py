@@ -10,13 +10,14 @@ import httpx
 log = logging.getLogger("forge.sec")
 UA = "ImagineForge/1.0 (northstarimagine.com; forge@northstarimagine.com)"
 BASE = "https://data.sec.gov"
+TICKERS = "https://www.sec.gov/files/company_tickers.json"
 
 
 async def company_tickers(client: httpx.AsyncClient | None = None) -> dict[str, Any]:
     own = client is None
     client = client or httpx.AsyncClient(timeout=30.0, headers={"User-Agent": UA})
     try:
-        r = await client.get(f"{BASE}/files/company_tickers.json")
+        r = await client.get(TICKERS)
         r.raise_for_status()
         return r.json()
     finally:
