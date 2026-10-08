@@ -301,6 +301,32 @@ class PaperLab:
                     pass
         return out
 
+
+    def reap_dead_positions(self) -> list[dict[str, Any]]:
+        """Close PAPER positions whose strategy is RETIRED/HIBERNATING so capital recirculates."""
+        db = self.f.db
+        rows = db.query(
+            "SELECT p.id, p.symbol, p.strategy_id, s.population FROM positions p "
+            "LEFT JOIN strategies s ON s.id=p.strategy_id "
+            "WHERE p.book='paper' AND p.status!='CLOSED' "
+            "AND (s.population IN ('RETIRED','HIBERNATING','QUARANTINED') OR s.id IS NULL) LIMIT 20"
+        ) or []
+        out = []
+        for r in rows:
+            try:
+                # Prefer gateway flatten if available
+                gw = getattr(self.f, "gateway", None)
+                if gw and hasattr(gw, "close_position"):
+                    import asyncio
+                    # sync path: mark for exit via kv flag consumed by exec loop
+                    db.kv_set(f"position.force_exit.{r['id']}", {"ts": time.time(), "reason": "reap_dead", "population": r["population"]})
+                else:
+                    db.kv_set(f"position.force_exit.{r['id']}", {"ts": time.time(), "reason": "reap_dead", "population": r["population"]})
+                out.append({"force_exit": r["id"], "symbol": r["symbol"], "strategy_id": r["strategy_id"]})
+            except Exception as e:
+                log.debug("reap %s: %s", r.get("id"), e)
+        return out
+
     def tick(self) -> dict[str, Any]:
         self.ensure_stable_strategies()
         div = self.diversify_experimental()
@@ -308,6 +334,7 @@ class PaperLab:
         promoted = self.promote_paper_probes()
         promoted += self.promote_diversity_to_shadow()
         killed = self.kill_confirmed_drains()
+        reaped = self.reap_dead_positions()
         # Signal runtime to allow more concurrent paper positions
         self.f.db.kv_set("lab.paper_aggression", {
             "ts": time.time(),
@@ -322,6 +349,7 @@ class PaperLab:
             "stable_bridged": bridged,
             "promoted": promoted,
             "hibernated_drains": killed,
+            "reaped": reaped,
             "stable_pnl": self.f.db.kv_get("lab.paper_stable_pnl"),
             "families": div.get("families"),
         }

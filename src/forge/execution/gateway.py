@@ -360,7 +360,14 @@ class ExecutionGateway:
                                                      "peak_gain": fav})
             age = time.time() - float(meta.get("opened_ts", time.time()))
             reason = None
-            if bbo.bid <= stop:
+            force = None
+            try:
+                force = self.db.kv_get(f"position.force_exit.{p['id']}")
+            except Exception:
+                force = None
+            if force:
+                reason = str((force or {}).get("reason") or "FORCE_EXIT")
+            elif bbo.bid <= stop:
                 reason = ("LOCK" if stop > entry_px else "TRAIL") if stop > entry_px * (1 - plan.stop_loss_pct) + 1e-12 else "SL"
             elif age >= plan.time_stop_s:
                 reason = "TIME"

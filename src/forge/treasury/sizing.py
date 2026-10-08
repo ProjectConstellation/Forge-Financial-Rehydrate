@@ -34,9 +34,11 @@ STATE_MULT = {"PRODUCTION": 1.0, "CHALLENGER": 0.35, "SHADOW": 0.5}   # SHADOW s
 
 def size_position(p_cal: float, win: float, loss: float, n_evidence: int, kelly_mult: float, genome_max: float,
                   policy_max: float, deployable_usd: float, state: str, breaker_mult: float = 1.0,
-                  velocity_score: float = 0.5) -> SizeDecision:
+                  velocity_score: float = 0.5, *, min_evidence_shrink: float = 0.0) -> SizeDecision:
     k = kelly_fraction(p_cal, win, loss)
     shrink = n_evidence / (n_evidence + 30.0)
+    if min_evidence_shrink > 0:
+        shrink = max(shrink, float(min_evidence_shrink))  # PAPER probes must be able to open above $1
     vel = 0.75 + 0.5 * min(max(velocity_score, 0.0), 1.0)         # OP-008: faster recycling earns more capital
     f = k * kelly_mult * shrink * STATE_MULT.get(state, 0.0) * breaker_mult * vel
     f = min(f, genome_max, policy_max)
