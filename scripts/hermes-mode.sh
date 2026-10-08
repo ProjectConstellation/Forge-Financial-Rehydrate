@@ -79,14 +79,15 @@ forge-rail-hunter|every 12h|gate_rail_hunter.py|boot_rail_hunter.md
 forge-scout|every 2h|forge_scout.py|boot_scout.md
 forge-architect|0 5 * * *|gate_architect.py|boot_architect.md
 forge-daily-report|0 12 * * *|gate_report.py|boot_report.md"
-    kv '{"mode": "deepseek", "model": "deepseek-flash", "effort_policy": "medium_default_high_for_hard_work"}' ;;
+    kv '{"mode": "deepseek", "model": "deepseek-flash", "effort_policy": "medium_everyday_high_hard_extra_high_rare"}' ;;
   status) hc config show 2>/dev/null | grep -E "Model:" | head -1; hc cron list 2>/dev/null | grep -E "Name:|Schedule:|\[(active|paused)\]" | paste - - - | sed -E 's/\s+/ /g'; exit 0 ;;
   *) echo "usage: $0 opus [credit_usd] [hours] | deepseek | status"; exit 1 ;;
 esac
 for id in $(ids_named); do hc cron remove "$id" >/dev/null 2>&1 || true; done
 while IFS='|' read -r name sched gate boot; do
   e=$EFF; case "$name" in
-    # HIGH: invention, falsification, prompt evolution, governor allocation, rail research, critic diagnosis
+    # HIGH: invention, falsification, prompt evolution, governor, rail, critic
+    # EXTRA HIGH (max): never default on cron — only event/LIVE-gate style wakes
     forge-alpha-inventor|forge-adversary|forge-architect|forge-governor|forge-rail-hunter|forge-critic) e=high ;;
     *) e=medium ;;  # normal minimum
   esac

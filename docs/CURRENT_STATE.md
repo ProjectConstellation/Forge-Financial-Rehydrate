@@ -1,12 +1,10 @@
-# CURRENT STATE — 2026-10-08 15:52 UTC
-- **Mode:** PAPER_REAL_MARKET_SIM_MONEY · algorithmic LIVE OFF
-- **PRIMARY economic target:** **≥ $1.00/h TRUE-NET** (never redefine downward). $0.50/h = diagnostic only.
-- **Executive Ops:** **Luke** · DeepSeek Flash · inference MEDIUM default / HIGH for hard work
-- **Capital:** follows continuous evidence ranking — no hard-coded stables/Kalshi permanence
-- **Spot:** PAPER only until fee-aware forward +EV · no activity-genome churn
-- **Parallel:** equity/ETF PAPER research (SEC live; Twelve Data when keyed) + Kalshi when credentials arrive
-- **Systems:** edge-decay rotation · Profit Recovery vs $1/h · paper trial continuous (rolls windows; opens next constraint)
-- **Kalshi eventual LIVE micro-pilot caps (after founder LIVE auth):** ~$3/market · ~$5 aggregate open cost
+# CURRENT STATE — 2026-10-08 17:17 UTC
+- **Mode:** PAPER — REAL MARKET / SIMULATED MONEY · algorithmic LIVE OFF
+- **PRIMARY:** ≥ $1.00/h TRUE-NET · $0.50/h diagnostic only
+- **Upgrade:** Treasury Truth · TCS · CUSUM edge-decay actuation · capital reallocator · algo factory · half-life · heartbeats · /api/v1/* · 8h full-dress trial
+- **Luke:** conversational advisor/ops · HIGH default · MAX escalations · financial answer contract
+- **Guardian:** intelligent (debounce + snooze + no auto-resume STOPPED)
+- **DeepSeek Flash** workforce · Opus not for scheduled cognition
 
 
 ---

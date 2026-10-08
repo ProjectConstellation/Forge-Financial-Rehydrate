@@ -205,6 +205,35 @@ class Forge:
         from forge.research.equity_paper import EquityPaperResearch
         self.equity_paper = EquityPaperResearch(self)
         B("equity_paper", self.equity_paper.run, 1800)
+        from forge.treasury.truth import TreasuryTruth
+        self.treasury_truth = TreasuryTruth(self)
+        B("treasury_truth", self.treasury_truth.run, 900)
+        from forge.treasury.tcs import TreasuryContribution
+        self.tcs = TreasuryContribution(self)
+        B("tcs", self.tcs.run, 900)
+        from forge.treasury.reallocator import CapitalReallocator
+        self.reallocator = CapitalReallocator(self)
+        B("capital_reallocator", self.reallocator.run, 900)
+        from forge.research.algo_factory import AlgoFactory
+        self.algo_factory = AlgoFactory(self)
+        B("algo_factory", self.algo_factory.run, 900)
+        from forge.opportunities.half_life import HalfLifeEngine
+        self.half_life = HalfLifeEngine(self)
+        B("half_life", self.half_life.run, 900)
+        from forge.agents.heartbeat import AgentHeartbeat
+        self.agent_heartbeat = AgentHeartbeat(self)
+        B("agent_heartbeat", self.agent_heartbeat.run, 900)
+        async def _trial_scorecard_loop():
+            import asyncio
+            from forge.treasury.paper_trial import update_8h_scorecard
+            while not self.stop_event.is_set():
+                self.sup.beat("trial_scorecard")
+                try:
+                    await asyncio.to_thread(update_8h_scorecard, self)
+                except Exception:
+                    pass
+                await asyncio.sleep(60)
+        B("trial_scorecard", _trial_scorecard_loop, 900)
         from forge.opportunities.settlement_window import SettlementWindowEngine
         self.settlement_window = SettlementWindowEngine(self)
         B("sw_sampler", self.settlement_window.sampler, 60)

@@ -7,8 +7,8 @@ approvals:
   single_query_mode: deny
   unattended_mode: deny
 agent:
-  # STANDARD intelligence: high (DeepSeek Flash). Deterministic facts use no LLM.
-  reasoning_effort: high
+  # Everyday: medium. Escalate HIGH / EXTRA HIGH (max) via cognitive governor + cron job effort.
+  reasoning_effort: medium
   max_turns: 30
   disabled_toolsets:
     - terminal

@@ -221,3 +221,22 @@
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
   })();
 })();
+
+/* mode truth banner (blueprint §6 / §57) */
+(function(){
+  const el = () => document.getElementById('mode-banner');
+  function applyMode(snap){
+    const b = el(); if(!b || !snap) return;
+    const label = snap.mode_label || (snap.treasury && snap.treasury.mode_label) || 'PAPER — REAL MARKET / SIMULATED MONEY';
+    const live = !!(snap.forge_live_trading);
+    b.textContent = label + (live ? '' : ' · algorithmic LIVE OFF');
+    b.classList.toggle('live', live);
+  }
+  const _push = window.__forgeApplySnapshot;
+  window.__forgeApplySnapshot = function(snap){
+    try{ applyMode(snap); }catch(e){}
+    if (typeof _push === 'function') return _push(snap);
+  };
+  // also listen to generic live events if present
+  window.addEventListener('forge:live', e => applyMode(e.detail||{}));
+})();

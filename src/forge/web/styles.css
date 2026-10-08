@@ -101,3 +101,8 @@ footer{text-align:center;padding:16px}
 .hstate .pill.HEALING{border-color:var(--warn);color:var(--warn)}.hparts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 12px}
 .hpart label{font-size:10.5px}.hpart .bar{margin-top:3px}.hpart .bar i{transition:width .8s}
 @media (max-width:620px){.hparts{grid-template-columns:repeat(2,1fr)}.health{align-items:flex-start}}
+
+.mode-banner{position:sticky;top:0;z-index:999;background:#0b1f17;color:#9ff5c8;font:600 12px/1.4 ui-monospace,monospace;
+  letter-spacing:.04em;padding:8px 12px;border-bottom:1px solid #1e3d2f;text-align:center}
+.mode-banner.live{background:#2a0f0f;color:#ffb4b4;border-color:#5a2020}
+.mode-banner.stale{opacity:.55;outline:2px dashed #c9a227}

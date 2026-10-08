@@ -163,6 +163,9 @@ def snapshot(forge: Any) -> dict[str, Any]:
         "uptime_s": round(time.time() - forge.started), "workers": workers(forge), "lights": lights(forge, positions),
         "throughput": {"genomes_total": int(db.kv_get("stats.genomes_total", 0) or 0), "genomes_last_cycle": forge.genomes_last_cycle,
                        "cycles": forge.improvement_runs, "feed_messages": forge.stream.quality.messages,
+                       "mode_label": ((forge.db.kv_get("treasury.truth") or {}).get("mode_label")
+                       or "PAPER — REAL MARKET / SIMULATED MONEY"),
+                       "forge_live_trading": bool((forge.db.kv_get("treasury.truth") or {}).get("forge_live_trading")),
                        "markets_streaming": len(forge.stream.symbols), "markets_discovered": len(forge.market.products),
                        "opportunities_24h": db.scalar("SELECT COUNT(*) FROM opportunities WHERE ts > strftime('%Y-%m-%dT%H:%M:%S','now','-1 day')") or 0,
                        "paper_trades_open": len(positions)},
@@ -534,6 +537,13 @@ def build_app(forge: Any) -> FastAPI:
     async def sw() -> FileResponse:
         return FileResponse(WEB / "sw.js", media_type="application/javascript",
                             headers={"Cache-Control": "no-store, max-age=0", "Service-Worker-Allowed": "/"})
+
+    
+    try:
+        from forge.api.firm_v1 import mount_firm_v1
+        mount_firm_v1(app, forge)
+    except Exception as _e:
+        import logging; logging.getLogger("forge.api").warning("firm_v1 mount failed: %s", _e)
 
     return app
 
