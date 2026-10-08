@@ -31,10 +31,10 @@ SPORTS = (
     "soccer_epl",
     "soccer_usa_mls",
 )
-BANKROLL_START = 5000.0
-MAX_STAKE_PCT = 0.02
-MIN_STAKE = 5.0
-MAX_OPEN = 40
+BANKROLL_START = 400.0  # founder operating band $200–$500
+MAX_STAKE_PCT = 0.04  # still small per-bet; book stays diversified
+MIN_STAKE = 2.0
+MAX_OPEN = 12  # vast ≠ oversized; fit $200–$500 book
 MIN_BOOKS = 5
 MIN_HOURS_TO_START = 0.5
 MAX_HOURS_TO_START = 72.0
@@ -209,7 +209,7 @@ class PaperBetDesk:
         if self._already_on_event(edge["event_id"]):
             return None
         kelly = binary_kelly(edge["p_hat"], edge["decimal_odds"], fraction=0.125)
-        stake = max(MIN_STAKE, min(cash * MAX_STAKE_PCT, cash * kelly, cash * 0.05))
+        stake = max(MIN_STAKE, min(cash * MAX_STAKE_PCT, cash * kelly, 20.0, cash * 0.08))
         stake = round(stake, 2)
         if stake < MIN_STAKE:
             return None
@@ -351,7 +351,7 @@ class PaperBetDesk:
             if bet:
                 placed.append({**bet, "sport": sp, "gate": e["gate"]})
                 seen_sport[sp] += 1
-            if len(placed) >= 8:  # per tick cap
+            if len(placed) >= 4:  # per tick cap (small book)
                 break
         eq = self.equity_sleeve()
         bank = self._bank()
