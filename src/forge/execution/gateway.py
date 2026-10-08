@@ -339,17 +339,22 @@ class ExecutionGateway:
                 force = self.db.kv_get(f"position.force_exit.{p['id']}")
             except Exception:
                 force = None
-            if force and bbo and rules:
+            if force and not (isinstance(force, dict) and force.get("done")):
                 qty = Decimal(p["qty"] or 0)
                 meta = json.loads(p["meta"] or "{}")
                 reason = str((force or {}).get("reason") or "FORCE_EXIT")
                 tp_o = self.db.query_one("SELECT * FROM orders WHERE client_order_id = ?", (meta.get("tp_cid"),)) if meta.get("tp_cid") else None
-                await self._market_exit(p, qty, reason, meta, tp_o)
-                try:
-                    self.db.kv_set(f"position.force_exit.{p['id']}", {"done": True, "ts": time.time()})
-                except Exception:
-                    pass
-                return  # force_exit early
+                # PAPER must recirculate even if BBO briefly missing (stale/delisted marks)
+                if self.book == "paper" or (bbo and rules):
+                    if qty > 0:
+                        await self._market_exit(p, qty, reason, meta, tp_o)
+                    else:
+                        await self._close(p, reason, meta)
+                    try:
+                        self.db.kv_set(f"position.force_exit.{p['id']}", {"done": True, "ts": time.time(), "reason": reason})
+                    except Exception:
+                        pass
+                    return  # force_exit early
         if p["status"] == "OPEN" and plan and bbo and rules:
             entry_px = float(Decimal(p["cost_usd"]) / qty) if qty > 0 else float(p["entry_price"] or 0)
             tp_o = self.db.query_one("SELECT * FROM orders WHERE client_order_id = ?", (meta.get("tp_cid"),)) if meta.get("tp_cid") else None
