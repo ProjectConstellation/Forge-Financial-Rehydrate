@@ -248,6 +248,22 @@ def register(ctx):
         "ops_trial",
         "[FORGE EXEC] Current PAPER trial / 8h full-dress scorecard vs $1/h TRUE-NET target.", {}))
 
+    def h_evidence(params, session_id=None, **kw):
+        _audit("evidence", params, "OK", session_id=session_id)
+        return _out(_call("GET", "/api/v1/lab/evidence", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_evidence", toolset="forge_ops", handler=h_evidence, schema=_schema(
+        "ops_evidence",
+        "[FORGE EXEC] What WORKS / DOESN'T / inconclusive on PAPER (+ shadow rails). "
+        "Use when founder asks 'what is working?', 'what should we kill?', 'show me the lab results'.", {}))
+
+    def h_paper_lab(params, session_id=None, **kw):
+        _audit("paper_lab", params, "OK", session_id=session_id)
+        return _out(_call("GET", "/api/v1/lab/paper", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_paper_lab", toolset="forge_ops", handler=h_paper_lab, schema=_schema(
+        "ops_paper_lab",
+        "[FORGE EXEC] Aggressive PAPER lab status: diversity actions, stable bridges, promotions, aggression settings.", {}))
+
+
 
     def h_objective(params, session_id=None, **kw):
         return _out(_call("POST", "/api/ops/action", {"action": "launch_objective", "params": {

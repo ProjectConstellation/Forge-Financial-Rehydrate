@@ -88,6 +88,19 @@ def mount_firm_v1(app: FastAPI, forge: Any) -> None:
         ) if hasattr(forge.db, "query") else []
         return _j({"events": rows})
 
+    @app.get("/api/v1/lab/evidence")
+    async def v1_evidence() -> Any:
+        return _j(forge.db.kv_get("lab.evidence_board") or {"error": "not_ready"})
+
+    @app.get("/api/v1/lab/paper")
+    async def v1_paper_lab() -> Any:
+        return _j({
+            "paper_lab": forge.db.kv_get("lab.paper_lab"),
+            "aggression": forge.db.kv_get("lab.paper_aggression"),
+            "stable_pnl": forge.db.kv_get("lab.paper_stable_pnl"),
+            "evidence": forge.db.kv_get("lab.evidence_board"),
+        })
+
     @app.get("/api/v1/trial/current")
     async def v1_trial() -> Any:
         return _j({

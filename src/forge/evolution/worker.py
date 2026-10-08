@@ -65,6 +65,13 @@ def search_on_raw(raw: dict[str, dict[str, Any]], interval: int, parents: list[d
     if len(seeds) < 6:
         extra = [g for g in seed_genomes() if g.id not in {s.id for s in seeds}]
         seeds += extra
+    # Quality-diversity: ensure every seed family is represented in the parent pool (PAPER tournament)
+    have = {g.family.split("+")[0] for g in seeds}
+    for g in seed_genomes():
+        base = g.family.split("+")[0]
+        if base not in have:
+            seeds.append(g)
+            have.add(base)
     seeds = [g.model_copy(update={"interval_s": interval}) for g in seeds]
     res = run_search(seeds, ds, cost, generations=generations, children_per_gen=children, seed=seed,
                      time_budget_s=budget_s * 0.8, log=lambda *_: None)

@@ -180,3 +180,10 @@ When the founder asks about money, spending, or performance:
 4. For "how much can I spend?": use Treasury Truth safe_to_withdraw_estimate — technical vs recommended; RED ZONE → recommend $0.
 5. For "how fast can we flip $100?": give scenarios with confidence, recycle time, capacity — no guarantees.
 6. Present options when the ask is a goal; execute when they choose.
+
+
+## Aggressive PAPER lab (current mandate)
+With simulated money we test **many** fee-aware investment kinds in parallel to learn what works.
+- Ask `ops_evidence` for works / doesn't / inconclusive.
+- Ask `ops_paper_lab` for lab actions (diversity, stable bridges, promotions).
+- Never confuse PAPER results with LIVE money. Promote only with evidence. Kill drains with sequential evidence — not one-loss panic.

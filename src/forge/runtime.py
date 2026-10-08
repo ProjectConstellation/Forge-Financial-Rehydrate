@@ -229,6 +229,18 @@ class Forge:
         from forge.agents.stale_nudge import StaleNudge
         self.stale_nudge = StaleNudge(self)
         B("stale_nudge", self.stale_nudge.run, 900)
+        from forge.lab.paper_lab import PaperLab
+        self.paper_lab = PaperLab(self)
+        B("paper_lab", self.paper_lab.run, 900)
+        from forge.lab.evidence_board import EvidenceBoard
+        self.evidence_board = EvidenceBoard(self)
+        B("evidence_board", self.evidence_board.run, 900)
+        from forge.lab.regime import RegimeDetector
+        self.regime = RegimeDetector(self)
+        B("regime", self.regime.run, 1200)
+        from forge.lab.scanner_boost import ScannerBoost
+        self.scanner_boost = ScannerBoost(self)
+        B("scanner_boost", self.scanner_boost.run, 1200)
         async def _trial_scorecard_loop():
             import asyncio
             from forge.treasury.paper_trial import update_8h_scorecard
@@ -636,6 +648,11 @@ class Forge:
             self._set_opp(oid, "REJECTED", f"drawdown {dds.get('drawdown', 0):.1%} from high-water: generic live paused")
             return
         # one position per market across all strategies (no doubled bets on one coin)
+        if self.book == "paper":
+            n_open = int(self.db.scalar("SELECT COUNT(*) FROM positions WHERE book='paper' AND status!='CLOSED'") or 0)
+            max_open = int((self.db.kv_get("lab.paper_aggression") or {}).get("max_concurrent_positions") or 12)
+            if n_open >= max_open:
+                return None  # PAPER concurrent cap — rotate capital across probes
         if self.db.scalar("SELECT 1 FROM positions WHERE book = ? AND symbol = ? AND status != 'CLOSED'", (self.book, sym)):
             self._set_opp(oid, "REJECTED", f"already holding {sym} (one position per market)")
             return
@@ -691,8 +708,11 @@ class Forge:
         m_vol = volatility_multiplier(vp, specialist)
         m_dd = float((self.treasury.get("drawdown_state") or {}).get("multiplier", 1.0))
         exposure = m_breadth * m_vol * m_dd
-        if self.book == "paper" and exposure < 0.25:
-            exposure = 0.25          # paper keeps a probe size so the gates themselves can be evaluated on outcomes
+        if self.book == "paper":
+            agg = self.db.kv_get("lab.paper_aggression") or {}
+            floor = float(agg.get("probe_exposure_floor") or 0.35)
+            if exposure < floor:
+                exposure = floor      # aggressive PAPER probes — learn fee survival fast
         if exposure <= 0:
             self._set_opp(oid, "REJECTED", f"exposure gate: breadth×{m_breadth:.2f} vol×{m_vol:.2f} drawdown×{m_dd:.2f}")
             return
