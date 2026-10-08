@@ -642,6 +642,12 @@ class Forge:
                 self._set_opp(oid, "REJECTED", f"ECR {ecr:.2f} ({ecr_t}): expected gross edge does not cover costs ×2")
                 return
             comps["paper_exploration"] = True
+            try:
+                from forge.lab.counterfactual import record as cf_record
+                cf_record(self.db, decision="ecr_gate", chosen="paper_explore",
+                          alts=["reject_as_live_would"], context={"ecr": ecr, "ecr_t": ecr_t, "oid": oid})
+            except Exception:
+                pass
         # treasury drawdown state: −15% from high-water pauses generic live deployment (research/paper continue)
         dds = self.treasury.get("drawdown_state") or {}
         if dds.get("generic_live_paused") and self.book != "paper" and g.family not in SPECIALIST_FAMILIES:

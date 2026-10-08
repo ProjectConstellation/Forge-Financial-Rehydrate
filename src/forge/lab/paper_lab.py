@@ -219,6 +219,62 @@ class PaperLab:
         return out
 
 
+
+    def promote_diversity_to_shadow(self) -> list[dict[str, Any]]:
+        """PAPER tournament: lift underrepresented EXPERIMENTAL families into SHADOW for live-forward fee tests."""
+        from forge.strategies.registry import State
+        db = self.f.db
+        shadow_rows = db.query(
+            "SELECT family, COUNT(*) c FROM strategies WHERE population='SHADOW' GROUP BY 1"
+        ) or []
+        shadow_by = {}
+        for r in shadow_rows:
+            shadow_by[str(r["family"]).split("+")[0]] = int(r["c"])
+        shadow_n = sum(shadow_by.values())
+        want = [
+            "microstructure", "inventory", "carry_proxy", "cross_asset", "event_driven",
+            "liquidity_provision", "volatility", "rotation", "momentum", "mean_reversion",
+            "stable_triangle", "stable_peg_mm",
+        ]
+        out = []
+        PER_FAMILY = 3
+        for fam in want:
+            if shadow_n >= PAPER_MAX_SHADOW:
+                break
+            have = shadow_by.get(fam, 0)
+            if have >= PER_FAMILY:
+                continue
+            need = PER_FAMILY - have
+            # Prefer newest experimental of this family
+            cands = db.query(
+                "SELECT id, family FROM strategies WHERE population='EXPERIMENTAL' AND "
+                "(family = ? OR family LIKE ?) ORDER BY created_at DESC LIMIT ?",
+                (fam, fam + "+%", need * 3),
+            ) or []
+            for r in cands:
+                if shadow_n >= PAPER_MAX_SHADOW or need <= 0:
+                    break
+                sid = r["id"]
+                # Skip known drains
+                drain = db.query_one(
+                    "SELECT COUNT(*) n, SUM(CAST(realized_pnl_usd AS REAL)-CAST(fees_usd AS REAL)) net "
+                    "FROM positions WHERE book='paper' AND status='CLOSED' AND strategy_id=?",
+                    (sid,),
+                )
+                if drain and int(drain["n"] or 0) >= 5 and float(drain["net"] or 0) < 0:
+                    continue
+                try:
+                    self.f.reg.transition(sid, State.SHADOW,
+                                          f"paper lab: diversity SHADOW probe ({fam}) — fee-aware forward test")
+                    db.kv_set(f"strategy.activated.{sid}", time.time())
+                    out.append({"promoted_diversity": sid, "family": fam})
+                    shadow_n += 1
+                    need -= 1
+                    shadow_by[fam] = shadow_by.get(fam, 0) + 1
+                except Exception as e:
+                    log.debug("div promote %s: %s", sid, e)
+        return out
+
     def kill_confirmed_drains(self) -> list[dict[str, Any]]:
         """Hibernate PAPER strategies with sequential losing closes (n>=5, net<0, wr=0)."""
         from forge.strategies.registry import State
@@ -250,6 +306,7 @@ class PaperLab:
         div = self.diversify_experimental()
         bridged = self.bridge_stable_shadow_to_paper()
         promoted = self.promote_paper_probes()
+        promoted += self.promote_diversity_to_shadow()
         killed = self.kill_confirmed_drains()
         # Signal runtime to allow more concurrent paper positions
         self.f.db.kv_set("lab.paper_aggression", {
