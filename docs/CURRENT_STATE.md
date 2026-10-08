@@ -1,7 +1,7 @@
 # CURRENT STATE — 2026-10-08 15:29 UTC
 - **Mode:** PAPER_REAL_MARKET_SIM_MONEY (algorithmic LIVE OFF). Portal: https://forge.northstarimagine.com
 - **Intelligence:** DeepSeek V4.1 Flash everywhere (Opus retired). Cognitive=high · else=medium.
-- **Firm:** Mara (ops) + mapped Hermes workforce; Profit Recovery auto-opens grow_profit when below floor.
+- **Firm:** Luke (ops) + mapped Hermes workforce; Profit Recovery auto-opens grow_profit when below floor.
 - **Bars:** floor **$0.50/h** · stretch **$1.00/h** PAPER true-net.
 - **24h PAPER trial:** RUNNING (see kv `paper_trial`). Maximize Coinbase stables + Kalshi shadow; USDC idle LIVE parking only.
 - **Top lever now:** coinbase.stable_triangle (EXCEPTIONAL shadow +EV). Kalshi auth awaiting founder key.

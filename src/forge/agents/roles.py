@@ -21,7 +21,7 @@ USDT-USDC maker 0 / taker 0.1 bp; USDT-USD maker 0.5 bp / taker 1 bp; Kalshi tak
 cent), maker 0 on most series. Validation: selection 65% / validation 20% / one-time sealed exam 15%; promotion needs
 validation P(net>0) ≥ 0.90, alpha-vs-drift P ≥ 0.60, deflated Sharpe, robustness; live needs Edge Coverage Ratio ≥ 2 and a
 0.25 backtest-to-live haircut until forward evidence earns more. Treasury ≈ $28 (PAPER_REAL_MARKET_SIM_MONEY; live gated).
-FIRM ALIASES: Mara=Executive Ops · Cyrus=governor · Quinn=alpha_inventor · Ada=critic · Vale≈adversary · Casey=doctor ·
+FIRM ALIASES: Luke=Executive Ops · Cyrus=governor · Quinn=alpha_inventor · Ada=critic · Vale≈adversary · Casey=doctor ·
 Sloane=rail_hunter · Mira=architect · Tess=scout · Rowan=Engineer · Ellis=velocity · Nolan=Kalshi/SAGE · Reid=execution.
 Bars: floor $0.50/h PAPER true-net · stretch $1.00/h. Coinbase One Basic: USDC rewards + membership cost; no Advanced rebate.
 Prioritize fee-survivable stables + Kalshi evidence; never force trades to hit a dashboard."""

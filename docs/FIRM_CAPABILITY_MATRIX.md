@@ -11,7 +11,7 @@ Mode: **PAPER_REAL_MARKET_SIM_MONEY** · LIVE algorithmic trading OFF until foun
 | USDC idle yield | idle_yield LIVE convert | WORKING | Rewards $0 so far | PRESERVE |
 | Profit velocity | profit_velocity | WORKING | Dual floor missing | UPGRADE $0.50/$1 |
 | Profit Recovery playbook | — | MISSING | No auto objective open | BUILD |
-| Mara firm identity | ops SOUL | PARTIAL | Not named firm chart | UPGRADE |
+| Luke firm identity | ops SOUL | PARTIAL | Not named firm chart | UPGRADE |
 | Role → employee map | roles.py | PARTIAL | Old names only | UPGRADE aliases |
 | Cognitive spend governor | inference_calls | PARTIAL | No gate/ROI loop | BUILD lite |
 | PAPER/LIVE labels | metrics/ops | PARTIAL | Ambiguous wording | UPGRADE |
