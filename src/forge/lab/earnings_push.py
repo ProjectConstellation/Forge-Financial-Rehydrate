@@ -97,6 +97,28 @@ class EarningsPush:
                     except Exception as e:
                         actions.append({f"paper_bets.{name}": f"err:{e}"[:100]})
 
+        # Respect negative opportunity memory — do not spam stables income if CONTAMINATED
+        try:
+            from forge.agents.opportunity_memory import OpportunityMemory
+            om = getattr(self.f, "opportunity_memory", None) or OpportunityMemory(self.f)
+            blk = om.blocks_income_claim("stable_triangle", "coinbase.stable_triangle")
+            if blk:
+                db.kv_set("lab.earnings_push", {
+                    "ts": now, "proven": proven, "nav": nav,
+                    "actions": [{"blocked_by_memory": blk.get("mem_id"), "status": blk.get("status"),
+                                 "reason": blk.get("reason")}],
+                    "policy": "diagnostic_first_until_ledger_clean",
+                })
+                # Page Tess/Ada for diagnostic only once
+                db.execute(
+                    "INSERT INTO ops_directives(ts,role,instruction,priority,status,requested_by) VALUES(?,?,?,?,?,?)",
+                    (now, "scout",
+                     "EARNINGS_PUSH blocked by CONTAMINATED memory on stable_triangle. Run/finish DIAGNOSTIC ledger reconcile — do not claim proven income.",
+                     "high", "OPEN", "earnings_push"))
+                return {"ts": now, "blocked_by_memory": True, "proven": proven}
+        except Exception as e:
+            actions.append({"memory_check_err": str(e)[:120]})
+
         # Feed Tess evidence — NEVER auto-advance OPPORTUNITY_ORCHESTRATION past her proposal.
         # Only auto-advance ALPHA_GENERATION MARKET_INTELLIGENCE_PACKET if truly stuck (>25m).
         pending = db.query(

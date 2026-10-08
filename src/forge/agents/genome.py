@@ -171,6 +171,12 @@ class PromptGenomes:
         except Exception as _e:
             world["OPPORTUNITY_MEMORY_ERROR"] = str(_e)[:160]
         text = render(role, json.loads(genome["sections"]), genome["id"], world, self.memory(role), panels)
+        if world.get("OPPORTUNITY_MEMORY"):
+            text = (text or "") + "\n\n=== OPPORTUNITY MEMORY (institutional) ===\n" + json.dumps(
+                world["OPPORTUNITY_MEMORY"], default=str)[:3500]
+        if world.get("PENDING_ORCHESTRATION"):
+            text = (text or "") + "\n\n=== PENDING ORCHESTRATION HANDOFFS ===\n" + json.dumps(
+                world["PENDING_ORCHESTRATION"], default=str)[:2000]
         return {"prompt_id": genome["id"], "role": role, "replay_of_run": paired, "snapshot_id": snap_id, "brief": text}
 
     # ---------------------------------------------------------------- world state + memory
