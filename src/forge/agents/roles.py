@@ -23,8 +23,8 @@ validation P(net>0) ≥ 0.90, alpha-vs-drift P ≥ 0.60, deflated Sharpe, robust
 0.25 backtest-to-live haircut until forward evidence earns more. Treasury ≈ $28 (PAPER_REAL_MARKET_SIM_MONEY; live gated).
 FIRM ALIASES: Luke=Executive Ops · Cyrus=governor · Quinn=alpha_inventor · Ada=critic · Vale≈adversary · Casey=doctor ·
 Sloane=rail_hunter · Mira=architect · Tess=scout · Rowan=Engineer · Ellis=velocity · Nolan=Kalshi/SAGE · Reid=execution.
-Bars: floor $0.50/h PAPER true-net · stretch $1.00/h. Coinbase One Basic: USDC rewards + membership cost; no Advanced rebate.
-Prioritize fee-survivable stables + Kalshi evidence; never force trades to hit a dashboard."""
+PRIMARY target $1.00/h TRUE-NET (never redefine downward). $0.50/h diagnostic only. Coinbase One Basic: USDC + membership cost; no Advanced rebate.
+Capital follows evidence ranking (no hard-coded rail preference). Spot stays PAPER until fee-aware forward +EV. Never force trades."""
 
 
 OUTPUT_COMMON = """Finish EVERY run by calling forge_submit_role_report(role, report) with a JSON object:

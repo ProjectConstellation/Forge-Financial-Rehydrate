@@ -199,6 +199,12 @@ class Forge:
         from forge.treasury.profit_velocity import VelocityEngine
         self.velocity = VelocityEngine(self)
         B("velocity", self.velocity.run, 900)
+        from forge.treasury.edge_decay import EdgeDecayMonitor
+        self.edge_decay = EdgeDecayMonitor(self)
+        B("edge_decay", self.edge_decay.run, 900)
+        from forge.research.equity_paper import EquityPaperResearch
+        self.equity_paper = EquityPaperResearch(self)
+        B("equity_paper", self.equity_paper.run, 1800)
         from forge.opportunities.settlement_window import SettlementWindowEngine
         self.settlement_window = SettlementWindowEngine(self)
         B("sw_sampler", self.settlement_window.sampler, 60)
@@ -226,7 +232,7 @@ class Forge:
             from forge.treasury.paper_trial import start_trial, snapshot
             if not self.db.kv_get("paper_trial"):
                 st = start_trial(self, 24.0)
-                await self.say("Firm", f"PAPER 24h full-dress trial started — mode {st['mode']} · floor $0.50/h · stretch $1.00/h · LIVE money OFF")
+                await self.say("Firm", f"PAPER trial started — {st['mode']} · PRIMARY TARGET $1.00/h TRUE-NET · $0.50/h diagnostic only · LIVE money OFF · continuous (does not stop at window end)")
             else:
                 snapshot(self)
         except Exception as _e:

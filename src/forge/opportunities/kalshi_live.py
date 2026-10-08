@@ -70,6 +70,16 @@ def cusum(diffs: list[float], k: float = CUSUM_K) -> float:
     return s
 
 
+
+# Founder correction: eventual LIVE micro-pilot caps (PAPER until explicit LIVE auth)
+try:
+    from forge.config_policies import (
+        KALSHI_LIVE_MAX_OPEN_COST_PER_MARKET_USD as _K_MAX_MKT,
+        KALSHI_LIVE_MAX_AGGREGATE_OPEN_COST_USD as _K_MAX_AGG,
+    )
+except Exception:
+    _K_MAX_MKT, _K_MAX_AGG = 3.0, 5.0
+
 class KalshiLive:
     def __init__(self, forge: Any) -> None:
         self.f = forge
@@ -167,8 +177,11 @@ class KalshiLive:
             n = min(n, int(fu))                         # confidence-weighted size from the velocity frontier
         reg = self.regime()
         bal = float((self.status or {}).get("balance_usd") or 0) or reg["deployable"]
-        cap = min(bal, reg["deployable"]) * 0.95         # bootstrap: whole treasury usable; reserve regime: above reserve
-        n = min(n, int((cap - self.open_cost()) // max(cost_each, 0.01)))
+        # LIVE micro-pilot: tighter of treasury regime vs founder caps (~$3/market, ~$5 aggregate)
+        per_mkt = max(cost_each, 0.01)
+        n = min(n, max(0, int(_K_MAX_MKT // per_mkt)))
+        cap = min(bal, reg["deployable"], _K_MAX_AGG) * 0.95
+        n = min(n, int((cap - self.open_cost()) // per_mkt))
         if n <= 0:
             return
         cid = f"forge-{sig['id']}"

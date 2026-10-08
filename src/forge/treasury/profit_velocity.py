@@ -37,8 +37,8 @@ DELTA = 0.05
 UTIL_MAX = 0.95
 N0_SHRINK = 5.0
 Z90 = 1.2816
-OPERATOR_FLOOR_TARGET = 0.50                   # $/h operational floor (bootstrap)
-OPERATOR_MIN_TARGET = 1.0                     # $/h stretch / ratchet bar
+OPERATOR_MIN_TARGET = 1.0                     # $/h PRIMARY economic objective (never redefine downward)
+DIAGNOSTIC_PROGRESS_USD_PER_H = 0.50           # interim diagnostic only — NOT an optimization target
 KALSHI_DEPTH_UNITS = 20.0                     # contracts per signal assumed fillable at the quoted ask (until WS depth)
 MEMBERSHIP_USD_PER_H = 4.99 / (30 * 24)       # Coinbase One fee is a FORGE cost
 OPUS_FREE_UNTIL = 1791348927.5 + 72 * 3600    # OP-018 credit window
@@ -322,11 +322,11 @@ class VelocityEngine:
             "streams": [{"id": s.id, "venue": s.venue, "live": s.live, "note": s.note,
                          **{k: (round(v, 6) if isinstance(v, float) else v) for k, v in st.items()}} for s, st in with_stats],
             "priorities": pri[:12], "diagnosis": diag,
-            "floor_usd_per_h": OPERATOR_FLOOR_TARGET,
-            "stretch_usd_per_h": OPERATOR_MIN_TARGET,
+            "target_primary_usd_per_h": OPERATOR_MIN_TARGET,
+            "diagnostic_progress_usd_per_h": DIAGNOSTIC_PROGRESS_USD_PER_H,
             "mode_label": "PAPER_REAL_MARKET_SIM_MONEY" if getattr(self.f, "book", "paper") != "live" else "LIVE_REAL_MARKET_REAL_MONEY",
-            "below_floor": (realized["1h"]["usd_per_h"] < OPERATOR_FLOOR_TARGET and realized["24h"]["usd_per_h"] < OPERATOR_FLOOR_TARGET),
-            "below_stretch": f_proven["usd_per_h"] < OPERATOR_MIN_TARGET,
+            "below_target": (f_proven["usd_per_h"] < OPERATOR_MIN_TARGET) or (realized["24h"]["usd_per_h"] < OPERATOR_MIN_TARGET),
+            "below_diagnostic": (realized["1h"]["usd_per_h"] < DIAGNOSTIC_PROGRESS_USD_PER_H and realized["24h"]["usd_per_h"] < DIAGNOSTIC_PROGRESS_USD_PER_H),
         }
         self.report = rep
         return rep
@@ -357,8 +357,8 @@ class VelocityEngine:
                     e = rep["expected_usd_per_h"]
                     await self.f.say("Profit Velocity",
                                      f"{rep.get('mode_label','PAPER')} · realized 1h ${rep['realized']['1h']['usd_per_h']:+.3f}/h · 24h "
-                                     f"${rep['realized']['24h']['usd_per_h']:+.3f}/h | floor ${rep.get('floor_usd_per_h',0.5):.2f}/h · "
-                                     f"stretch ${rep.get('stretch_usd_per_h',1):.2f}/h | proven ${e['proven']:.3f}/h · potential "
+                                     f"${rep['realized']['24h']['usd_per_h']:+.3f}/h | TARGET ${rep.get('target_primary_usd_per_h',1):.2f}/h · "
+                                     f"diagnostic ${rep.get('diagnostic_progress_usd_per_h',0.5):.2f}/h | proven ${e['proven']:.3f}/h · potential "
                                      f"${e['potential']:.3f}/h | {rep['regime']['regime']} | top lever: "
                                      f"{rep['priorities'][0]['action'] if rep['priorities'] else '—'}")
             except Exception as e:

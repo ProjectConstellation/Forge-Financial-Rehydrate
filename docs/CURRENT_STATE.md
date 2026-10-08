@@ -1,11 +1,12 @@
-# CURRENT STATE — 2026-10-08 15:29 UTC
-- **Mode:** PAPER_REAL_MARKET_SIM_MONEY (algorithmic LIVE OFF). Portal: https://forge.northstarimagine.com
-- **Intelligence:** DeepSeek V4.1 Flash everywhere (Opus retired). Cognitive=high · else=medium.
-- **Firm:** Luke (ops) + mapped Hermes workforce; Profit Recovery auto-opens grow_profit when below floor.
-- **Bars:** floor **$0.50/h** · stretch **$1.00/h** PAPER true-net.
-- **24h PAPER trial:** RUNNING (see kv `paper_trial`). Maximize Coinbase stables + Kalshi shadow; USDC idle LIVE parking only.
-- **Top lever now:** coinbase.stable_triangle (EXCEPTIONAL shadow +EV). Kalshi auth awaiting founder key.
-- Continuity docs: `docs/FIRM_CAPABILITY_MATRIX.md`. Do not flip LIVE without founder auth.
+# CURRENT STATE — 2026-10-08 15:52 UTC
+- **Mode:** PAPER_REAL_MARKET_SIM_MONEY · algorithmic LIVE OFF
+- **PRIMARY economic target:** **≥ $1.00/h TRUE-NET** (never redefine downward). $0.50/h = diagnostic only.
+- **Executive Ops:** **Luke** · DeepSeek Flash · inference MEDIUM default / HIGH for hard work
+- **Capital:** follows continuous evidence ranking — no hard-coded stables/Kalshi permanence
+- **Spot:** PAPER only until fee-aware forward +EV · no activity-genome churn
+- **Parallel:** equity/ETF PAPER research (SEC live; Twelve Data when keyed) + Kalshi when credentials arrive
+- **Systems:** edge-decay rotation · Profit Recovery vs $1/h · paper trial continuous (rolls windows; opens next constraint)
+- **Kalshi eventual LIVE micro-pilot caps (after founder LIVE auth):** ~$3/market · ~$5 aggregate open cost
 
 
 ---

@@ -341,13 +341,13 @@ class SurfaceRegistry:
         pm = self._rail("coinbase.stable_peg_mm", "Coinbase Advanced Trade (stable pairs)", "peg market-making / idle yield")
         fee = self.f.db.kv_get("fees.USDT-USD.maker") or {}
         pm.capabilities.update(pairs=["USDT-USD", "USDT-USDC"], maker_fee=fee.get("rate"), fee_source=fee.get("source"))
-        # PAPER trial: promote when shadow evidence is strong (P>0.9 or n>=30 with positive mean)
+        # Clear blockers when shadow evidence is currently +EV; allocator still ranks vs all rails
         st = self.f.db.kv_get("pegmaker.state") or {}
         n_peg = int(self.f.db.scalar("SELECT COUNT(*) FROM shadow_trades WHERE rail='coinbase.stable_peg_mm' AND pnl_usd IS NOT NULL") or 0)
         mean_peg = float(self.f.db.scalar("SELECT AVG(pnl_usd) FROM shadow_trades WHERE rail='coinbase.stable_peg_mm' AND pnl_usd IS NOT NULL") or 0)
         if n_peg >= 30 and mean_peg > 0:
             pm.status = "SHADOW"; pm.executable = True; pm.blockers = []
-            pm.economics.evidence = f"{n_peg} shadow RTs mean ${mean_peg:.4f} — PAPER priority rail"
+            pm.economics.evidence = f"{n_peg} shadow RTs mean ${mean_peg:.4f} — current shadow evidence supports allocation contention"
         else:
             pm.blockers = [f"paper only until shadow proves +EV (n={n_peg}, mean={mean_peg:.4f})"]
         pm.status, pm.executable = "SHADOW", False
@@ -359,7 +359,7 @@ class SurfaceRegistry:
         sum_tr = float(self.f.db.scalar("SELECT SUM(pnl_usd) FROM shadow_trades WHERE rail='coinbase.stable_triangle' AND pnl_usd IS NOT NULL") or 0)
         if n_tr >= 100 and mean_tr > 0:
             tr.status = "SHADOW"; tr.executable = True; tr.blockers = []
-            tr.economics.evidence = f"{n_tr} shadow cycles mean ${mean_tr:.4f} sum ${sum_tr:.2f} — PAPER priority rail (EXCEPTIONAL)"
+            tr.economics.evidence = f"{n_tr} shadow cycles mean ${mean_tr:.4f} sum ${sum_tr:.2f} — current shadow evidence supports allocation contention (EXCEPTIONAL)"
         else:
             tr.blockers = [f"paper only until shadow +EV after fees (n={n_tr}, mean={mean_tr:.4f})"]
         tr.status, tr.executable = "SHADOW", False
