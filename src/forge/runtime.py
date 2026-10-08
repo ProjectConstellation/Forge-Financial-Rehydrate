@@ -627,7 +627,29 @@ class Forge:
         if st not in tradable or self.gateway is None:
             self._set_opp(oid, "OBSERVED", f"{st.value}: shadow observation (would-be trade)")
             return
+        # Stable rails are executed by PegMaker shadow/bridge — not spot genome signals on alts
+        if g.id.startswith("paper_stable_") or g.family in ("stable_triangle", "stable_peg_mm"):
+            self._set_opp(oid, "OBSERVED", "stable rail: pegmaker path (not spot genome)")
+            return
         # Continuous kill/realloc gate — decay PAUSE / realloc REDUCE blocks new size immediately
+        # Half-life urgency: microstructure-class edges expire fast — mark expires_ns tightly
+        try:
+            hl_rep = (self.db.kv_get("opportunity.half_life") or {}).get("families") or {}
+            fam0 = (g.family or "").split("+")[0]
+            hl_info = hl_rep.get(fam0) or hl_rep.get("microstructure") or {}
+            urgency = hl_info.get("urgency") or "SAME_DAY"
+            hl_s = float(hl_info.get("half_life_s") or 1800)
+            comps["half_life_s"] = hl_s
+            comps["urgency"] = urgency
+            if urgency == "IMMEDIATE":
+                # shrink horizon; if opportunity already older than half-life, drop
+                import time as _t
+                age = _t.time() - float(self.db.scalar("SELECT ts FROM opportunities WHERE id=?", (oid,)) or _t.time())
+                if age > hl_s:
+                    self._set_opp(oid, "REJECTED", f"half-life expired ({age:.0f}s > {hl_s:.0f}s) — drop stale edge")
+                    return
+        except Exception:
+            pass
         ed = self.db.kv_get("edge_decay") or {}
         for a in (ed.get("actions") or []):
             if a.get("strategy_id") == g.id and a.get("state") in ("PAUSE", "REDUCE"):
@@ -705,6 +727,10 @@ class Forge:
         eq = float(self.treasury.get("equity_usd") or 0)
         reserve = self.capital.reserve_usd(eq)
         deployable = max(0.0, float(self.treasury.get("cash_usd") or 0) - reserve)
+        if self.book == "paper":
+            # PAPER tournament: don't let sticky reserve starve probes — use most of free cash
+            free = max(0.0, float(self.treasury.get("cash_usd") or 0) - min(reserve, eq * 0.05))
+            deployable = max(deployable, free, float(self.treasury.get("cash_usd") or 0) * 0.85)
         # continuous evidence weighting + correlation discount (no fixed concurrency: capital flows to the best, decorrelated bets)
         evid = min(1.0, max(0.2, ((ev.p_edge if ev else 0.5) - 0.5) / 0.4))
         ss = self.bars[interval].state.get(sym)
@@ -733,9 +759,14 @@ class Forge:
         if exposure <= 0:
             self._set_opp(oid, "REJECTED", f"exposure gate: breadth×{m_breadth:.2f} vol×{m_vol:.2f} drawdown×{m_dd:.2f}")
             return
+        min_shr = 0.22 if self.book == "paper" else 0.0  # n=0 SHADOW must still clear $1 venue min on PAPER
+        # Prefer reallocator top streams: slight size bump when preferred
+        prefer = {(a.get("to") or "") for a in ((self.db.kv_get("capital.reallocation") or {}).get("actions") or []) if a.get("type") == "PREFER"}
+        prefer_boost = 1.15 if (g.id in prefer or g.family in prefer or any(x in prefer for x in (g.family,))) else 1.0
         sz = size_position(p, win, loss, ev.n if ev else 0, kmult, g.sizing.max_fraction,
-                           pol.max_position_fraction, deployable * evid * corr_disc * exposure, st.value,
-                           self.breakers.size_multiplier(), va.capital_velocity_score)
+                           pol.max_position_fraction, deployable * evid * corr_disc * exposure * prefer_boost, st.value,
+                           self.breakers.size_multiplier(), va.capital_velocity_score,
+                           min_evidence_shrink=min_shr)
         # risk-at-stop cap (answers §9): per-position ≤ 5% equity at the stop, aggregate open risk ≤ 10%
         open_risk = 0.0
         for r in self.db.query("SELECT cost_usd, exit_plan FROM positions WHERE book = ? AND status != 'CLOSED'", (self.book,)):
@@ -746,6 +777,9 @@ class Forge:
             sz = SizeDecision(sz.fraction, rc.max_notional, sz.kelly_raw, sz.shrink, sz.explanation + " | capped: " + rc.explanation)
         sz = SizeDecision(sz.fraction, sz.notional_usd, sz.kelly_raw, sz.shrink,
                           sz.explanation + f" | exposure breadth×{m_breadth:.2f} vol×{m_vol:.2f} dd×{m_dd:.2f}")
+        if self.book == "paper" and 0.50 <= sz.notional_usd < 1.05:
+            # PAPER probes: clear Coinbase $1 min instead of dying at $0.90–$0.99
+            sz = SizeDecision(sz.fraction, 1.05, sz.kelly_raw, sz.shrink, sz.explanation + " | paper_min_$1.05")
         if sz.notional_usd < 1.0:
             self._set_opp(oid, "REJECTED", f"size ${sz.notional_usd:.2f} below $1 venue minimum — {sz.explanation}")
             return
