@@ -120,6 +120,7 @@ def mount_firm_v1(app: FastAPI, forge: Any) -> None:
             "prefer_rails": forge.db.kv_get("econ.prefer_rails"),
             "earnings_escalator": forge.db.kv_get("lab.earnings_escalator"),
             "membership_recommendation": forge.db.kv_get("membership.recommendation"),
+            "prelive_proof": forge.db.kv_get("lab.prelive_proof"),
         })
 
     @app.get("/api/v1/lab/paper_bets")

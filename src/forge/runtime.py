@@ -259,6 +259,10 @@ class Forge:
         from forge.treasury.earnings_escalator import EarningsEscalator
         self.earnings_escalator = EarningsEscalator(self)
         B("earnings_escalator", self.earnings_escalator.run, 600)
+        from forge.treasury.prelive_proof import PreLiveProof
+        self.prelive_proof = PreLiveProof(self)
+        B("prelive_proof", self.prelive_proof.run, 300)
+
 
 
 

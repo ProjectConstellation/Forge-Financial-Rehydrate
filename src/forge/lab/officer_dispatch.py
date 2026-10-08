@@ -118,8 +118,16 @@ class OfficerDispatch:
             family = self._extract_family(instr)
             cool_role = ROLE_WAKE_COOLDOWN_S.get(role, 30 * 60)
             last_role = float((st.get("roles") or {}).get(role) or 0)
-            # Dedupe: if same role woken recently, mark directive acknowledged without re-waking
+            pri = str(d.get("priority") or "").lower()
+            # NEVER fake-complete critical work. Cooldown only skips re-wake; leave OPEN for Hermes report.
             if now - last_role < cool_role:
+                if pri == "critical":
+                    # Still attempt wake if never successfully reported recently
+                    actions.append({"id": d["id"], "role": role, "action": "HOLD_OPEN_COOLDOWN"})
+                    if now - last_role > 60:
+                        self._hermes_wake(role)
+                        st.setdefault("roles", {})[role] = now
+                    continue
                 db.execute(
                     "UPDATE ops_directives SET status='DONE', result=?, done_ts=? WHERE id=? AND status='OPEN'",
                     (f"acked_cooldown: last wake {int(now-last_role)}s ago; local desk handling", now, d["id"]),
@@ -150,9 +158,10 @@ class OfficerDispatch:
                     )
                     action = "LOCAL_ONLY"
                     st.setdefault("roles", {})[role] = now  # still pace role
+                # Keep OPEN until Hermes officer files a real report (genome heartbeat). Local regen is not "done".
                 db.execute(
-                    "UPDATE ops_directives SET status='DONE', result=?, done_ts=? WHERE id=? AND status='OPEN'",
-                    (result[:1900], now, d["id"]),
+                    "UPDATE ops_directives SET result=? WHERE id=? AND status='OPEN'",
+                    (f"DISPATCHED:{action} {result}"[:1900], d["id"]),
                 )
                 actions.append({"id": d["id"], "role": role, "family": family, "action": action, "woke": woke})
                 st.setdefault("wakes", []).append({"ts": now, "role": role, "family": family, "action": action})
@@ -162,8 +171,8 @@ class OfficerDispatch:
             woke = self._hermes_wake(role)
             st.setdefault("roles", {})[role] = now
             db.execute(
-                "UPDATE ops_directives SET status='DONE', result=?, done_ts=? WHERE id=? AND status='OPEN'",
-                (f"HERMES_WAKE {role} (event-driven officer_dispatch)", now, d["id"]),
+                "UPDATE ops_directives SET result=? WHERE id=? AND status='OPEN'",
+                (f"DISPATCHED:HERMES_WAKE {role} — awaiting officer report", d["id"]),
             )
             actions.append({"id": d["id"], "role": role, "action": "LLM_WAKE", "woke": woke})
             st.setdefault("wakes", []).append({"ts": now, "role": role, "action": "LLM_WAKE"})
