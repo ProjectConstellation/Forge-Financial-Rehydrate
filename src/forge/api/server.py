@@ -260,6 +260,8 @@ def build_app(forge: Any) -> FastAPI:
             return await call_next(request)                       # route enforces the agent token
         if path in ("/ready", "/metrics") and not _external(request):
             pass                                                  # local monitoring only
+        elif path.startswith("/api/v1/") and request.method == "GET" and not _external(request):
+            pass                                                  # firm read APIs on loopback (same trust as /ready)
         elif path not in PUBLIC and who(request) is None:
             if path.startswith("/api/") or request.method != "GET" or path in ("/ready", "/metrics"):
                 return JSONResponse({"detail": "login required"}, status_code=401)
