@@ -164,6 +164,12 @@ class PegMaker:
         if best is None:
             return
         pnl, buy_sym, sell_sym, ask, bid, qty, fb, fs, edge = best
+        # Deduplicate identical book prints (Ada falsification: byte-identical P&L spam is not edge)
+        sig = (round(ask, 6), round(bid, 6), round(edge, 10), buy_sym, sell_sym)
+        last_sig = getattr(self, "_tri_sig", None)
+        if sig == last_sig:
+            return
+        self._tri_sig = sig
         self.tri_last = time.time()
         self.f.db.insert("shadow_trades", {"ts": time.time(), "rail": "coinbase.stable_triangle", "symbol": f"{buy_sym}>{sell_sym}",
                                            "side": "round_trip", "qty": qty, "entry": ask, "exit": bid,

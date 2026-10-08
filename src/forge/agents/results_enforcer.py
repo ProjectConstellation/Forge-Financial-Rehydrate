@@ -156,15 +156,33 @@ class ResultsEnforcer:
             log.warning("page %s: %s", role, e)
 
     def _wake(self, role: str) -> bool:
-        # Reuse employment/officer wake path if present
         for attr in ("employment", "officer_dispatch"):
             obj = getattr(self.f, attr, None)
             if obj and hasattr(obj, "_hermes_wake"):
                 try:
-                    return bool(obj._hermes_wake(role))
+                    if obj._hermes_wake(role):
+                        return True
                 except Exception:
                     pass
-        return False
+        # Direct fallback (forge may sudo to forge-hermes)
+        import subprocess
+        jid = (self.f.db.kv_get("hermes.cron_ids") or {}).get(role)
+        if not jid:
+            return False
+        try:
+            subprocess.Popen(
+                ["sudo", "-u", "forge-hermes", "env",
+                 "HOME=/srv/forge/runtime/hermes/home",
+                 "HERMES_HOME=/srv/forge/runtime/hermes/home",
+                 "HERMES_ACCEPT_HOOKS=1",
+                 "/srv/forge/runtime/hermes/app/venv/bin/hermes",
+                 "cron", "run", str(jid)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            return True
+        except Exception as e:
+            log.warning("wake %s: %s", role, e)
+            return False
 
     def _prompt_tweak(self, role: str, diagnosis: str) -> dict[str, Any] | None:
         pg = getattr(self.f, "prompt_genomes", None)
@@ -201,6 +219,7 @@ class ResultsEnforcer:
                 champ.get("version"),
                 f"results_enforcer: cure REPORT_ONLY — {diagnosis[:200]}",
                 new_sections,
+                author="results_enforcer",
             )
             tweaks = self.f.db.kv_get("results_enforcer.prompt_tweaks") or {}
             tweaks[role] = time.time()
@@ -209,7 +228,7 @@ class ResultsEnforcer:
         except TypeError:
             # signature may differ — try minimal
             try:
-                out = pg.submit_variant(role, None, diagnosis[:200], new_sections)
+                out = pg.submit_variant(role, None, diagnosis[:200], new_sections, author="results_enforcer")
                 return out
             except Exception as e:
                 return {"error": str(e)[:160]}
