@@ -333,6 +333,23 @@ class ExecutionGateway:
                 if plan and rules and plan.take_profit_pct < 1.0:      # convex exits carry no resting target
                     await self._place_tp(p["id"], sym, qty, Decimal(p["cost_usd"]) / qty, plan, rules, meta)
             return
+        if p["status"] == "OPEN":
+            force = None
+            try:
+                force = self.db.kv_get(f"position.force_exit.{p['id']}")
+            except Exception:
+                force = None
+            if force and bbo and rules:
+                qty = Decimal(p["qty"] or 0)
+                meta = json.loads(p["meta"] or "{}")
+                reason = str((force or {}).get("reason") or "FORCE_EXIT")
+                tp_o = self.db.query_one("SELECT * FROM orders WHERE client_order_id = ?", (meta.get("tp_cid"),)) if meta.get("tp_cid") else None
+                await self._market_exit(p, qty, reason, meta, tp_o)
+                try:
+                    self.db.kv_set(f"position.force_exit.{p['id']}", {"done": True, "ts": time.time()})
+                except Exception:
+                    pass
+                return  # force_exit early
         if p["status"] == "OPEN" and plan and bbo and rules:
             entry_px = float(Decimal(p["cost_usd"]) / qty) if qty > 0 else float(p["entry_price"] or 0)
             tp_o = self.db.query_one("SELECT * FROM orders WHERE client_order_id = ?", (meta.get("tp_cid"),)) if meta.get("tp_cid") else None
