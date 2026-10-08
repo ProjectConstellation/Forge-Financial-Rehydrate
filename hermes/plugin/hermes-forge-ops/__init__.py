@@ -259,6 +259,15 @@ def register(ctx):
     def h_paper_lab(params, session_id=None, **kw):
         _audit("paper_lab", params, "OK", session_id=session_id)
         return _out(_call("GET", "/api/v1/lab/paper", actor=_actor(session_id)))
+    
+    def h_vigil(params, session_id=None, **kw):
+        _audit("vigil", params, "OK", session_id=session_id)
+        return _out(_call("GET", "/api/v1/lab/vigil", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_vigil", toolset="forge_ops", handler=h_vigil, schema=_schema(
+        "ops_vigil",
+        "[FORGE EXEC] Position Vigil: stuck/losing cuts, hibernations, challenger demands. "
+        "Use when founder asks why capital is stuck or what the desk cut automatically.", {}))
+
     ctx.register_tool(name="ops_paper_lab", toolset="forge_ops", handler=h_paper_lab, schema=_schema(
         "ops_paper_lab",
         "[FORGE EXEC] Aggressive PAPER lab status: diversity actions, stable bridges, promotions, aggression settings.", {}))

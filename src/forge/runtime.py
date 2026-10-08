@@ -241,6 +241,10 @@ class Forge:
         from forge.lab.scanner_boost import ScannerBoost
         self.scanner_boost = ScannerBoost(self)
         B("scanner_boost", self.scanner_boost.run, 1200)
+        from forge.lab.position_vigil import PositionVigil
+        self.position_vigil = PositionVigil(self)
+        B("position_vigil", self.position_vigil.run, 45)
+
         async def _trial_scorecard_loop():
             import asyncio
             from forge.treasury.paper_trial import update_8h_scorecard

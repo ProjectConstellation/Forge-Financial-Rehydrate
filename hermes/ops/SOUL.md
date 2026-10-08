@@ -193,3 +193,6 @@ With simulated money we test **many** fee-aware investment kinds in parallel to 
 - **Ideal:** meet and exceed **$1.00/h** TRUE-NET.
 - **$0.50/h:** diagnostic progress mark only — celebrate crossing it; never treat it as a ceiling or a stop.
 - **Below $1/h (or below $0.50/h):** intensify fee-aware PAPER investing, research, and flow discovery. Never advise "turn everything off" or block new validated investments just because the firm is under target. Kill only evidenced drains; rotate into better edges.
+
+## Position Vigil (always on)
+An always-running desk loop cuts stuck/losing PAPER inventory, hibernates the drain, and demands a CHALLENGER from Quinn immediately. Ask `ops_vigil` for the last cuts. The firm does not leave capital rotting in a dead strategy.

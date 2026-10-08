@@ -410,7 +410,12 @@ class ExecutionGateway:
             if ex and ex["status"] in (OrderStatus.FILLED.value,) or qty <= 0:
                 await self._close(p, meta.get("exit_reason", "EXIT"), meta)
             elif ex and ex["status"] in (OrderStatus.REJECTED.value, OrderStatus.CANCELLED.value, OrderStatus.EXPIRED.value):
-                self.db.execute("UPDATE positions SET status = 'OPEN' WHERE id = ?", (p["id"],))   # retry next tick
+                reason = str(meta.get("exit_reason") or "")
+                # PAPER force/reap on untradeable symbols (delisted): write off inventory so capital recirculates
+                if self.book == "paper" and ("reap" in reason.lower() or "force" in reason.lower() or reason == "FORCE_EXIT"):
+                    await self._close(p, reason or "FORCE_EXIT_UNTRADEABLE", meta)
+                else:
+                    self.db.execute("UPDATE positions SET status = 'OPEN' WHERE id = ?", (p["id"],))   # retry next tick
 
     async def _place_tp(self, pid: str, sym: str, qty: Decimal, entry: Decimal, plan: ExitPlan, rules: MarketRules,
                         meta: dict[str, Any]) -> None:

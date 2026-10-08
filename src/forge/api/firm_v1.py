@@ -99,7 +99,12 @@ def mount_firm_v1(app: FastAPI, forge: Any) -> None:
             "aggression": forge.db.kv_get("lab.paper_aggression"),
             "stable_pnl": forge.db.kv_get("lab.paper_stable_pnl"),
             "evidence": forge.db.kv_get("lab.evidence_board"),
+            "position_vigil": forge.db.kv_get("lab.position_vigil"),
         })
+
+    @app.get("/api/v1/lab/vigil")
+    async def v1_vigil() -> Any:
+        return _j(forge.db.kv_get("lab.position_vigil") or {"error": "not_ready"})
 
     @app.get("/api/v1/trial/current")
     async def v1_trial() -> Any:
