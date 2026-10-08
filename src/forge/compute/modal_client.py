@@ -168,6 +168,26 @@ class ComputeGovernor:
             forge.sup.beat("compute")
             forge.status("Compute Governor", f"Modal {self.budget_state()} · month ${self.month_spend():.2f}/${self.budget:.0f} "
                                              f"· circuit {self.circuit.state}")
+            # Economic phase: honor research requests from EconOrchestrator (RED ZONE / 8h trial)
+            try:
+                req = forge.db.kv_get("modal.research_request") or {}
+                if req and not req.get("consumed") and (time.time() - float(req.get("ts") or 0)) < 3600:
+                    if self.circuit.state != "OPEN" and await self.should_burst(forge, 3600):
+                        parents = []
+                        try:
+                            parents = list(forge.reg.active())[:24]
+                        except Exception:
+                            parents = []
+                        if parents:
+                            forge.db.kv_set("modal.research_request", {**req, "consumed": True, "consumed_ts": time.time()})
+                            await forge.say("Modal Lab", "Econ phase research burst (genome tournament / falsification)", level="info")
+                            await self.burst_search(forge, 3600, parents)
+                            forge.db.kv_set("econ.modal_research", {
+                                "ts": time.time(), "launched": True, "status": "burst_launched",
+                                "workloads": req.get("workloads"), "reason": req.get("reason"),
+                            })
+            except Exception as e:
+                log.warning("econ modal request: %s", e)
             await asyncio.sleep(120)
 
     def summary(self) -> dict[str, Any]:
