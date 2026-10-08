@@ -36,7 +36,7 @@ class TreasuryContribution:
             "SELECT realized_pnl_usd, fees_usd, cost_usd, opened_at, closed_at FROM positions "
             "WHERE strategy_id=? AND status='CLOSED' ORDER BY closed_at DESC LIMIT 100", (strategy_id,)) or []
         open_rows = db.query(
-            "SELECT cost_usd, unrealized_pnl_usd FROM positions WHERE strategy_id=? AND status!='CLOSED'",
+            "SELECT cost_usd FROM positions WHERE strategy_id=? AND status!='CLOSED'",
             (strategy_id,)) or []
         realized = sum(_f(r.get("realized_pnl_usd")) - _f(r.get("fees_usd")) for r in closed)
         fees = sum(_f(r.get("fees_usd")) for r in closed)
@@ -52,7 +52,7 @@ class TreasuryContribution:
                 cap_h += max(_f(r.get("cost_usd")), 0.01) * 0.1
         for r in open_rows:
             cap_h += max(_f(r.get("cost_usd")), 0.01) * 0.25  # partial credit open
-        unreal = sum(_f(r.get("unrealized_pnl_usd")) for r in open_rows)
+        unreal = 0.0  # mark-to-market filled elsewhere; column not on positions
         # opex attribution from inference (coarse)
         opex = 0.0
         try:
