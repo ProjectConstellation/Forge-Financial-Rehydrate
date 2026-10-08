@@ -327,6 +327,14 @@ class VelocityEngine:
             "mode_label": "PAPER_REAL_MARKET_SIM_MONEY" if getattr(self.f, "book", "paper") != "live" else "LIVE_REAL_MARKET_REAL_MONEY",
             "below_target": (f_proven["usd_per_h"] < OPERATOR_MIN_TARGET) or (realized["24h"]["usd_per_h"] < OPERATOR_MIN_TARGET),
             "below_diagnostic": (realized["1h"]["usd_per_h"] < DIAGNOSTIC_PROGRESS_USD_PER_H and realized["24h"]["usd_per_h"] < DIAGNOSTIC_PROGRESS_USD_PER_H),
+            "invest_policy": {
+                "primary_target_usd_per_h": OPERATOR_MIN_TARGET,
+                "diagnostic_usd_per_h": DIAGNOSTIC_PROGRESS_USD_PER_H,
+                "when_below_target": "intensify_fee_aware_investing_and_research",
+                "when_below_diagnostic": "same_plus_more_PAPER_probes_and_flow_discovery",
+                "never": "block_or_turn_down_investments_solely_because_under_$1/h",
+                "ideal": "meet_and_exceed_$1/h_TRUE_NET",
+            },
         }
         self.report = rep
         return rep

@@ -187,3 +187,9 @@ With simulated money we test **many** fee-aware investment kinds in parallel to 
 - Ask `ops_evidence` for works / doesn't / inconclusive.
 - Ask `ops_paper_lab` for lab actions (diversity, stable bridges, promotions).
 - Never confuse PAPER results with LIVE money. Promote only with evidence. Kill drains with sequential evidence — not one-loss panic.
+
+
+## Economic objective (founder lock)
+- **Ideal:** meet and exceed **$1.00/h** TRUE-NET.
+- **$0.50/h:** diagnostic progress mark only — celebrate crossing it; never treat it as a ceiling or a stop.
+- **Below $1/h (or below $0.50/h):** intensify fee-aware PAPER investing, research, and flow discovery. Never advise "turn everything off" or block new validated investments just because the firm is under target. Kill only evidenced drains; rotate into better edges.

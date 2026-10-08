@@ -24,7 +24,7 @@ def start_trial(forge: Any, hours: float = 24.0) -> dict[str, Any]:
             "potential": (vel.get("expected_usd_per_h") or {}).get("potential"),
             "realized_1h": ((vel.get("realized") or {}).get("1h") or {}).get("usd_per_h"),
         },
-        "note": "Primary objective >= $1.00/h TRUE-NET. $0.50/h is diagnostic only. LIVE algorithmic trading OFF. Firm does not stop when the window ends.",
+        "note": "Primary objective >= $1.00/h TRUE-NET. $0.50/h is diagnostic progress only — NOT a stop switch. Below target/diagnostic the firm INTENSIFIES fee-aware investing (more probes, research, flow discovery); it never blocks or turns down investments solely for being under $1/h. LIVE algorithmic trading OFF until founder auth. Continuous (does not stop at window end).",
     }
     forge.db.kv_set("paper_trial", st)
     forge.db.kv_set("firm.state", {
@@ -82,7 +82,7 @@ def snapshot(forge: Any) -> dict[str, Any]:
             "diagnostic_progress_usd_per_h": DIAGNOSTIC,
             "rolled_windows": st.get("rolled_windows") or 0,
             "elapsed_h": st.get("elapsed_h"),
-            "note": st.get("note") or "Primary objective >= $1.00/h TRUE-NET. $0.50/h diagnostic only.",
+            "note": st.get("note") or "Primary objective >= $1.00/h TRUE-NET. $0.50/h is diagnostic progress only — NOT a stop switch. Below target/diagnostic the firm INTENSIFIES fee-aware investing (more probes, research, flow discovery); it never blocks or turns down investments solely for being under $1/h. LIVE algorithmic trading OFF until founder auth. Continuous (does not stop at window end).",
         },
     })
     return st

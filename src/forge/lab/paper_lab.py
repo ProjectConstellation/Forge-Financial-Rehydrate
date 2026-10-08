@@ -342,6 +342,10 @@ class PaperLab:
             "max_shadow": PAPER_MAX_SHADOW,
             "probe_exposure_floor": 0.40,
             "note": "PAPER only — learn fast, fee-aware, no LIVE",
+            "under_target_intensifies": True,
+            "diagnostic_usd_per_h": 0.50,
+            "primary_target_usd_per_h": 1.00,
+
         })
         rep = {
             "ts": time.time(),
