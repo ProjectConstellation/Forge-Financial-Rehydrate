@@ -223,6 +223,12 @@ class Forge:
         from forge.agents.heartbeat import AgentHeartbeat
         self.agent_heartbeat = AgentHeartbeat(self)
         B("agent_heartbeat", self.agent_heartbeat.run, 900)
+        from forge.treasury.red_zone import RedZoneGovernor
+        self.red_zone = RedZoneGovernor(self)
+        B("red_zone", self.red_zone.run, 900)
+        from forge.agents.stale_nudge import StaleNudge
+        self.stale_nudge = StaleNudge(self)
+        B("stale_nudge", self.stale_nudge.run, 900)
         async def _trial_scorecard_loop():
             import asyncio
             from forge.treasury.paper_trial import update_8h_scorecard

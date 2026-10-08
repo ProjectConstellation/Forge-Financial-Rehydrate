@@ -171,7 +171,23 @@ def snapshot(forge: Any) -> dict[str, Any]:
                        "paper_trades_open": len(positions)},
         "health": db.kv_get("health.score") or {},
         "testing": db.kv_get("timemachine.report") or {},
-        "today": {"realized_net_usd": windows_today(db, book), "unrealized_usd": sum((p["live_pnl_usd"] or 0) for p in positions)}})
+        "today": {"realized_net_usd": windows_today(db, book), "unrealized_usd": sum((p["live_pnl_usd"] or 0) for p in positions)},
+        "firm": {
+            "mode_label": (db.kv_get("treasury.truth") or {}).get("mode_label")
+                           or "PAPER — REAL MARKET / SIMULATED MONEY",
+            "forge_live_trading": bool((db.kv_get("treasury.truth") or {}).get("forge_live_trading")),
+            "treasury_truth": db.kv_get("treasury.truth"),
+            "red_zone": db.kv_get("treasury.red_zone"),
+            "trial_8h": db.kv_get("trial.8h"),
+            "reallocation_top": ((db.kv_get("capital.reallocation") or {}).get("ranking") or [{}])[:3],
+            "tcs_best": ((db.kv_get("treasury.tcs") or {}).get("best") or [])[:3],
+            "agents": db.kv_get("agents.heartbeat"),
+            "freshness": {
+                "snapshot_ts": time.time(),
+                "feed_age_s": (forge.stream.quality.snapshot(time.time_ns()) or {}).get("age_s"),
+                "stale_after_s": 5,
+            },
+        }})
 
 
 def windows_today(db: Any, book: str) -> float:

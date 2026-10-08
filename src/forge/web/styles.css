@@ -106,3 +106,8 @@ footer{text-align:center;padding:16px}
   letter-spacing:.04em;padding:8px 12px;border-bottom:1px solid #1e3d2f;text-align:center}
 .mode-banner.live{background:#2a0f0f;color:#ffb4b4;border-color:#5a2020}
 .mode-banner.stale{opacity:.55;outline:2px dashed #c9a227}
+
+.firm h3{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.firm .livepill{margin-left:auto}
+.livepill.stale{background:#3a2a0a;color:#f0d78c}
+.livepill.stale i{background:#f0d78c}

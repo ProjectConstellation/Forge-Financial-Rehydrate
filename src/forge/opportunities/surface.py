@@ -87,7 +87,17 @@ class Rail:
 def allocate(rails: list[Rail], capital: float, hurdle_per_day: float, include_blocked: bool = False) -> dict[str, Any]:
     """Greedy by score/day (capacity-bounded). Rails with score ≤ 0 get nothing; leftover stays in cash."""
     elig = [r for r in rails if (r.executable or include_blocked) and r.economics.probability > 0]
-    ranked = sorted(elig, key=lambda r: -r.economics.score_per_day(capital, hurdle_per_day))
+    # Venue crowding: discount apparent diversification (blueprint §79)
+    venue_n: dict[str, int] = {}
+    for r in elig:
+        v = (r.id.split(".", 1)[0] if r.id else "?")
+        venue_n[v] = venue_n.get(v, 0) + 1
+    def _adj_score(r):
+        base = r.economics.score_per_day(capital, hurdle_per_day)
+        v = (r.id.split(".", 1)[0] if r.id else "?")
+        crowd = max(0, venue_n.get(v, 1) - 1)
+        return base / (1.0 + 0.25 * crowd)  # correlation_penalty
+    ranked = sorted(elig, key=lambda r: -_adj_score(r))
     left, plan, daily = capital, [], 0.0
     for r in ranked:
         s = r.economics.score_per_day(capital, hurdle_per_day)

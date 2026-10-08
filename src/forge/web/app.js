@@ -9,7 +9,8 @@
   const ago = (s) => s == null ? "—" : s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m`;
   const fmtN = (n) => (n ?? 0).toLocaleString();
 
-  let CSRF = null, equitySeries = [], lastSnapAt = 0, prevMsgs = null, prevTs = null;
+  let CSRF = null, equitySeries = [], try { renderFirmTruth(o); } catch (e) { console.warn("firm", e); }
+    lastSnapAt = 0, prevMsgs = null, prevTs = null;
   const msgRate = [], counter = {shown: 0, target: 0, raf: 0};
 
   async function api(path, opts = {}) {
@@ -99,6 +100,52 @@
   }
 
   /* ---------- snapshot ---------- */
+  
+  function renderFirmTruth(o) {
+    const F = o.firm || {};
+    const truth = F.treasury_truth || {};
+    const trial = F.trial_8h || {};
+    const sc = trial.scorecard || {};
+    const spend = (truth.safe_to_withdraw_estimate || {});
+    const red = !!(F.red_zone && F.red_zone.active) || !!truth.red_zone;
+    if ($("f_nav")) {
+      $("f_nav").textContent = usd(truth.treasury_nav);
+      $("f_red").textContent = red ? "RED ZONE (<$50) · intensify FLOW research" : "above red zone";
+      $("f_red").style.color = red ? "#ff8aa0" : "";
+      $("f_spend").textContent = usd(spend.recommended_usd);
+      $("f_spend_s").textContent = spend.reason || "advisory only";
+      const gap = (sc.objective || {}).gap_usd_per_h;
+      $("f_trial").textContent = (trial.status || "—") + (sc.elapsed_h != null ? ` · ${(+sc.elapsed_h).toFixed(2)}h` : "");
+      $("f_trial_s").textContent = sc.objective
+        ? (`target $1/h · gap $${(+gap).toFixed(3)}/h · ${(sc.economic_result || "PENDING")}`)
+        : "—";
+      const top = (F.reallocation_top || []).map(r => r.id || r.rail).filter(Boolean).slice(0, 3).join(" · ");
+      $("f_realloc").textContent = top ? ("Capital ranking: " + top) : "";
+      const roster = ((F.agents || {}).roster || []);
+      $("f_agents").innerHTML = roster.slice(0, 12).map(a =>
+        `<span class="chip ${a.employment === "STALE" || a.employment === "REVIEW" ? "warn" : ""}">${esc(a.role)} · ${esc(a.employment)}</span>`
+      ).join("");
+    }
+    // freshness from server timestamp (stale if >5s)
+    const snapTs = ((F.freshness || {}).snapshot_ts) || (Date.now() / 1000);
+    const age = (Date.now() / 1000) - snapTs;
+    const fresh = age <= 5;
+    const fp = $("freshpill"), ft = $("freshtxt");
+    if (fp && ft) {
+      fp.className = "livepill" + (fresh ? "" : " stale");
+      ft.textContent = fresh ? "LIVE DATA" : "STALE";
+    }
+    // mode banner
+    const label = F.mode_label || o.mode_label || (o.throughput || {}).mode_label;
+    const b = $("mode-banner");
+    if (b && label) {
+      b.textContent = label + (F.forge_live_trading ? "" : " · algorithmic LIVE OFF");
+      b.classList.toggle("live", !!F.forge_live_trading);
+      b.classList.toggle("stale", !fresh);
+    }
+    if ($("modeb") && label) $("modeb").textContent = (F.forge_live_trading ? "LIVE MONEY" : "PAPER");
+  }
+
   function renderSnapshot(o) {
     lastSnapAt = Date.now();
     $("livepill").className = "livepill on"; $("livetxt").textContent = "LIVE";

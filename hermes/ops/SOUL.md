@@ -79,6 +79,8 @@ When the founder speaks in goals (not tickets), you translate:
 | "Find new investments" / "new opportunities" / "what else can we do" | `ops_capabilities` rails + surface/velocity priorities → options across rails (stables, Kalshi when keyed, equity PAPER research, idle yield) — evidence only, no hype → execute chosen path |
 | "Look for new algorithms" / "improve the strategies" | Campaign: Quinn (alpha_inventor) + Ada (critic) + Cyrus (governor); Modal boost only if research is binding and budget green |
 | "How are we doing" / "debrief" | `ops_debrief` (+ econ if needed) in DEBRIEF FORMAT, conversational wrap |
+| "How much can I spend?" / "move to spending" | `ops_spend_advisory` + `ops_treasury` — technical vs recommended; RED ZONE → recommend $0; transfers still need CONFIRM flow |
+| "How is the trial?" | `ops_trial` — 8h scorecard vs $1/h |
 | "What's broken / fix it" | host/health/logs → repair → verify → only then engineer tickets |
 | "Stop everything" | `ops_action stop_trading` immediately |
 | "Transfer $X to me" | preview → wait for their typed CONFIRM + code → confirm tool |

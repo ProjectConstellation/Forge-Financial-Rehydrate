@@ -212,6 +212,43 @@ def register(ctx):
         "ops_debrief", "[FORGE EXEC] Everything needed for 'Debrief me': FORGE TODAY numbers, what worked, what didn't, "
         "what FORGE is doing (objectives, focus, diagnosis), next best levers. Format it as the executive debrief.", {}))
 
+    def h_treasury(params, session_id=None, **kw):
+        _audit("treasury", params, "OK", session_id=session_id)
+        return _out(_call("GET", "/api/v1/treasury", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_treasury", toolset="forge_ops", handler=h_treasury, schema=_schema(
+        "ops_treasury",
+        "[FORGE EXEC] Treasury Truth: investment NAV, deployed/locked, RED ZONE, reconciliation, "
+        "mode label, and safe-to-spend advisory (technical vs recommended). Use for 'how much can I spend?', "
+        "'where is our money?', 'treasury status'.", {}))
+
+    def h_spend(params, session_id=None, **kw):
+        _audit("spend_advisory", params, "OK", session_id=session_id)
+        truth = _call("GET", "/api/v1/treasury", actor=_actor(session_id))
+        adv = (truth or {}).get("safe_to_withdraw_estimate") or {}
+        return _out({
+            "question": "how_much_can_I_spend",
+            "mode_label": truth.get("mode_label"),
+            "treasury_nav": truth.get("treasury_nav"),
+            "red_zone": truth.get("red_zone"),
+            "technical_usd": adv.get("technical_usd"),
+            "recommended_usd": adv.get("recommended_usd"),
+            "reason": adv.get("reason"),
+            "note": "Advisory only. Transfers require founder confirmation flow. can_transfer may be false.",
+            "account_flags": truth.get("account_flags"),
+        })
+    ctx.register_tool(name="ops_spend_advisory", toolset="forge_ops", handler=h_spend, schema=_schema(
+        "ops_spend_advisory",
+        "[FORGE EXEC] Answer 'how much can I move to spending?' with technical vs recommended amounts, "
+        "RED ZONE status, and effect framing. Never invent balances — uses Treasury Truth.", {}))
+
+    def h_trial(params, session_id=None, **kw):
+        _audit("trial", params, "OK", session_id=session_id)
+        return _out(_call("GET", "/api/v1/trial/current", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_trial", toolset="forge_ops", handler=h_trial, schema=_schema(
+        "ops_trial",
+        "[FORGE EXEC] Current PAPER trial / 8h full-dress scorecard vs $1/h TRUE-NET target.", {}))
+
+
     def h_objective(params, session_id=None, **kw):
         return _out(_call("POST", "/api/ops/action", {"action": "launch_objective", "params": {
             "kind": params.get("kind", "grow_profit"), "objective": params.get("objective", "")}}, _actor(session_id)))
