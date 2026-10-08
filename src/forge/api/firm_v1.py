@@ -57,6 +57,8 @@ def mount_firm_v1(app: FastAPI, forge: Any) -> None:
             "opportunity_memory": forge.db.kv_get("lab.opportunity_memory"),
             "luke_orchestration": forge.db.kv_get("lab.luke_orchestration"),
             "money_scorecard": forge.db.kv_get("lab.money_scorecard"),
+            "kalshi": forge.db.kv_get("lab.kalshi_capital_policy"),
+            "multi_venue": forge.db.kv_get("lab.multi_venue_mandate"),
             "events": forge.db.kv_get("lab.economic_events"),
             "ts": time.time(),
         })

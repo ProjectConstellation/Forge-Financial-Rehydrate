@@ -16,3 +16,14 @@ Never in git, logs, browser, or LLM prompts. Operator pasted keys in chat on 202
 | Coinbase CDP wallet secret (Agentic Wallet / x402) | When agentic-wallet rail is activated |
 | OpenRouter (Jev only) | `OPENROUTER_API_KEY_JEV` | ✅ 2026-10-07; account credit $5. Used ONLY for `typesafe/jev-router` as DeepSeek-outage failover (measured: routes to deepseek-v4.1-flash via Together, 3–8 s, $0.001–0.003/call). |
 | TypeSafe (optional) | `TYPESAFE_API_KEY` | Not provided. Needed only for the real System One API (sub-second calibrated triage, ~$0.0001/decision). |
+
+## Kalshi activation (founder — 2026-10-08)
+
+1. Create/login at https://kalshi.com
+2. API Keys: https://docs.kalshi.com/getting_started/api_keys — create key, download private key PEM + copy API Key ID
+3. SCP PEM to forge host, then: 
+4. Fund ~$25 for micro PAPER/LIVE ladder later
+5. Keep KALSHI_LIVE=off until PAPER shadow evidence + explicit founder LIVE auth
+6. Never paste the private key into chat or Cursor
+
+Coinbase = crypto/stables. Kalshi = event contracts. Both add independent FLOW toward $1/h.

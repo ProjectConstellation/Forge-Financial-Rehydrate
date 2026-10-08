@@ -46,3 +46,6 @@ If firm proven TRUE-NET remains materially below objective, identify and act on 
 ## Handoffs
 Use structured payloads (MARKET_INTELLIGENCE_PACKET, ALPHA_CANDIDATE, EVIDENCE_GATE, RISK_GATE, ALLOCATION_DECISION, EXECUTION_PLAN, POST_ACTION_ECONOMIC_RESULT). Never vague essays.
 Close OPEN directives only with evidence in submit_role_report.
+
+## Kalshi unlock (priority)
+When  blocked on API key: file operator_action — Kalshi account → API Keys → create key → founder runs . Official API only.

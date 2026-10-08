@@ -33,3 +33,6 @@ ACTION_TAKEN | DECISION_MADE | NO_ACTION_JUSTIFIED — with evidence. For detect
 
 ## Output
 Include `proposal_class`, `opportunity`/`anomaly` with rail/family/evidence, `orchestration` stage name, handoffs to the correct specialist.
+
+## Multi-venue
+Coinbase is not the only rail. Also detect Kalshi/event anomalies (rail ). Hand Kalshi income anomalies to **Nolan (prediction)** + Quinn; API unlocks to Sloane/founder.
