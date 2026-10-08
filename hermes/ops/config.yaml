@@ -9,7 +9,7 @@ approvals:
 agent:
   # STANDARD intelligence: high (DeepSeek Flash). Deterministic facts use no LLM.
   reasoning_effort: high
-  max_turns: 25
+  max_turns: 30
   disabled_toolsets:
     - terminal
     - code_execution

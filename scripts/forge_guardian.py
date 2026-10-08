@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""FORGE GUARDIAN — root watchdog for the whole money-generating system (runs every 60 s from a systemd timer).
+"""FORGE GUARDIAN — intelligent root watchdog (every 60s).
 
-Layers of self-healing (inner → outer):
-  1. FORGE's own Supervisor restarts crashed/stalled loops inside the engine (per-loop heartbeats).
-  2. systemd restarts any crashed service immediately (Restart=always, StartLimitIntervalSec=0 → never gives up).
-  3. GUARDIAN (this): verifies that every FORGE service is actually *working*, not just "active":
-       - all units active (forge, forge-hermes, forge-tunnel, forge-ops, forge-eng) + timers/paths → start/restart
-       - FORGE API answers /health (3 consecutive misses → restart forge)
-       - engine loops: critical loops stale for ≥ 10 min → restart forge
-       - EXECUTIVE OPS Telegram link: connected since its last start, bot token valid → else restart forge-ops
-       - resources: memory pressure, disk space, swap → alert
-     Every repair is audited (OPS audit trail, hash-chained journal) and the owner gets ONE Telegram note per incident
-     (plus a recovery note) — never routine noise.
-  4. Linode host watchdog (Lassie) reboots the VM if it powers off unexpectedly; every unit is enabled at boot.
+Self-heal layers (inner → outer):
+  1. Engine Supervisor restarts stalled loops.
+  2. systemd Restart=always on units.
+  3. GUARDIAN verifies units are *working*, repairs crashes, alerts once per incident.
+  4. Host watchdog (Lassie) if the VM dies.
+
+Intelligence rules:
+  - Do NOT race intentional restarts/deploys (activating/deactivating/reloading → wait).
+  - Require sustained downtime (DOWN_TICKS) before repair+alert — suppresses "down 1 min" deploy noise.
+  - Suppress recovery chatter for brief incidents (< MIN_INCIDENT_ALERT_S).
+  - Honor /var/lib/forge-guardian/snooze_until (unix ts) during maintenance/deploys.
+  - Never resume trading: process restart is fine; STOPPED trading state lives in DB and must stay STOPPED
+    until founder CONFIRM resume_trading. If trading is STOPPED, say so in repair notes; do not call resume.
+  - Prefer diagnose+repair over blind thrash; audit every repair.
 """
 
 from __future__ import annotations
@@ -26,11 +28,15 @@ from pathlib import Path
 
 API = "http://127.0.0.1:8470"
 STATE = Path("/var/lib/forge-guardian/state.json")
+SNOOZE = Path("/var/lib/forge-guardian/snooze_until")
 UNITS = ["forge", "forge-hermes", "forge-tunnel", "forge-ops", "forge-eng"]
 AUX = ["forge-deployer.timer", "forge-ops-provision.path", "forge-cred-provision.path"]
 CRITICAL_LOOPS = {"api", "market_stream", "feed_watch", "bars_300", "bars_3600", "execution", "treasury", "healing",
                   "crossrail", "crossrail_fast", "settlement_window", "sw_sampler", "kalshi_live", "velocity", "econ"}
 ALERT_COOLDOWN_S = 1800
+DOWN_TICKS = 3          # ~3 min sustained down before repair (timer ~60s)
+MIN_INCIDENT_ALERT_S = 120  # don't Telegram-spam sub-2min blips
+TRANSIENT = {"activating", "deactivating", "reloading", "maintenance"}
 
 
 def sh(*cmd: str, timeout: int = 60) -> subprocess.CompletedProcess:
@@ -41,12 +47,20 @@ def load() -> dict:
     try:
         return json.loads(STATE.read_text())
     except Exception:
-        return {"incidents": {}, "health_miss": 0, "loop_stale_since": {}, "repairs": []}
+        return {"incidents": {}, "health_miss": 0, "loop_stale_since": {}, "down_ticks": {}, "repairs": []}
 
 
 def save(st: dict) -> None:
     STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_text(json.dumps(st))
+
+
+def snoozed() -> bool:
+    try:
+        until = float(SNOOZE.read_text().strip())
+        return time.time() < until
+    except Exception:
+        return False
 
 
 def ops_env() -> dict:
@@ -84,21 +98,57 @@ def audit(action: str, outcome: str, detail: dict) -> None:
         pass
 
 
-def incident(st: dict, key: str, text: str, repaired: bool) -> None:
-    """One owner alert per incident key per cooldown; recovery note when it clears."""
+def trading_stopped_note() -> str:
+    """If trading intentionally STOPPED, never imply we resumed it."""
+    try:
+        st = api("GET", "/api/ops/status", timeout=8)
+        ts = st.get("trading_state") or {}
+        state = ts.get("state") if isinstance(ts, dict) else ts
+        if state == "STOPPED":
+            reason = (ts.get("reason") if isinstance(ts, dict) else "") or "intentional stop"
+            return f" (trading remains STOPPED — {reason[:120]}; will NOT auto-resume)"
+    except Exception:
+        pass
+    return ""
+
+
+def incident(st: dict, key: str, text: str, repaired: bool, *, notify_owner: bool = True) -> None:
     now = time.time()
     inc = st["incidents"].get(key)
-    if inc is None or now - inc.get("alerted", 0) > ALERT_COOLDOWN_S:
-        notify(f"🛡️ FORGE Guardian: {text}" + (" — auto-repaired, verifying." if repaired else ""))
-        st["incidents"][key] = {"since": inc["since"] if inc else now, "alerted": now, "text": text}
+    if notify_owner and (inc is None or now - inc.get("alerted", 0) > ALERT_COOLDOWN_S):
+        notify(f"🛡️ FORGE Guardian: {text}" + (" — auto-repaired, verifying." if repaired else "") + trading_stopped_note())
+        st["incidents"][key] = {"since": inc["since"] if inc else now, "alerted": now, "text": text, "notified": True}
+    else:
+        st["incidents"][key] = {
+            "since": inc["since"] if inc else now,
+            "alerted": (inc or {}).get("alerted", 0),
+            "text": text,
+            "notified": bool((inc or {}).get("notified")),
+        }
     st["repairs"] = (st.get("repairs", []) + [{"ts": now, "key": key, "text": text}])[-50:]
     audit(f"guardian:{key}", "REPAIRED" if repaired else "ALERT", {"text": text})
 
 
 def resolve(st: dict, key: str) -> None:
     inc = st["incidents"].pop(key, None)
-    if inc and inc.get("alerted"):
-        notify(f"✅ FORGE Guardian: recovered — {inc['text']} (down {int((time.time() - inc['since']) / 60)} min)")
+    if not inc:
+        return
+    dur = int(time.time() - inc.get("since", time.time()))
+    # Only ping recovery if we alerted the owner and it wasn't a brief blip
+    if inc.get("notified") and inc.get("alerted") and dur >= MIN_INCIDENT_ALERT_S:
+        notify(f"✅ FORGE Guardian: recovered — {inc['text']} (down {max(1, dur // 60)} min){trading_stopped_note()}")
+    st.setdefault("down_ticks", {}).pop(key, None)
+
+
+def unit_props(unit: str) -> dict:
+    out = sh("systemctl", "show", unit, "-p", "ActiveState", "-p", "SubState", "-p", "Result",
+             "-p", "NRestarts", "-p", "ActiveEnterTimestampMonotonic").stdout
+    props = {}
+    for line in out.splitlines():
+        if "=" in line:
+            k, v = line.split("=", 1)
+            props[k] = v
+    return props
 
 
 def active(unit: str) -> bool:
@@ -106,21 +156,42 @@ def active(unit: str) -> bool:
 
 
 def restart(unit: str) -> None:
-    sh("systemctl", "restart", unit, timeout=120)
+    sh("systemctl", "restart", unit, timeout=180)
 
 
 def check_units(st: dict) -> None:
+    if snoozed():
+        return
+    ticks = st.setdefault("down_ticks", {})
     for u in UNITS + AUX:
         key = f"unit:{u}"
+        props = unit_props(u)
+        sub = props.get("SubState", "")
+        astate = props.get("ActiveState", "")
+        # Mid-transition (deploy/restart) — wait, do not fight systemd
+        if sub in TRANSIENT or astate in ("activating", "deactivating", "reloading"):
+            continue
         if active(u):
+            ticks.pop(key, None)
             resolve(st, key)
             continue
+        ticks[key] = int(ticks.get(key, 0)) + 1
+        if ticks[key] < DOWN_TICKS:
+            # Sustained-down debounce: no restart yet (avoids deploy race + "1 min" spam)
+            continue
         sh("systemctl", "enable", u)
-        restart(u) if not u.endswith((".timer", ".path")) else sh("systemctl", "start", u)
-        incident(st, key, f"{u} was down", repaired=active(u))
+        if u.endswith((".timer", ".path")):
+            sh("systemctl", "start", u)
+        else:
+            restart(u)
+        ok = active(u) or unit_props(u).get("ActiveState") == "activating"
+        incident(st, key, f"{u} was down (sustained ≥{DOWN_TICKS} min)", repaired=ok)
+        ticks[key] = 0
 
 
 def check_api(st: dict) -> dict | None:
+    if snoozed():
+        return None
     try:
         with urllib.request.urlopen(API + "/health", timeout=8) as r:
             ok = r.status == 200
@@ -134,15 +205,19 @@ def check_api(st: dict) -> dict | None:
         except Exception:
             return None
     st["health_miss"] = st.get("health_miss", 0) + 1
+    # 3 misses ≈ 3 min — but skip if unit is mid-restart
+    props = unit_props("forge")
+    if props.get("SubState") in TRANSIENT:
+        return None
     if st["health_miss"] >= 3:
         restart("forge")
         st["health_miss"] = 0
-        incident(st, "api", "FORGE API was unresponsive for 3 min — engine restarted", repaired=True)
+        incident(st, "api", "FORGE API unresponsive ≥3 min — engine restarted", repaired=True)
     return None
 
 
 def check_loops(st: dict, status: dict | None) -> None:
-    if not status:
+    if not status or snoozed():
         return
     stale = set((status.get("health") or {}).get("stale_loops") or [])
     now = time.time()
@@ -152,6 +227,7 @@ def check_loops(st: dict, status: dict | None) -> None:
     st["loop_stale_since"] = since
     long_stale = [k for k, t in since.items() if now - t >= 600 and (k in CRITICAL_LOOPS or len(since) >= 4)]
     if long_stale:
+        # If trading STOPPED intentionally, still restart process (API/health) but note we won't resume trading
         restart("forge")
         st["loop_stale_since"] = {}
         incident(st, "loops", f"engine loops stalled ≥10 min ({', '.join(sorted(long_stale)[:6])}) — engine restarted",
@@ -161,10 +237,15 @@ def check_loops(st: dict, status: dict | None) -> None:
 
 
 def check_telegram(st: dict) -> None:
+    if snoozed():
+        return
     env = ops_env()
     if not env.get("TELEGRAM_BOT_TOKEN") or not active("forge-ops"):
         return
-    started = sh("systemctl", "show", "forge-ops", "-p", "ActiveEnterTimestampMonotonic", "--value").stdout.strip()
+    props = unit_props("forge-ops")
+    if props.get("SubState") in TRANSIENT:
+        return
+    started = props.get("ActiveEnterTimestampMonotonic", "").strip()
     since_start = sh("systemctl", "show", "forge-ops", "-p", "ActiveEnterTimestamp", "--value").stdout.strip()
     log = sh("journalctl", "-u", "forge-ops", "--since", since_start or "-1h", "--no-pager", "-o", "cat").stdout
     connected = "Connected to Telegram" in log
@@ -224,10 +305,12 @@ def main() -> int:
     except Exception:
         pass
     st["last_run"] = time.time()
+    st["snoozed"] = snoozed()
     save(st)
     try:
         api("POST", "/api/ops/guardian", {"last_run": st["last_run"], "open_incidents": st["incidents"],
-                                          "recent_repairs": st.get("repairs", [])[-10:]})
+                                          "recent_repairs": st.get("repairs", [])[-10:],
+                                          "snoozed": st["snoozed"], "down_ticks": st.get("down_ticks", {})})
     except Exception:
         pass
     return 0

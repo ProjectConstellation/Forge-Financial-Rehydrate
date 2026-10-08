@@ -2,6 +2,8 @@
 # FORGE always-on hardening + GUARDIAN watchdog. Run on the FORGE host as root (idempotent; restarts nothing that runs).
 set -euo pipefail
 install -m 700 /srv/forge/scripts/forge_guardian.py /usr/local/sbin/forge-guardian
+install -m 755 /srv/forge/scripts/guardian-snooze.sh /usr/local/sbin/forge-guardian-snooze
+mkdir -p /var/lib/forge-guardian
 # never stop retrying: unlimited restarts for every FORGE service
 for u in forge forge-hermes forge-tunnel forge-ops forge-eng; do
   mkdir -p /etc/systemd/system/$u.service.d
