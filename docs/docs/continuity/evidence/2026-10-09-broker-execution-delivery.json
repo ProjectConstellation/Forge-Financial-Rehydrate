@@ -1,0 +1,1108 @@
+{
+  "ts": 1791510453.3074262,
+  "responses": {
+    "/health": {
+      "status": 200,
+      "data": {
+        "ok": true,
+        "uptime_s": 80
+      }
+    },
+    "/api/v1/research/results": {
+      "status": 200,
+      "data": {
+        "ts": 1791510453.4172387,
+        "cost_by_role_24h": [
+          {
+            "agent": "hermes_governor",
+            "calls": 174,
+            "cost_usd": 0.43724981,
+            "last_call": "2026-10-09T00:58:10.847466+00:00"
+          },
+          {
+            "agent": "perception",
+            "calls": 55,
+            "cost_usd": 0.06347151,
+            "last_call": "2026-10-09T00:30:49.462568+00:00"
+          },
+          {
+            "agent": "diagnostician",
+            "calls": 18,
+            "cost_usd": 0.058144589999999996,
+            "last_call": "2026-10-09T00:52:34.490356+00:00"
+          },
+          {
+            "agent": "hermes_doctor",
+            "calls": 15,
+            "cost_usd": 0.01409748,
+            "last_call": "2026-10-09T00:48:36.665992+00:00"
+          },
+          {
+            "agent": "hermes_treasury",
+            "calls": 8,
+            "cost_usd": 0.01222037,
+            "last_call": "2026-10-09T00:56:41.727181+00:00"
+          },
+          {
+            "agent": "hermes_execution",
+            "calls": 8,
+            "cost_usd": 0.01198693,
+            "last_call": "2026-10-09T00:58:38.423201+00:00"
+          },
+          {
+            "agent": "hermes_adversary",
+            "calls": 8,
+            "cost_usd": 0.011291220000000001,
+            "last_call": "2026-10-09T00:57:37.714262+00:00"
+          },
+          {
+            "agent": "hermes_alpha_inventor",
+            "calls": 7,
+            "cost_usd": 0.01086249,
+            "last_call": "2026-10-09T00:41:39.088501+00:00"
+          },
+          {
+            "agent": "hermes_critic",
+            "calls": 8,
+            "cost_usd": 0.008846670000000001,
+            "last_call": "2026-10-09T00:43:41.010116+00:00"
+          },
+          {
+            "agent": "hermes_prediction",
+            "calls": 5,
+            "cost_usd": 0.0037199200000000003,
+            "last_call": "2026-10-09T00:54:36.308580+00:00"
+          },
+          {
+            "agent": "hermes_scout",
+            "calls": 7,
+            "cost_usd": 0.0033845299999999997,
+            "last_call": "2026-10-09T00:44:38.510276+00:00"
+          },
+          {
+            "agent": "hermes_ops",
+            "calls": 1,
+            "cost_usd": 0.0031116,
+            "last_call": "2026-10-08T15:54:27.155162+00:00"
+          },
+          {
+            "agent": "hermes_rail_hunter",
+            "calls": 4,
+            "cost_usd": 0.0024369,
+            "last_call": "2026-10-08T20:46:42.503951+00:00"
+          },
+          {
+            "agent": "hermes_intelligence",
+            "calls": 1,
+            "cost_usd": 0.00205335,
+            "last_call": "2026-10-09T00:43:40.609292+00:00"
+          }
+        ],
+        "recent_paid_jobs": [
+          {
+            "id": "job_1m4f2cde34jzqnf64cnmk5",
+            "kind": "evolution_3600",
+            "status": "DONE",
+            "est_cost_usd": "0.01741669",
+            "ts_start": "2026-10-09T00:53:03.043116+00:00",
+            "ts_end": "2026-10-09T00:55:48.123046+00:00",
+            "error": null
+          },
+          {
+            "id": "job_1m4ez029nendsb8cnkpfe6",
+            "kind": "evolution_300",
+            "status": "DONE",
+            "est_cost_usd": "0.03553913",
+            "ts_start": "2026-10-08T23:53:52.693605+00:00",
+            "ts_end": "2026-10-08T23:58:33.977902+00:00",
+            "error": null
+          },
+          {
+            "id": "job_1m4eytnv18nrq45q3vsztq",
+            "kind": "evolution_3600",
+            "status": "DONE",
+            "est_cost_usd": "0.01679658",
+            "ts_start": "2026-10-08T23:50:56.097058+00:00",
+            "ts_end": "2026-10-08T23:53:22.535212+00:00",
+            "error": null
+          },
+          {
+            "id": "job_1m4eyg2ybc5c00wrddsf3t",
+            "kind": "evolution_300",
+            "status": "DONE",
+            "est_cost_usd": "0.03777827",
+            "ts_start": "2026-10-08T23:45:09.067971+00:00",
+            "ts_end": "2026-10-08T23:50:25.954485+00:00",
+            "error": null
+          },
+          {
+            "id": "job_1m4eycffs7spgprds3m5ys",
+            "kind": "evolution_3600",
+            "status": "FAILED",
+            "est_cost_usd": "0",
+            "ts_start": "2026-10-08T23:43:10.841922+00:00",
+            "ts_end": null,
+            "error": "orphaned by restart"
+          },
+          {
+            "id": "job_1m4ey378jcps66vmffb35a",
+            "kind": "evolution_300",
+            "status": "DONE",
+            "est_cost_usd": "0.03527783",
+            "ts_start": "2026-10-08T23:38:07.506496+00:00",
+            "ts_end": "2026-10-08T23:42:40.705576+00:00",
+            "error": null
+          },
+          {
+            "id": "job_1m4exyadrbkmk2vtksw2v7",
+            "kind": "evolution_3600",
+            "status": "DONE",
+            "est_cost_usd": "0.01569045",
+            "ts_start": "2026-10-08T23:35:26.904412+00:00",
+            "ts_end": "2026-10-08T23:37:37.388732+00:00",
+            "error": null
+          },
+          {
+            "id": "job_1m4exn1rt49djjyqdf8hwk",
+            "kind": "evolution_300",
+            "status": "DONE",
+            "est_cost_usd": "0.03543224",
+            "ts_start": "2026-10-08T23:30:23.130525+00:00",
+            "ts_end": "2026-10-08T23:34:56.786936+00:00",
+            "error": null
+          }
+        ],
+        "validation_receipts_24h": [
+          {
+            "family": "mean_reversion+trend_pullback",
+            "where_run": "modal\u00d74",
+            "candidates": 7660,
+            "passed_validation": 313,
+            "promoted": 0,
+            "latest": "2026-10-08T23:58:33.991223+00:00"
+          },
+          {
+            "family": "liquidity_provision+momentum",
+            "where_run": "modal\u00d74",
+            "candidates": 859,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-09T00:55:48.135094+00:00"
+          },
+          {
+            "family": "momentum",
+            "where_run": "modal\u00d74",
+            "candidates": 539,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-09T00:55:48.135323+00:00"
+          },
+          {
+            "family": "breakout",
+            "where_run": "modal\u00d74",
+            "candidates": 474,
+            "passed_validation": 5,
+            "promoted": 3,
+            "latest": "2026-10-09T00:55:48.132399+00:00"
+          },
+          {
+            "family": "mean_reversion",
+            "where_run": "modal\u00d74",
+            "candidates": 378,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-09T00:55:48.133994+00:00"
+          },
+          {
+            "family": "volatility",
+            "where_run": "modal\u00d74",
+            "candidates": 321,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-09T00:55:48.128971+00:00"
+          },
+          {
+            "family": "liquidity_provision",
+            "where_run": "modal\u00d74",
+            "candidates": 282,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-08T23:58:33.982449+00:00"
+          },
+          {
+            "family": "trend_pullback",
+            "where_run": "modal\u00d74",
+            "candidates": 183,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-08T23:06:36.334708+00:00"
+          },
+          {
+            "family": "mean_reversion+trend_pullback",
+            "where_run": "local",
+            "candidates": 176,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-09T01:43:40.734616+00:00"
+          },
+          {
+            "family": "rotation",
+            "where_run": "modal\u00d74",
+            "candidates": 175,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-09T00:55:48.131698+00:00"
+          },
+          {
+            "family": "trend_pullback+momentum",
+            "where_run": "modal\u00d74",
+            "candidates": 165,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-08T17:37:18.530517+00:00"
+          },
+          {
+            "family": "liquidity_provision+momentum",
+            "where_run": "local",
+            "candidates": 116,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-09T01:45:28.082996+00:00"
+          }
+        ],
+        "outstanding_reservations": [],
+        "modal_experiment": null,
+        "alpaca_training": {
+          "ts": 1791508605.2778144,
+          "status": null,
+          "rail": "alpaca.equities.paper",
+          "training_nav_usd": 50.0,
+          "live_ready": false,
+          "evaluation": {
+            "algorithm_version": "relative_momentum_fixed_v1",
+            "n_trades": 3,
+            "hypothetical_net_usd": 0.35963704736040275,
+            "earned_usd": 0.0,
+            "evidence_verdict": "INSUFFICIENT_INDEPENDENT_EVIDENCE",
+            "next_action": "autonomous_equity timer executes preregistered future paper blocks and rotates failed mechanisms"
+          }
+        },
+        "alpaca_automatic_trials": {
+          "schema": 1,
+          "mode": "LOCAL_FORWARD_PAPER",
+          "registered_at": 1791508592.9968443,
+          "registered_after": "2026-10-09",
+          "bankroll_usd": 50.0,
+          "trials": [
+            {
+              "id": "equity-0-1-2026-10-09",
+              "mechanism": "relative_momentum",
+              "generation": 1,
+              "after": "2026-10-09",
+              "state": "READY",
+              "allocation_usd": 10.0,
+              "net_usd": 0.0,
+              "trades": [],
+              "position": null,
+              "sessions": 0,
+              "first_open": null,
+              "last_close": null,
+              "contract": {
+                "signal_lookback_sessions": 20,
+                "hold_sessions": 5,
+                "next_open_execution": true,
+                "round_trip_cost_bps": 20,
+                "stop_close_return": -0.05,
+                "max_trial_loss_usd": 1.0,
+                "review_sessions": 20,
+                "min_closed_trades": 3,
+                "selection": "net > 0 and net exceeds equal-capital buy-and-hold",
+                "live_promotion": false
+              }
+            },
+            {
+              "id": "equity-1-1-2026-10-09",
+              "mechanism": "dip_reversion",
+              "generation": 1,
+              "after": "2026-10-09",
+              "state": "READY",
+              "allocation_usd": 10.0,
+              "net_usd": 0.0,
+              "trades": [],
+              "position": null,
+              "sessions": 0,
+              "first_open": null,
+              "last_close": null,
+              "contract": {
+                "signal_lookback_sessions": 20,
+                "hold_sessions": 5,
+                "next_open_execution": true,
+                "round_trip_cost_bps": 20,
+                "stop_close_return": -0.05,
+                "max_trial_loss_usd": 1.0,
+                "review_sessions": 20,
+                "min_closed_trades": 3,
+                "selection": "net > 0 and net exceeds equal-capital buy-and-hold",
+                "live_promotion": false
+              }
+            }
+          ],
+          "history": [],
+          "earned_usd": 0.0,
+          "live_ready": false,
+          "checked_at": 1791508618.5971897,
+          "blocked": null,
+          "data_last": "2026-10-08T04:00:00Z",
+          "simulated_closed_net_usd": 0.0,
+          "paper_balance_usd": 50.0,
+          "limitations": [
+            "IEX daily bar local simulation, not actual broker fills",
+            "next-open price modeled after session; gaps can exceed stop budget",
+            "20bps costs assumed; real execution needs spread, fees and reconciliation",
+            "one positive review window is not proof of a durable edge"
+          ],
+          "history_count": 0
+        },
+        "alpaca_broker_experiments": {
+          "ts": 1791510437.0042942,
+          "mode": "ALPACA_BROKER_PAPER",
+          "authority": "RUNNING",
+          "status": "SESSION_CLOSED",
+          "experiment": {
+            "capital_usd": 10.0,
+            "first_mid": null,
+            "generation": 1,
+            "id": "9a9255ef9ee70ebe5f6bca14b50db032",
+            "last_session": null,
+            "lookback": 20,
+            "mechanism": "relative_momentum",
+            "sessions": 0,
+            "symbol": "QQQ-USD"
+          },
+          "open_positions": {
+            "count": 0,
+            "positions": []
+          },
+          "paper_cash_usd": 50.0,
+          "paper_closed_net_usd": 0.0,
+          "live_income_usd": 0.0,
+          "live_eligible": false,
+          "cost_basis": "actual_paper_fill_prices_plus_assumed_5bps_fee_per_leg",
+          "reconciliation": {
+            "issues": [],
+            "ok": true,
+            "ts": 1791510437.0042942
+          },
+          "contract": {
+            "authority": "PAPER_ONLY",
+            "bankroll_usd": 50.0,
+            "cost_basis": "actual_paper_fill_prices_plus_assumed_5bps_fee_per_leg",
+            "max_open_usd": 25.0,
+            "max_order_usd": 15.0,
+            "max_positions": 2,
+            "registered_at": "2026-10-09T01:39:11.557780+00:00"
+          },
+          "fresh": true
+        },
+        "last_local_research": {
+          "artifact_consumed": true,
+          "candidates": 12,
+          "earned_cash_usd": 0,
+          "evaluated": 2589,
+          "interval_s": 3600,
+          "outcome": "RESEARCH_EVIDENCE_PENDING_FORWARD_VALIDATION",
+          "ts": 1791510328.0983615,
+          "where": "local"
+        },
+        "outcome_contract": "call/job\u2192objective\u2192artifact\u2192decision\u2192outcome; no claim inferred from narrative",
+        "primary_target_usd_per_hour": 1.0,
+        "progress_floor_usd_per_hour": 0.5
+      }
+    },
+    "/api/v1/portfolios/capabilities": {
+      "status": 200,
+      "data": {
+        "ts": 1791510453.4283426,
+        "mode": "paper",
+        "coinbase": {
+          "real_nav_usd": 28.27,
+          "source_ts": 1791510377.0673888,
+          "fresh": true,
+          "account_flags": {
+            "can_trade": true,
+            "can_transfer": false,
+            "fee_tier": "Intro",
+            "portfolio_type": "DEFAULT"
+          },
+          "session": "24/7_subject_to_venue_status"
+        },
+        "kalshi": {
+          "authenticated_adapter_configured": true,
+          "real_balance_usd": 0.0,
+          "source_ts": 1791510437.8063245,
+          "session": "24/7_except_Thursday_03_05_America_New_York_maintenance",
+          "requirements": [
+            "market_status",
+            "funding",
+            "fees",
+            "settlement_rules",
+            "independent_evidence",
+            "live_gate"
+          ]
+        },
+        "alpaca": {
+          "paper_configured": true,
+          "source_ts": 1791510452.6782653,
+          "training_nav_usd": 50.0,
+          "broker_simulation_equity_usd": 100000.0,
+          "regular_session_open": false,
+          "paper_endpoint": true,
+          "session": "calendar_and_asset_eligible_24_5_sessions",
+          "live_ready": false,
+          "execution_adapter": "BROKER_PAPER_GATEWAY",
+          "execution_status": "SESSION_CLOSED",
+          "execution_ts": 1791510437.0042942,
+          "execution_fresh": true,
+          "reconciliation": {
+            "issues": [],
+            "ok": true,
+            "ts": 1791510437.0042942
+          },
+          "constraints": [
+            "no_leverage",
+            "account_assets_permissions",
+            "settlement",
+            "fees_spread_slippage",
+            "exit_reconciliation"
+          ]
+        },
+        "data_feeds": {
+          "odds_configured": false,
+          "twelve_data_configured": true,
+          "execution_assumed": false
+        },
+        "registered_rails": [
+          {
+            "id": "cdp.onchain",
+            "status": "BLOCKED",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.equity",
+            "status": "CANDIDATE",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.futures",
+            "status": "DATA_ONLY",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.listing_discovery",
+            "status": "SHADOW",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.prediction",
+            "status": "UNAVAILABLE",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.spot",
+            "status": "SHADOW",
+            "executable": 1
+          },
+          {
+            "id": "coinbase.stable_peg_mm",
+            "status": "SHADOW",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.stable_triangle",
+            "status": "SHADOW",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.staking",
+            "status": "BLOCKED",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.usdc_rewards",
+            "status": "LIVE",
+            "executable": 1
+          },
+          {
+            "id": "kalshi.events",
+            "status": "SHADOW",
+            "executable": 0
+          },
+          {
+            "id": "x402.data",
+            "status": "CANDIDATE",
+            "executable": 0
+          }
+        ],
+        "allocation_rule": "only funded eligible executable rails with clean evidence enter money allocation"
+      }
+    },
+    "/api/agent/tools": {
+      "status": 200,
+      "data": {
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "submit_paper_experiment",
+              "description": "Queue a typed equity hypothesis for automatic broker-paper trial, risk checks, measurement and rotation. No orders or LIVE authority.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "objective_id": {
+                    "type": "string"
+                  },
+                  "mechanism": {
+                    "type": "string",
+                    "enum": [
+                      "relative_momentum",
+                      "dip_reversion",
+                      "trend_following"
+                    ]
+                  },
+                  "symbol": {
+                    "type": "string",
+                    "enum": [
+                      "QQQ",
+                      "SPY",
+                      "IWM",
+                      "GLD",
+                      "TLT"
+                    ]
+                  },
+                  "lookback_sessions": {
+                    "type": "integer",
+                    "enum": [
+                      10,
+                      20,
+                      40
+                    ]
+                  },
+                  "hypothesis": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "objective_id",
+                  "mechanism",
+                  "hypothesis"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_research_results",
+              "description": "Measured research costs, decisions, paper experiments and automatic next actions; separate from LIVE income.",
+              "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_system_state",
+              "description": "Treasury, capital regime, fees, mode, population counts, hurdle rate.",
+              "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_market_state",
+              "description": "Live regime/feature snapshot for markets (latest bar).",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "symbols": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "interval_s": {
+                    "type": "integer",
+                    "enum": [
+                      300,
+                      3600
+                    ]
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "list_strategies",
+              "description": "Strategies with state and evidence.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "states": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "PRODUCTION",
+                        "CHALLENGER",
+                        "SHADOW",
+                        "EXPERIMENTAL",
+                        "HIBERNATING",
+                        "RETIRED",
+                        "QUARANTINED"
+                      ]
+                    }
+                  },
+                  "limit": {
+                    "type": "integer"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_strategy",
+              "description": "Full genome, lineage, holdout/forward metrics and state history.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_recent_failures",
+              "description": "Recent losing positions, demotions and gate failures with reasons.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "limit": {
+                    "type": "integer"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_missed_opportunities",
+              "description": "Counterfactual outcomes of rejected/observed opportunities (missed winners, avoided losers).",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "limit": {
+                    "type": "integer"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_calibration",
+              "description": "Predicted-vs-actual reliability by prediction class.",
+              "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_research_log",
+              "description": "Recent research notes/lessons (institutional memory).",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "limit": {
+                    "type": "integer"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "submit_strategy_candidates",
+              "description": "Queue genomes for evaluation by the evolution engine (validated, backtested, gated).",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "candidates": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                },
+                "required": [
+                  "candidates"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "record_lesson",
+              "description": "Persist a structured lesson.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "statement": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "number"
+                  },
+                  "family": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "statement",
+                  "confidence"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "request_research",
+              "description": "Ask the Improvement Loop to prioritize a horizon/focus next cycle.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "interval_s": {
+                    "type": "integer",
+                    "enum": [
+                      300,
+                      3600
+                    ]
+                  },
+                  "focus": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "focus"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_opportunity_surface",
+              "description": "All income rails: status, executability, blockers, evidence-based score/day, allocator plan now vs if-unblocked, fixed costs (Coinbase One).",
+              "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_crossrail_evidence",
+              "description": "Kalshi\u2194Coinbase prediction engine evidence: Brier model/market/stacked, settled shadow P&L by signal kind, lead/lag, edge half-life, RTI-proxy error, calibrator weights.",
+              "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_profit_velocity",
+              "description": "FORGE PROFIT VELOCITY (the master KPI): realized true-net $/h (1h/4h/24h), expected $/h (live-now / proven / potential frontier), target, treasury regime, binding constraint, per-stream evidence tiers, scaling curve and ranked levers (marginal $/h of capital, proof, flow). Optimise research toward its top levers.",
+              "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_shadow_rails",
+              "description": "Paper results of non-core rails (stable peg maker, stable triangle, listing discovery).",
+              "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_listing_events",
+              "description": "Recent Coinbase product/listing/status/doc-page discovery events.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "limit": {
+                    "type": "integer"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_intelligence_budget",
+              "description": "Live DeepSeek balance, 24h pace/headroom, value-per-$ by role (incl. Hermes roles).",
+              "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_role_brief",
+              "description": "FIRST CALL OF EVERY RUN: your engineered role brief (constitution, mission, decision rights, evidence standard, output schema), live world state and your role's track record.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "submit_role_report",
+              "description": "LAST CALL OF EVERY RUN: structured role report (JSON object per your brief's output schema).",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string"
+                  },
+                  "report": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "role",
+                  "report"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_recent_candidates",
+              "description": "LLM-designed strategy candidates with gate/sealed outcomes and inventor/adversary forecasts.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "limit": {
+                    "type": "integer"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_role_reports",
+              "description": "Recent structured reports of all roles (blind-panel verdicts hidden until reconciled).",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "limit": {
+                    "type": "integer"
+                  },
+                  "role": {
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_prompt_performance",
+              "description": "Prompt genome versions per role with runs, KPI, cost, calibration and challenger status.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "submit_prompt_variant",
+              "description": "Architect only: propose ONE challenger prompt variant (edit 1\u20133 sections) with a hypothesis.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string"
+                  },
+                  "parent_version": {
+                    "type": "integer"
+                  },
+                  "hypothesis": {
+                    "type": "string"
+                  },
+                  "sections": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "role",
+                  "hypothesis",
+                  "sections"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "get_system_health",
+              "description": "Self-healing health: loop heartbeats, feed state, event-loop lag, quarantines, circuits, recent warnings/errors, memory.",
+              "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "submit_research_lead",
+              "description": "Record a research lead (new rail, fee/rule change, market-structure anomaly, data source) with sources; it is triaged by FORGE and valued if it leads to income.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "expected_value_usd_month": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "title",
+                  "body",
+                  "category"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "paper_only_ledger": true,
+  "deployment_hashes_verified": 62
+}

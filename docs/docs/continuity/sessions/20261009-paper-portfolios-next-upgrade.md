@@ -1,0 +1,10 @@
+# Paper portfolios and next-upgrade continuity entry
+
+- **Recorded:** 2026-10-09T01:59:50Z
+- **Scope:** Imagine Forge only; private income engine for Northstar Imagine. No other server projects touched.
+- **Founder direction:** document the next-upgrade plan on continuity; keep multiple fake-paper experiments running across portfolios so Forge learns what works. Preserve ambition for at least $0.50/hour and target $1/hour, while avoiding wasteful inference spend. Paper tests are not actual earnings.
+- **Action in this session:** continuity documentation only. No runtime configuration, strategy code, account funding, live trading, or transfers changed.
+- **Runtime verification:** `forge.service`, `forge-alpaca-broker.service`, `forge-equity-forward.timer`, `forge-continuity.timer` reported ACTIVE at 01:59:50 UTC. Strategy counts and per-rail snapshot, including 12 open sports-paper positions constrained by the desk's open-position cap, are documented in `reports/2026-10-09-PAPER-PORTFOLIO-PLAN.md`.
+- **Evidence caveats:** strategy and signal counts do not prove independent samples, fills, profitable outcomes or income. Latest inspected Coinbase paper book had 49 closed positions and no open position; latest sports lab tick had candidate edges but placed none because the book cap was reached. Alpaca broker-paper and future-only modeled trials are different evidence types. No actual earnings are claimed.
+- **Known next-upgrade check:** reconcile sports odds-feed key naming (`THE_ODDS_API_KEY` in the desk vs `ODDS_API_KEY` in capability reporting), expose last-success/freshness timestamps, and prevent stale cached input from making new simulated orders. The current evidence does not establish that the sports feed is inactive.
+- **Next:** implement the shared paper experiment lifecycle, freshness-gated cross-rail opportunity intake, realistic fill/settlement/cost records, independent forward validation, automatic experiment dispositions, and economics/inference attribution as specified in the plan. Retain paper/live isolation and STOPPED precedence. Rehydrate from the report plus continuity index before making changes.

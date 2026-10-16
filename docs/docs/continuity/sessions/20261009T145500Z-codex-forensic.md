@@ -1,0 +1,51 @@
+# Session 20261009T145500Z — Codex Forge forensic review
+
+## Authorization and boundary
+Founder requests a target-host forensic review, research on Anthropic Haiku 5.5 vs Forge's configured DeepSeek model before changing any Hermes credentials, and a reduction of the active PAPER observer from four hours to one hour. Credentials must not be changed. No LIVE activation, orders, transfers, or money movement. All Forge work is on forgeadmin@104.237.131.109:/srv/forge. Preserve all existing dirty/untracked work.
+
+## Baseline
+At 2026-10-09 14:53 UTC, host forge reported 4 vCPU / 7.8 GiB RAM. forge.service, forge-hermes.service, forge-ops.service, forge-eng.service, forge-alpaca-broker.service, and forge-paper-trial-4h.service were active; restart counts 0. Hermes ops and eng config declare DeepSeek model deepseek-flash at high effort. No credential values were read or changed.
+
+Existing run 20261009T141137Z is PAPER_ONLY and read-only, samples every 300 seconds. Latest available sample at 14:52:40Z reported 107 strategy records / 107 unique DNA, 180 research rows / 84 genomes, zero validation passes/promotions/sealed exams, no main-book paper positions opened since start, and zero LIVE position rows. 24h settled income $0; recorded net costs -$3.38791341 (inference -$0.62023129, estimated compute -$2.76768212). Separate Alpaca broker PAPER lane had one QQQ position and live_eligible=false. Kalshi live order table empty and live gate blocked. Evidence: /srv/forge/var/research/paper_trial_4h/20261009T141137Z/latest.json. Existing trial's 4h interval has not completed.
+
+Read AGENTS, continuity README/REHYDRATE/FOUNDER_INTENT/CURRENT_STATE/WORK_QUEUE/KNOWN_ISSUES/SYSTEM_MAP/TEAM_ECONOMICS, latest trial journal, and session template. Target Git main is ahead 55 commits and has extensive pre-existing modifications/untracked files; ownership UNKNOWN. No reset/stage/broad overwrite.
+
+## Scope
+Read-only: provider/model and Hermes schedule/run history, role reports/workflows, inference/compute attribution, rails, fills/settlements, historical run evidence.
+Paper observer only: preserve old partial snapshots; replace the active four-hour observer with a properly labeled one-hour read-only observation and unique output path.
+Continuity: this journal and a forensic report.
+No source runtime, strategy, risk, execution, Hermes credentials/model configuration, orders, funds, transfers, or live-mode changes. No tests requested or run.
+
+## Checkpoints
+- 2026-10-09 14:55 UTC: Direct connection verified; services/config/run evidence read. Current system has no verified LIVE income in sampled window; candidate creation, shadow outcomes and PAPER marks do not count as earnings.
+- Next: inspect run/agent history and official/current model evidence; preserve old run receipt; define and start 1h observer; complete forensic report.
+
+## Handoff
+Keep provider credentials untouched. Report only timestamped target evidence. Label historical, sampled, paper, live and estimated figures distinctly.
+
+## 2026-10-09 15:20 UTC checkpoint — source evidence gathered; 1h observation remains independent
+
+### Trial state
+- Preserved the interrupted four-hour observer `20261009T141137Z`: 10 snapshots retained, last sample `2026-10-09T14:57:47Z`, interruption receipt `/srv/forge/var/research/paper_trial_4h/20261009T141137Z/interrupted.json`. It was a read-only monitor; it did not itself start strategy tests or submit orders.
+- Started target-only `forge-paper-trial-1h.service` at `2026-10-09T15:00:17Z`, expected end `16:00:17Z`; still active at checkpoint. Paper-only, 300-second sample cadence, 5% CPU quota, 128 MiB cap, no order or strategy config mutation. Final result must be read after service completion.
+- At sample `15:15:40Z`: 50 strategy records / 50 distinct DNA hashes since start; 48 research trials / 31 genomes; 0 validation passes, promotions, or sealed exams; active populations EXPERIMENTAL 238, SHADOW 62, CHALLENGER 12; no new paper positions since start; no live positions; no Kalshi live orders; `research_experiments` empty. This is early progress only, not a one-hour result.
+
+### Financial and execution evidence
+- Treasury-board sample updated `2026-10-09T15:11:42Z`: settled income in the rolling 24h `$0`; internal true net `-$3.23999151` / `-$0.13499965 per hour`; internal inference cost `$0.62023129`; compute estimate `$2.61976022`; display NAV `$28.27` (not independently reconciled as actual live wealth). Modal research status was `WAITING_EXPLICIT_EXPERIMENT`, not launched; month spend `$25.53746149` of `$30`.
+- Current 24h token query used `julianday` to avoid SQLite ISO-date lexical comparison errors: 301 DeepSeek Flash calls; input 4,775,986, cached 3,117,696, output 1,116,197; local recorded cost `$0.619214`; first call `2026-10-08T15:19:07Z`, last call `2026-10-09T00:58:38Z`. No later inference calls are recorded even though Hermes cron registry has newer `last_status=ok` entries. Governor is 174 calls / `$0.43725` (about 71% of recorded inference cost). Calls default to `reasoning_effort=high` in target `src/forge/brain/deepseek.py` and pass DeepSeek `thinking=enabled`; per-call effort metadata is missing/null for most records, reducing auditability.
+- Important cost reconciliation gap: official DeepSeek current off-peak rates are cache-hit `$0.003`, cache-miss `$0.15`, output `$0.60` per MTok. Applying those rates to the stored token counts (assuming cached counts are disjoint and every request was under 100k tokens) implies about `$0.928` for this window, not `$0.619`. The DeepSeek API docs define `prompt_tokens = cache_hit + cache_miss`. Actual provider account billing was not queried; treat this as a likely local pricing/usage reconciliation gap, not a provider invoice.
+- Hermes registry has 13 enabled high-effort jobs, all `last_status=ok`; the latest runs range `12:00`–`15:10Z`. However, the newest durable role report is treasury at `00:58:41Z`, newest `agent_results` at `00:10:38Z` (62 total), and current heartbeats show 12 `STALE_SLA_BREACH`, one Ops `WAITING_DEPENDENCY`. Open ops directives increased to 6,654; DONE 298, CANCELLED 343. Scheduler `ok` is not evidence of durable analysis or income; Hermes CLI list/run history also disagrees with the JSON job registry.
+- Position check upgrade (explicitly requested earlier) deployed on the real Forge target: shared PositionVigil scan/sleep is now 5 seconds, state timestamps update at ~5s. Forge execution loop itself already ticks the execution gateway every ~2s. This vigil reads `positions` for the current Forge book; it does not monitor the separate Alpaca account. Alpaca paper engine separately ticks every 15s when regular session is open and 60s when closed. Forge remained global PAPER/LIVE-off; no live positions or orders observed.
+- Restart exposed a paper-only record-integrity defect: GTC-USD position `pos_1m4a2vwnxeapak2ze7bsf6` had an exit rejected `NO_MARKET_DATA`, then the generic PAPER reap/force path closed it with no exit price and realized P&L 0. Its ledger still has only the original 11.73 GTC buy / `$1.760673` debit and no sale/credit. It is not a real fill and capital was not recirculated. Do not count this as realized loss/profit; treat paper inventory/position ledger as unreconciled. No code/test change made to this path during the active observation.
+- The observer reports lifetime closed paper positions 56 / net `-$2.212455`; these are lifetime grouped counts, not a 1h/24h result. Sports paper has 12 open and 16 void with no settled P&L; current sports source returned HTTP 401 in startup logs. Alpaca broker lane remains paper-only/live_eligible=false with one QQQ-USD training position; the `$100k` Alpaca paper account is not Forge capital. Local forward paper trials are still READY with no sessions. Kalshi live order table is empty and live route blocked.
+- Existing population archive is disk-backed (SQLite about 594 MB; retired genome JSON about 82 MB). It is not evidence that all retired strategies occupy RAM; host previously had about 2.7 GiB available. Do not purge/archive-compress without evidence on RAM/storage need.
+
+### Model research status
+- Official Anthropic newsroom checked on 2026-10-09: Claude Haiku 5.5, API ID `claude-haiku-5-5`, released Oct 7, is the latest Haiku release found. Anthropic's “~75% lower” claim is relative to Haiku 4.5, not DeepSeek. Haiku 5.5 supports explicit effort, defaults to medium, and needs `effort=high` set explicitly.
+- Official DeepSeek release docs say `deepseek-flash` serves V4.1 Flash; `deepseek-v4-pro` API requests route to V4.1 Flash until V4.1-Pro launches. No official V4.1-Pro launch found through Oct 9. DeepSeek docs support high reasoning effort on V4.1 Flash. The target is configured for DeepSeek Flash/high; no provider credentials or model settings changed.
+- Anthropic list price for prompts <=100k: `$0.10` input, `$0.50` output, `$0.01` cache reads per MTok. DeepSeek Flash off-peak: `$0.15` uncached input, `$0.60` output, `$0.003` cache hit (50% off peak schedule). Same-token estimate from current ledger mix is `$0.755` for Haiku vs `$0.928` DeepSeek, excluding cache writes and assuming equal token/cache behavior; this is illustrative, not an actual bill or promise of lower spend.
+- Artificial Analysis comparison is Haiku High vs DeepSeek Flash Max (not same effort): Intelligence Index 38 vs 39; cost/task `$0.08` vs `$0.27`; output speed 179 vs 217 t/s; time-to-first-token 22.65 vs 1.12s; weighted time/task 194 vs 274s. High effort Haiku scores 38 vs GPT-6 Luna High 33, but per-task cost `$0.08` vs `$0.03` due different token use (55k vs 20k). This supports neither a blanket quality win nor a reliability claim.
+- Alpaca docs reviewed: paper fills omit market impact, latency slippage, queue position, and can fill beyond NBBO quantity; cash-account U.S. stock commission-free does not eliminate pass-through fees; overnight equity is 24/5 on eligible symbols and limit orders, not continuous 24/7.
+
+### Next
+Wait for the observer's `20261009T150017Z/final.json` after `16:00:17Z`; append exact final counts and economics to this journal and write the consolidated target-side report. Keep credentials, live authority, and funds untouched. No tests run.

@@ -1,0 +1,1328 @@
+{
+  "ts": 1791508889.0398133,
+  "responses": {
+    "/health": {
+      "status": 200,
+      "data": {
+        "ok": true,
+        "uptime_s": 146
+      }
+    },
+    "/api/v1/risk": {
+      "status": 200,
+      "data": {
+        "trading_state": "RUNNING",
+        "breakers": [],
+        "red_zone": {
+          "active": true,
+          "nav": 28.27,
+          "policy": "intensify_flow_research_not_size",
+          "ts": 1791508866.3321242
+        }
+      }
+    },
+    "/api/v1/performance?window=24h": {
+      "status": 200,
+      "data": {
+        "economic_truth": {
+          "net_usd": -8.727500690000001,
+          "true_net_usd": -8.727500690000001,
+          "usd_per_h": -0.36364585417497536,
+          "usd_per_hour": -0.36364585417497536,
+          "settled_income_usd": 0.0,
+          "kalshi": 0.0,
+          "spot": 0.0,
+          "idle_yield": 0.0,
+          "intelligence": -0.64490806,
+          "compute": -8.08259263,
+          "data": -0.0,
+          "operating_cost_usd": 8.727500690000001,
+          "costs": {
+            "OPEX:COMPUTE": 8.08259263,
+            "OPEX:INFERENCE": 0.64490806
+          },
+          "basis": "settled_live_income_less_all_recorded_forge_operating_costs",
+          "idle_reward_coverage": "verified_counter",
+          "compute_cost_basis": "internal_estimate_pending_provider_reconciliation",
+          "unposted_historical_inference_estimate_usd": 0.51501959,
+          "excluded": [
+            "deposits",
+            "paper_profit",
+            "shadow_forecasts",
+            "unrealized_marks"
+          ],
+          "seconds": 86400.00187897682,
+          "since": 1791422489.0704951,
+          "ts": 1791508889.072374
+        },
+        "window": "last 24h",
+        "since_utc": "2026-10-08T01:21:29.070495+00:00",
+        "seconds": 86400,
+        "data_coverage_from_utc": "2026-10-08T01:21:21.834358+00:00",
+        "LIVE": {
+          "true_net_usd": -8.727501,
+          "usd_per_hour": -0.363646,
+          "wallet_change_before_cashflow_reconciliation_usd": 0.0,
+          "settled_income_usd": 0.0,
+          "cost_basis": "settled_live_income_less_all_recorded_forge_operating_costs",
+          "realized_usd": 0.0,
+          "treasury_now_usd": 28.27,
+          "withdrawn_to_owner_usd": 0.0,
+          "note": "settled LIVE outcomes minus Forge operating costs; deposits/paper excluded; wallet change is a separate diagnostic"
+        },
+        "PAPER": {
+          "equity_change_usd": -1.38068,
+          "realized_usd": -0.332985,
+          "unrealized_now_usd": 0.0,
+          "paper_equity_now_usd": 26.1955
+        },
+        "COSTS": {
+          "fees_usd": 0.539549,
+          "inference_usd": 0.644908,
+          "compute_usd": 8.082593
+        },
+        "deployed_now_usd": 0.0,
+        "deployed_pct": 0.0,
+        "by_strategy": [
+          {
+            "book": "paper",
+            "strategy_id": "stg_1m4edyzwt6awhb4s5b0h9f",
+            "trades": 10,
+            "pnl": 0.0559
+          },
+          {
+            "book": "paper",
+            "strategy_id": "stg_1m4afpwtn2db8rrjwjeycg",
+            "trades": 1,
+            "pnl": 0.0229
+          },
+          {
+            "book": "paper",
+            "strategy_id": "stg_1m4eafmsq3q90xhpm2tst2",
+            "trades": 4,
+            "pnl": 0.005
+          },
+          {
+            "book": "paper",
+            "strategy_id": "stg_1m4eafmty1q6srdc825aab",
+            "trades": 3,
+            "pnl": -0.0002
+          },
+          {
+            "book": "paper",
+            "strategy_id": "stg_1m4eafmrw1tyd18jh2rw7c",
+            "trades": 7,
+            "pnl": -0.0039
+          },
+          {
+            "book": "paper",
+            "strategy_id": "stg_1m4eafmsz944d9n1wxdz4g",
+            "trades": 1,
+            "pnl": -0.0042
+          },
+          {
+            "book": "paper",
+            "strategy_id": "stg_1m4eafmty4xagh8sdrjf55",
+            "trades": 1,
+            "pnl": -0.007
+          },
+          {
+            "book": "paper",
+            "strategy_id": "stg_1m4ed53w35z9j09arbp32w",
+            "trades": 1,
+            "pnl": -0.0132
+          },
+          {
+            "book": "paper",
+            "strategy_id": "stg_1m4ej74jf4dz45fm0eybt5",
+            "trades": 6,
+            "pnl": -0.0388
+          },
+          {
+            "book": "paper",
+            "strategy_id": "stg_1m4afsyw6347xf6tcyb106",
+            "trades": 1,
+            "pnl": -0.0525
+          }
+        ],
+        "by_rail_shadow": [
+          {
+            "rail": "kalshi.TAKE",
+            "n": 1415,
+            "pnl_per_contract_basis": 27.2
+          },
+          {
+            "rail": "kalshi.TAKE_THRESH",
+            "n": 801,
+            "pnl_per_contract_basis": 26.57
+          },
+          {
+            "rail": "kalshi.SETTLE_WINDOW",
+            "n": 711,
+            "pnl_per_contract_basis": 5.504
+          },
+          {
+            "rail": "kalshi.SURFACE_RV",
+            "n": 922,
+            "pnl_per_contract_basis": -7.73
+          },
+          {
+            "rail": "kalshi.MODEL_RAW",
+            "n": 1626,
+            "pnl_per_contract_basis": -8.68
+          },
+          {
+            "rail": "kalshi.MAKE",
+            "n": 1723,
+            "pnl_per_contract_basis": -49.45
+          },
+          {
+            "rail": "coinbase.listing_discovery",
+            "n": 3,
+            "pnl_usd": -0.197658
+          },
+          {
+            "rail": "coinbase.stable_peg_mm",
+            "n": 32,
+            "pnl_usd": 0.143887
+          },
+          {
+            "rail": "coinbase.stable_triangle",
+            "n": 669,
+            "pnl_usd": 0.730319
+          },
+          {
+            "rail": "odds.paper_h2h",
+            "n": 28,
+            "pnl_usd": null
+          },
+          {
+            "rail": "twelve.equity_paper",
+            "n": 45,
+            "pnl_usd": 0.0
+          }
+        ]
+      }
+    },
+    "/api/v1/research/results": {
+      "status": 200,
+      "data": {
+        "ts": 1791508889.3062863,
+        "cost_by_role_24h": [
+          {
+            "agent": "hermes_governor",
+            "calls": 174,
+            "cost_usd": 0.43724981,
+            "last_call": "2026-10-09T00:58:10.847466+00:00"
+          },
+          {
+            "agent": "perception",
+            "calls": 56,
+            "cost_usd": 0.0655022,
+            "last_call": "2026-10-09T00:30:49.462568+00:00"
+          },
+          {
+            "agent": "diagnostician",
+            "calls": 18,
+            "cost_usd": 0.058144589999999996,
+            "last_call": "2026-10-09T00:52:34.490356+00:00"
+          },
+          {
+            "agent": "hermes_doctor",
+            "calls": 15,
+            "cost_usd": 0.01409748,
+            "last_call": "2026-10-09T00:48:36.665992+00:00"
+          },
+          {
+            "agent": "hermes_treasury",
+            "calls": 8,
+            "cost_usd": 0.01222037,
+            "last_call": "2026-10-09T00:56:41.727181+00:00"
+          },
+          {
+            "agent": "hermes_execution",
+            "calls": 8,
+            "cost_usd": 0.01198693,
+            "last_call": "2026-10-09T00:58:38.423201+00:00"
+          },
+          {
+            "agent": "hermes_adversary",
+            "calls": 8,
+            "cost_usd": 0.011291220000000001,
+            "last_call": "2026-10-09T00:57:37.714262+00:00"
+          },
+          {
+            "agent": "hermes_alpha_inventor",
+            "calls": 7,
+            "cost_usd": 0.01086249,
+            "last_call": "2026-10-09T00:41:39.088501+00:00"
+          },
+          {
+            "agent": "hermes_critic",
+            "calls": 8,
+            "cost_usd": 0.008846670000000001,
+            "last_call": "2026-10-09T00:43:41.010116+00:00"
+          },
+          {
+            "agent": "hermes_prediction",
+            "calls": 5,
+            "cost_usd": 0.0037199200000000003,
+            "last_call": "2026-10-09T00:54:36.308580+00:00"
+          },
+          {
+            "agent": "hermes_scout",
+            "calls": 7,
+            "cost_usd": 0.0033845299999999997,
+            "last_call": "2026-10-09T00:44:38.510276+00:00"
+          },
+          {
+            "agent": "hermes_ops",
+            "calls": 1,
+            "cost_usd": 0.0031116,
+            "last_call": "2026-10-08T15:54:27.155162+00:00"
+          },
+          {
+            "agent": "hermes_rail_hunter",
+            "calls": 4,
+            "cost_usd": 0.0024369,
+            "last_call": "2026-10-08T20:46:42.503951+00:00"
+          },
+          {
+            "agent": "hermes_intelligence",
+            "calls": 1,
+            "cost_usd": 0.00205335,
+            "last_call": "2026-10-09T00:43:40.609292+00:00"
+          }
+        ],
+        "recent_paid_jobs": [
+          {
+            "id": "job_1m4f2cde34jzqnf64cnmk5",
+            "kind": "evolution_3600",
+            "status": "DONE",
+            "est_cost_usd": "0.01741669",
+            "ts_start": "2026-10-09T00:53:03.043116+00:00",
+            "ts_end": "2026-10-09T00:55:48.123046+00:00",
+            "error": null
+          },
+          {
+            "id": "job_1m4ez029nendsb8cnkpfe6",
+            "kind": "evolution_300",
+            "status": "DONE",
+            "est_cost_usd": "0.03553913",
+            "ts_start": "2026-10-08T23:53:52.693605+00:00",
+            "ts_end": "2026-10-08T23:58:33.977902+00:00",
+            "error": null
+          },
+          {
+            "id": "job_1m4eytnv18nrq45q3vsztq",
+            "kind": "evolution_3600",
+            "status": "DONE",
+            "est_cost_usd": "0.01679658",
+            "ts_start": "2026-10-08T23:50:56.097058+00:00",
+            "ts_end": "2026-10-08T23:53:22.535212+00:00",
+            "error": null
+          },
+          {
+            "id": "job_1m4eyg2ybc5c00wrddsf3t",
+            "kind": "evolution_300",
+            "status": "DONE",
+            "est_cost_usd": "0.03777827",
+            "ts_start": "2026-10-08T23:45:09.067971+00:00",
+            "ts_end": "2026-10-08T23:50:25.954485+00:00",
+            "error": null
+          },
+          {
+            "id": "job_1m4eycffs7spgprds3m5ys",
+            "kind": "evolution_3600",
+            "status": "FAILED",
+            "est_cost_usd": "0",
+            "ts_start": "2026-10-08T23:43:10.841922+00:00",
+            "ts_end": null,
+            "error": "orphaned by restart"
+          },
+          {
+            "id": "job_1m4ey378jcps66vmffb35a",
+            "kind": "evolution_300",
+            "status": "DONE",
+            "est_cost_usd": "0.03527783",
+            "ts_start": "2026-10-08T23:38:07.506496+00:00",
+            "ts_end": "2026-10-08T23:42:40.705576+00:00",
+            "error": null
+          },
+          {
+            "id": "job_1m4exyadrbkmk2vtksw2v7",
+            "kind": "evolution_3600",
+            "status": "DONE",
+            "est_cost_usd": "0.01569045",
+            "ts_start": "2026-10-08T23:35:26.904412+00:00",
+            "ts_end": "2026-10-08T23:37:37.388732+00:00",
+            "error": null
+          },
+          {
+            "id": "job_1m4exn1rt49djjyqdf8hwk",
+            "kind": "evolution_300",
+            "status": "DONE",
+            "est_cost_usd": "0.03543224",
+            "ts_start": "2026-10-08T23:30:23.130525+00:00",
+            "ts_end": "2026-10-08T23:34:56.786936+00:00",
+            "error": null
+          }
+        ],
+        "validation_receipts_24h": [
+          {
+            "family": "mean_reversion+trend_pullback",
+            "where_run": "modal\u00d74",
+            "candidates": 7660,
+            "passed_validation": 313,
+            "promoted": 0,
+            "latest": "2026-10-08T23:58:33.991223+00:00"
+          },
+          {
+            "family": "liquidity_provision+momentum",
+            "where_run": "modal\u00d74",
+            "candidates": 859,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-09T00:55:48.135094+00:00"
+          },
+          {
+            "family": "mean_reversion+trend_pullback",
+            "where_run": "modal\u00d716",
+            "candidates": 579,
+            "passed_validation": 11,
+            "promoted": 0,
+            "latest": "2026-10-08T01:44:42.602776+00:00"
+          },
+          {
+            "family": "momentum",
+            "where_run": "modal\u00d74",
+            "candidates": 548,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-09T00:55:48.135323+00:00"
+          },
+          {
+            "family": "breakout",
+            "where_run": "modal\u00d74",
+            "candidates": 476,
+            "passed_validation": 5,
+            "promoted": 3,
+            "latest": "2026-10-09T00:55:48.132399+00:00"
+          },
+          {
+            "family": "mean_reversion",
+            "where_run": "modal\u00d74",
+            "candidates": 381,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-09T00:55:48.133994+00:00"
+          },
+          {
+            "family": "volatility",
+            "where_run": "modal\u00d74",
+            "candidates": 321,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-09T00:55:48.128971+00:00"
+          },
+          {
+            "family": "liquidity_provision",
+            "where_run": "modal\u00d74",
+            "candidates": 283,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-08T23:58:33.982449+00:00"
+          },
+          {
+            "family": "trend_pullback",
+            "where_run": "modal\u00d74",
+            "candidates": 183,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-08T23:06:36.334708+00:00"
+          },
+          {
+            "family": "rotation",
+            "where_run": "modal\u00d74",
+            "candidates": 175,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-09T00:55:48.131698+00:00"
+          },
+          {
+            "family": "trend_pullback+momentum",
+            "where_run": "modal\u00d74",
+            "candidates": 166,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-08T17:37:18.530517+00:00"
+          },
+          {
+            "family": "mean_reversion+trend_pullback",
+            "where_run": "local",
+            "candidates": 129,
+            "passed_validation": 0,
+            "promoted": 0,
+            "latest": "2026-10-09T01:14:21.871910+00:00"
+          }
+        ],
+        "outstanding_reservations": [],
+        "modal_experiment": null,
+        "alpaca_training": {
+          "ts": 1791508605.2778144,
+          "status": null,
+          "rail": "alpaca.equities.paper",
+          "training_nav_usd": 50.0,
+          "live_ready": false,
+          "evaluation": {
+            "algorithm_version": "relative_momentum_fixed_v1",
+            "n_trades": 3,
+            "hypothetical_net_usd": 0.35963704736040275,
+            "earned_usd": 0.0,
+            "evidence_verdict": "INSUFFICIENT_INDEPENDENT_EVIDENCE",
+            "next_action": "autonomous_equity timer executes preregistered future paper blocks and rotates failed mechanisms"
+          }
+        },
+        "alpaca_automatic_trials": {
+          "schema": 1,
+          "mode": "LOCAL_FORWARD_PAPER",
+          "registered_at": 1791508592.9968443,
+          "registered_after": "2026-10-09",
+          "bankroll_usd": 50.0,
+          "trials": [
+            {
+              "id": "equity-0-1-2026-10-09",
+              "mechanism": "relative_momentum",
+              "generation": 1,
+              "after": "2026-10-09",
+              "state": "READY",
+              "allocation_usd": 10.0,
+              "net_usd": 0.0,
+              "trades": [],
+              "position": null,
+              "sessions": 0,
+              "first_open": null,
+              "last_close": null,
+              "contract": {
+                "signal_lookback_sessions": 20,
+                "hold_sessions": 5,
+                "next_open_execution": true,
+                "round_trip_cost_bps": 20,
+                "stop_close_return": -0.05,
+                "max_trial_loss_usd": 1.0,
+                "review_sessions": 20,
+                "min_closed_trades": 3,
+                "selection": "net > 0 and net exceeds equal-capital buy-and-hold",
+                "live_promotion": false
+              }
+            },
+            {
+              "id": "equity-1-1-2026-10-09",
+              "mechanism": "dip_reversion",
+              "generation": 1,
+              "after": "2026-10-09",
+              "state": "READY",
+              "allocation_usd": 10.0,
+              "net_usd": 0.0,
+              "trades": [],
+              "position": null,
+              "sessions": 0,
+              "first_open": null,
+              "last_close": null,
+              "contract": {
+                "signal_lookback_sessions": 20,
+                "hold_sessions": 5,
+                "next_open_execution": true,
+                "round_trip_cost_bps": 20,
+                "stop_close_return": -0.05,
+                "max_trial_loss_usd": 1.0,
+                "review_sessions": 20,
+                "min_closed_trades": 3,
+                "selection": "net > 0 and net exceeds equal-capital buy-and-hold",
+                "live_promotion": false
+              }
+            }
+          ],
+          "history": [],
+          "earned_usd": 0.0,
+          "live_ready": false,
+          "checked_at": 1791508618.5971897,
+          "blocked": null,
+          "data_last": "2026-10-08T04:00:00Z",
+          "simulated_closed_net_usd": 0.0,
+          "paper_balance_usd": 50.0,
+          "limitations": [
+            "IEX daily bar local simulation, not actual broker fills",
+            "next-open price modeled after session; gaps can exceed stop budget",
+            "20bps costs assumed; real execution needs spread, fees and reconciliation",
+            "one positive review window is not proof of a durable edge"
+          ],
+          "history_count": 0
+        },
+        "last_local_research": {
+          "artifact_consumed": true,
+          "candidates": 12,
+          "earned_cash_usd": 0,
+          "evaluated": 2626,
+          "interval_s": 3600,
+          "outcome": "RESEARCH_EVIDENCE_PENDING_FORWARD_VALIDATION",
+          "ts": 1791508569.2116663,
+          "where": "local"
+        },
+        "outcome_contract": "call/job\u2192objective\u2192artifact\u2192decision\u2192outcome; no claim inferred from narrative",
+        "primary_target_usd_per_hour": 1.0,
+        "progress_floor_usd_per_hour": 0.5
+      }
+    },
+    "/api/v1/portfolios/capabilities": {
+      "status": 200,
+      "data": {
+        "ts": 1791508889.3293998,
+        "mode": "paper",
+        "coinbase": {
+          "real_nav_usd": 28.27,
+          "source_ts": 1791508745.7188475,
+          "fresh": true,
+          "account_flags": {
+            "can_trade": true,
+            "can_transfer": false,
+            "fee_tier": "Intro",
+            "portfolio_type": "DEFAULT"
+          },
+          "session": "24/7_subject_to_venue_status"
+        },
+        "kalshi": {
+          "authenticated_adapter_configured": true,
+          "real_balance_usd": 0.0,
+          "source_ts": 1791508866.5781198,
+          "session": "24/7_except_Thursday_03_05_America_New_York_maintenance",
+          "requirements": [
+            "market_status",
+            "funding",
+            "fees",
+            "settlement_rules",
+            "independent_evidence",
+            "live_gate"
+          ]
+        },
+        "alpaca": {
+          "paper_configured": true,
+          "source_ts": 1791508638.899908,
+          "training_nav_usd": 50.0,
+          "broker_simulation_equity_usd": 100000.0,
+          "regular_session_open": false,
+          "paper_endpoint": true,
+          "session": "calendar_and_asset_eligible_24_5_sessions",
+          "live_ready": false,
+          "execution_adapter": "DETERMINISTIC_INTEGRATION_REQUIRED",
+          "constraints": [
+            "no_leverage",
+            "account_assets_permissions",
+            "settlement",
+            "fees_spread_slippage",
+            "exit_reconciliation"
+          ]
+        },
+        "data_feeds": {
+          "odds_configured": false,
+          "twelve_data_configured": true,
+          "execution_assumed": false
+        },
+        "registered_rails": [
+          {
+            "id": "cdp.onchain",
+            "status": "BLOCKED",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.equity",
+            "status": "CANDIDATE",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.futures",
+            "status": "DATA_ONLY",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.listing_discovery",
+            "status": "SHADOW",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.prediction",
+            "status": "UNAVAILABLE",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.spot",
+            "status": "SHADOW",
+            "executable": 1
+          },
+          {
+            "id": "coinbase.stable_peg_mm",
+            "status": "SHADOW",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.stable_triangle",
+            "status": "SHADOW",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.staking",
+            "status": "BLOCKED",
+            "executable": 0
+          },
+          {
+            "id": "coinbase.usdc_rewards",
+            "status": "LIVE",
+            "executable": 1
+          },
+          {
+            "id": "kalshi.events",
+            "status": "SHADOW",
+            "executable": 0
+          },
+          {
+            "id": "x402.data",
+            "status": "CANDIDATE",
+            "executable": 0
+          }
+        ],
+        "allocation_rule": "only funded eligible executable rails with clean evidence enter money allocation"
+      }
+    },
+    "/api/v1/workforce/results": {
+      "status": 200,
+      "data": {
+        "actions": [
+          {
+            "action": "MISSED_FIRE_WAKE",
+            "role": "ops",
+            "woke": true
+          },
+          {
+            "action": "MISSED_FIRE_WAKE",
+            "role": "alpha_inventor",
+            "woke": true
+          },
+          {
+            "action": "MISSED_FIRE_WAKE",
+            "role": "critic",
+            "woke": true
+          },
+          {
+            "action": "MISSED_FIRE_WAKE",
+            "role": "adversary",
+            "woke": true
+          },
+          {
+            "action": "MISSED_FIRE_WAKE",
+            "role": "scout",
+            "woke": true
+          },
+          {
+            "action": "PROMPT_TWEAK",
+            "result": null,
+            "role": "prediction"
+          },
+          {
+            "action": "MISSED_FIRE_WAKE",
+            "role": "execution",
+            "woke": true
+          },
+          {
+            "action": "REPORT_ONLY_PAGE",
+            "role": "treasury",
+            "score": -0.9
+          },
+          {
+            "action": "STALE_HANDOFF",
+            "id": "ho_c505013905a5",
+            "to": "ops"
+          }
+        ],
+        "collaboration": {
+          "completion_rate_2h": 1.0,
+          "handoffs_created_2h": 3,
+          "handoffs_done_2h": 3,
+          "handoffs_pending": 1,
+          "open_workflows": [
+            {
+              "owner": "ops",
+              "stage": "MEMORY_UPDATE",
+              "status": "OPEN",
+              "workflow_id": "wf_7cd138b45366"
+            }
+          ],
+          "stale_handoffs": 1
+        },
+        "delta_proven_usd_per_h": -0.0,
+        "delta_stable_net": 0.0,
+        "firm_grade": "THEATER_RISK",
+        "missed_fire_roles": [
+          "ops",
+          "alpha_inventor",
+          "critic",
+          "adversary",
+          "scout",
+          "execution"
+        ],
+        "policy": {
+          "grades": [
+            "EARNER",
+            "CONTRIBUTOR",
+            "MIXED",
+            "REPORT_ONLY",
+            "MISSING"
+          ],
+          "money_okr": "raise proven TRUE-NET $/h via evidenced sleeves (stables PAPER while LIVE off)",
+          "prompt_tweaks": "auto after 2+ consecutive REPORT_ONLY",
+          "report_only": "FORBIDDEN when open work exists"
+        },
+        "proven_usd_per_h": 0.00233374868658437,
+        "realized_economic_truth": {
+          "basis": "settled_live_income_less_all_recorded_forge_operating_costs",
+          "compute": -0.01741669,
+          "compute_cost_basis": "internal_estimate_pending_provider_reconciliation",
+          "costs": {
+            "OPEX:COMPUTE": 0.01741669,
+            "OPEX:INFERENCE": 0.1318037
+          },
+          "data": -0.0,
+          "excluded": [
+            "deposits",
+            "paper_profit",
+            "shadow_forecasts",
+            "unrealized_marks"
+          ],
+          "idle_reward_coverage": "verified_counter",
+          "idle_yield": 0.0,
+          "intelligence": -0.1318037,
+          "kalshi": 0.0,
+          "net_usd": -0.14922038999999998,
+          "operating_cost_usd": 0.14922038999999998,
+          "seconds": 3600.0,
+          "settled_income_usd": 0.0,
+          "since": 1791505146.0992882,
+          "spot": 0.0,
+          "true_net_usd": -0.14922038999999998,
+          "ts": 1791508746.0992882,
+          "unposted_historical_inference_estimate_usd": 0.10515551000000001,
+          "usd_per_h": -0.14922038999999998,
+          "usd_per_hour": -0.14922038999999998
+        },
+        "recent_scores": [
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "REPORT_ONLY",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 233,
+            "result_type": "NO_ACTION_JUSTIFIED",
+            "role": "treasury",
+            "score": -0.9,
+            "summary_head": "RED ZONE; no new fundable destination. equity 26.229750 = cash 23.237641 + deployed 2.992109 (identity exact, residual 0); free capital 20.614666; SURVIVAL max ",
+            "tags": [
+              "NO_ACTION_UNJUSTIFIED",
+              "ARTIFACTS"
+            ],
+            "ts": 1791507521.9279525
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 232,
+            "result_type": "DECISION_MADE",
+            "role": "governor",
+            "score": 2.0,
+            "summary_head": "Next marginal dollar -> $0 new trading capital (cash $23.24 + reserve $2.62 idle): 0 executable rails carry income; stable_triangle/peg are ONE byte-identical c",
+            "tags": [
+              "DECISION_MADE"
+            ],
+            "ts": 1791507459.6803973
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "REPORT_ONLY",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 231,
+            "result_type": null,
+            "role": "prediction",
+            "score": -0.5,
+            "summary_head": "",
+            "tags": [
+              "MISSING_RESULT_TYPE"
+            ],
+            "ts": 1791507392.5006275
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 230,
+            "result_type": "ACTION_TAKEN",
+            "role": "doctor",
+            "score": 5.6,
+            "summary_head": "Health 86/100 (system 80), 63/63 loops alive, ai/modal circuits CLOSED, unknown_orders/paper_rebuilds/bad_ticks 0; only ACTIVE quarantine is MORPHO-USD@3600 (IN",
+            "tags": [
+              "ACTION_TAKEN",
+              "ARTIFACTS",
+              "CLOSED_DIR_8"
+            ],
+            "ts": 1791506979.8142269
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 229,
+            "result_type": "MEASURE_RESULT",
+            "role": "scout",
+            "score": 2.1,
+            "summary_head": "MEASURE_RESULT capital-hours: KPI live yield is priced on a phantom $28.27 treasury (0.0375*28.27/365/24 reproduces live_now.idle_usd_per_h exactly), overstatin",
+            "tags": [
+              "MISSING_RESULT_TYPE",
+              "ACTION_LANGUAGE",
+              "ARTIFACTS",
+              "CLOSED_DIR_1"
+            ],
+            "ts": 1791506830.5967016
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 228,
+            "result_type": "DECISION_MADE",
+            "role": "critic",
+            "score": 4.6,
+            "summary_head": "EVIDENCE_GATE FAIL answering dir 1057: not one claimed +EV sleeve clears the firm's P(net>0)>=0.90 bar - the three top-ranked kalshi levers all have mu_lcb<0 (p",
+            "tags": [
+              "DECISION_MADE",
+              "ACTION_LANGUAGE",
+              "ARTIFACTS",
+              "CLOSED_DIR_1"
+            ],
+            "ts": 1791506766.5507047
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 227,
+            "result_type": "ACTION_TAKEN",
+            "role": "intelligence",
+            "score": 3.6,
+            "summary_head": "AGENT-PERFORMANCE ANOMALY_DETECT. The Earnings Escalator (FORGE's most frequent directive source) is absent from forge_get_prompt_performance's 14-row genome re",
+            "tags": [
+              "ACTION_TAKEN",
+              "ARTIFACTS"
+            ],
+            "ts": 1791506716.1963134
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 226,
+            "result_type": "ACTION_TAKEN",
+            "role": "alpha_inventor",
+            "score": 4.2,
+            "summary_head": "Filed a NEW model_improvement lead (lead_1m4f1vjw393p931j040w6q): stables genomes are VENUE-INERT - my own stg_1m4eztdx38nb4z6nrgxptj was structurally accepted ",
+            "tags": [
+              "ACTION_TAKEN",
+              "ARTIFACTS"
+            ],
+            "ts": 1791506654.2816272
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 225,
+            "result_type": "DECISION_MADE",
+            "role": "execution",
+            "score": 2.6,
+            "summary_head": "Peg/triangle rails remain UNMEASURABLE: two shadow_rails snapshots 16.6s apart (ts 1791506439.76/1791506456.40) both show USDT-USDC bid=null, queue_ahead=null, ",
+            "tags": [
+              "DECISION_MADE",
+              "ARTIFACTS"
+            ],
+            "ts": 1791506579.1825318
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 224,
+            "result_type": "ACTION_TAKEN",
+            "role": "adversary",
+            "score": 3.9,
+            "summary_head": "RISK_GATE 2026-10-09T00:41Z: market risk is unchanged from 00:28Z (pegmaker inv_qty 250.16 of my 300 halt line, 0 round trips; equity flat over 11 min) but I fo",
+            "tags": [
+              "ACTION_TAKEN",
+              "ARTIFACTS"
+            ],
+            "ts": 1791506524.0066068
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 223,
+            "result_type": "DECISION_MADE",
+            "role": "governor",
+            "score": 3.5,
+            "summary_head": "Re-allocated vigil-freed PAPER capital (dirs 602/622/763/849) to usdc_rewards ($0.0026/day; only LIVE executable rail); $0 new capital to any trading sleeve. Re",
+            "tags": [
+              "DECISION_MADE",
+              "ACTION_LANGUAGE"
+            ],
+            "ts": 1791506449.4670506
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 222,
+            "result_type": "DECISION_MADE",
+            "role": "treasury",
+            "score": 3.1,
+            "summary_head": "RED ZONE: equity 26.247962 = cash 24.487289 + deployed 1.760673; free capital 21.862493; SURVIVAL max single sleeve 15.748777. Realized 24h TRUE-NET is -0.0299/",
+            "tags": [
+              "DECISION_MADE",
+              "ARTIFACTS",
+              "CLOSED_DIR_1"
+            ],
+            "ts": 1791506440.5602338
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 221,
+            "result_type": "ANOMALY_DETECT",
+            "role": "scout",
+            "score": 2.1,
+            "summary_head": "Coinbase One's changed page headlines 'zero trading fees', but FORGE's own membership record shows the benefit excludes Advanced and has no simple-trade API: it",
+            "tags": [
+              "MISSING_RESULT_TYPE",
+              "ACTION_LANGUAGE",
+              "ARTIFACTS",
+              "CLOSED_DIR_1"
+            ],
+            "ts": 1791505718.2297153
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 220,
+            "result_type": "DECISION_MADE",
+            "role": "critic",
+            "score": 4.6,
+            "summary_head": "EVIDENCE_GATE FAIL on the CHALLENGER tier, now falsified forward: the genome I failed at 00:10Z on 'forward n=3, combined P=1.00' has since printed forward n=14",
+            "tags": [
+              "DECISION_MADE",
+              "ACTION_LANGUAGE",
+              "ARTIFACTS",
+              "CLOSED_DIR_1"
+            ],
+            "ts": 1791505696.4892998
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 219,
+            "result_type": "DECISION_MADE",
+            "role": "alpha_inventor",
+            "score": 4.9,
+            "summary_head": "Verified THREE independent blockers making the standing 'only stables microstructure challengers' directive unactionable: (1) the 40-market genome DSL universe ",
+            "tags": [
+              "DECISION_MADE",
+              "ARTIFACTS",
+              "CLOSED_DIR_6"
+            ],
+            "ts": 1791505581.8219085
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 218,
+            "result_type": "DECISION_MADE",
+            "role": "execution",
+            "score": 2.5,
+            "summary_head": "Peg rails stay SHADOW; feasibility FAILS again. Counterfactual ledger applies a flat per-trade haircut (0.010 TP / 0.014 SL|TIME, 30/30 symbols, recomputed twic",
+            "tags": [
+              "DECISION_MADE",
+              "CLOSED_DIR_1"
+            ],
+            "ts": 1791505463.7125897
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 217,
+            "result_type": "ACTION_TAKEN",
+            "role": "adversary",
+            "score": 3.6,
+            "summary_head": "RISK_GATE 2026-10-09T00:28Z: the ruin path is OPEX, not market risk - compute+inference ($26.22255) is 92.8% of the -$28.245 true-net loss and 99.9% of equity, ",
+            "tags": [
+              "ACTION_TAKEN",
+              "ARTIFACTS"
+            ],
+            "ts": 1791505428.052733
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "REPORT_ONLY",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 216,
+            "result_type": null,
+            "role": "prediction",
+            "score": -0.5,
+            "summary_head": "",
+            "tags": [
+              "MISSING_RESULT_TYPE"
+            ],
+            "ts": 1791505421.290363
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 215,
+            "result_type": "DECISION_MADE",
+            "role": "treasury",
+            "score": 2.3,
+            "summary_head": "RED ZONE: equity 26.247962 = cash 24.487289 + deployed 1.760673; free capital 21.862493; SURVIVAL max single sleeve 0.6*equity = 15.748777. Reported proven 0.03",
+            "tags": [
+              "DECISION_MADE",
+              "ARTIFACTS"
+            ],
+            "ts": 1791505408.4979596
+          },
+          {
+            "earnings_attribution": "REQUIRES_SETTLED_RECONCILED_LIVE_OUTCOME",
+            "grade": "CONTRIBUTOR",
+            "outcome_class": "UNPRODUCTIVE",
+            "report_id": 214,
+            "result_type": "ACTION_TAKEN",
+            "role": "governor",
+            "score": 3.6,
+            "summary_head": "Held $0 trading capital: no executable +EV rail (stable sleeve de-certified - 2 book fills vs 1456 claimed RTs, forward -1.6%/trade, ~140bp spot-fee misroute); ",
+            "tags": [
+              "ACTION_TAKEN",
+              "ARTIFACTS"
+            ],
+            "ts": 1791505402.6979597
+          }
+        ],
+        "report_only_roles": [
+          "treasury"
+        ],
+        "roster": [
+          {
+            "age_s": null,
+            "avg_score_5": null,
+            "last_result_type": null,
+            "last_summary": null,
+            "last_tags": null,
+            "latest_grade": "MISSING",
+            "missed_fire": true,
+            "open_directives": 82,
+            "pending_handoffs": 1,
+            "role": "ops"
+          },
+          {
+            "age_s": 1286,
+            "avg_score_5": 3.62,
+            "last_result_type": "DECISION_MADE",
+            "last_summary": "Next marginal dollar -> $0 new trading capital (cash $23.24 + reserve $2.62 idle): 0 executable rails carry income; stable_triangle/peg are ONE byte-identical c",
+            "last_tags": [
+              "DECISION_MADE"
+            ],
+            "latest_grade": "CONTRIBUTOR",
+            "missed_fire": false,
+            "open_directives": 127,
+            "pending_handoffs": 0,
+            "role": "governor"
+          },
+          {
+            "age_s": 2091,
+            "avg_score_5": 5.12,
+            "last_result_type": "ACTION_TAKEN",
+            "last_summary": "Filed a NEW model_improvement lead (lead_1m4f1vjw393p931j040w6q): stables genomes are VENUE-INERT - my own stg_1m4eztdx38nb4z6nrgxptj was structurally accepted ",
+            "last_tags": [
+              "ACTION_TAKEN",
+              "ARTIFACTS"
+            ],
+            "latest_grade": "CONTRIBUTOR",
+            "missed_fire": true,
+            "open_directives": 94,
+            "pending_handoffs": 0,
+            "role": "alpha_inventor"
+          },
+          {
+            "age_s": 1979,
+            "avg_score_5": 4.97,
+            "last_result_type": "DECISION_MADE",
+            "last_summary": "EVIDENCE_GATE FAIL answering dir 1057: not one claimed +EV sleeve clears the firm's P(net>0)>=0.90 bar - the three top-ranked kalshi levers all have mu_lcb<0 (p",
+            "last_tags": [
+              "DECISION_MADE",
+              "ACTION_LANGUAGE",
+              "ARTIFACTS",
+              "CLOSED_DIR_1"
+            ],
+            "latest_grade": "CONTRIBUTOR",
+            "missed_fire": true,
+            "open_directives": 13,
+            "pending_handoffs": 0,
+            "role": "critic"
+          },
+          {
+            "age_s": 2222,
+            "avg_score_5": 4.03,
+            "last_result_type": "ACTION_TAKEN",
+            "last_summary": "RISK_GATE 2026-10-09T00:41Z: market risk is unchanged from 00:28Z (pegmaker inv_qty 250.16 of my 300 halt line, 0 round trips; equity flat over 11 min) but I fo",
+            "last_tags": [
+              "ACTION_TAKEN",
+              "ARTIFACTS"
+            ],
+            "latest_grade": "CONTRIBUTOR",
+            "missed_fire": true,
+            "open_directives": 21,
+            "pending_handoffs": 0,
+            "role": "adversary"
+          },
+          {
+            "age_s": 1915,
+            "avg_score_5": 2.48,
+            "last_result_type": "MEASURE_RESULT",
+            "last_summary": "MEASURE_RESULT capital-hours: KPI live yield is priced on a phantom $28.27 treasury (0.0375*28.27/365/24 reproduces live_now.idle_usd_per_h exactly), overstatin",
+            "last_tags": [
+              "MISSING_RESULT_TYPE",
+              "ACTION_LANGUAGE",
+              "ARTIFACTS",
+              "CLOSED_DIR_1"
+            ],
+            "latest_grade": "CONTRIBUTOR",
+            "missed_fire": true,
+            "open_directives": 85,
+            "pending_handoffs": 0,
+            "role": "scout"
+          },
+          {
+            "age_s": 1353,
+            "avg_score_5": -0.5,
+            "last_result_type": null,
+            "last_summary": "",
+            "last_tags": [
+              "MISSING_RESULT_TYPE"
+            ],
+            "latest_grade": "REPORT_ONLY",
+            "missed_fire": false,
+            "open_directives": 0,
+            "pending_handoffs": 0,
+            "role": "prediction"
+          },
+          {
+            "age_s": 2166,
+            "avg_score_5": 3.83,
+            "last_result_type": "DECISION_MADE",
+            "last_summary": "Peg/triangle rails remain UNMEASURABLE: two shadow_rails snapshots 16.6s apart (ts 1791506439.76/1791506456.40) both show USDT-USDC bid=null, queue_ahead=null, ",
+            "last_tags": [
+              "DECISION_MADE",
+              "ARTIFACTS"
+            ],
+            "latest_grade": "CONTRIBUTOR",
+            "missed_fire": true,
+            "open_directives": 76,
+            "pending_handoffs": 0,
+            "role": "execution"
+          },
+          {
+            "age_s": 1224,
+            "avg_score_5": 2.24,
+            "last_result_type": "NO_ACTION_JUSTIFIED",
+            "last_summary": "RED ZONE; no new fundable destination. equity 26.229750 = cash 23.237641 + deployed 2.992109 (identity exact, residual 0); free capital 20.614666; SURVIVAL max ",
+            "last_tags": [
+              "NO_ACTION_UNJUSTIFIED",
+              "ARTIFACTS"
+            ],
+            "latest_grade": "REPORT_ONLY",
+            "missed_fire": false,
+            "open_directives": 75,
+            "pending_handoffs": 0,
+            "role": "treasury"
+          },
+          {
+            "age_s": 1766,
+            "avg_score_5": 4.37,
+            "last_result_type": "ACTION_TAKEN",
+            "last_summary": "Health 86/100 (system 80), 63/63 loops alive, ai/modal circuits CLOSED, unknown_orders/paper_rebuilds/bad_ticks 0; only ACTIVE quarantine is MORPHO-USD@3600 (IN",
+            "last_tags": [
+              "ACTION_TAKEN",
+              "ARTIFACTS",
+              "CLOSED_DIR_8"
+            ],
+            "latest_grade": "CONTRIBUTOR",
+            "missed_fire": false,
+            "open_directives": 31,
+            "pending_handoffs": 0,
+            "role": "doctor"
+          },
+          {
+            "age_s": null,
+            "avg_score_5": null,
+            "last_result_type": null,
+            "last_summary": null,
+            "last_tags": null,
+            "latest_grade": "QUIET",
+            "missed_fire": false,
+            "open_directives": 0,
+            "pending_handoffs": 0,
+            "role": "architect"
+          },
+          {
+            "age_s": 2029,
+            "avg_score_5": 3.6,
+            "last_result_type": "ACTION_TAKEN",
+            "last_summary": "AGENT-PERFORMANCE ANOMALY_DETECT. The Earnings Escalator (FORGE's most frequent directive source) is absent from forge_get_prompt_performance's 14-row genome re",
+            "last_tags": [
+              "ACTION_TAKEN",
+              "ARTIFACTS"
+            ],
+            "latest_grade": "CONTRIBUTOR",
+            "missed_fire": false,
+            "open_directives": 28,
+            "pending_handoffs": 0,
+            "role": "intelligence"
+          },
+          {
+            "age_s": null,
+            "avg_score_5": null,
+            "last_result_type": null,
+            "last_summary": null,
+            "last_tags": null,
+            "latest_grade": "QUIET",
+            "missed_fire": false,
+            "open_directives": 0,
+            "pending_handoffs": 0,
+            "role": "rail_hunter"
+          }
+        ],
+        "stable_net": 0.33387328291510343,
+        "ts": 1791508746.0992882
+      }
+    }
+  },
+  "gateway_request": {
+    "status": 402
+  }
+}

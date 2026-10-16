@@ -1,0 +1,70 @@
+model:
+  provider: deepseek
+  default: deepseek-flash
+cron:
+  model: deepseek-flash
+  model_provider: deepseek
+approvals:
+  mode: 'off'
+  cron_mode: approve
+  single_query_mode: approve
+  unattended_mode: approve
+  deny:
+  - sudo *
+  - systemctl *
+  - ssh *
+  - scp *
+  - '*forge.env*'
+  - '*/etc/forge*'
+  - '*ops_token*'
+  - '*agent_token*'
+  - '*operator_token*'
+terminal:
+  backend: local
+  cwd: /srv/forge/runtime/eng/repo
+agent:
+  reasoning_effort: high
+  max_turns: 120
+  disabled_toolsets:
+  - browser
+  - computer_use
+  - image_gen
+  - homeassistant
+  - discord
+  - discord_admin
+  - spotify
+  - connections
+  reasoning_overrides:
+    deepseek-flash: high
+    deepseek-v4-pro: high
+memory:
+  user_profile_enabled: false
+plugins:
+  enabled:
+  - hermes-forge-eng
+  disabled:
+  - hermes-forge
+  - hermes-forge-ops
+platform_toolsets:
+  cron:
+  - forge_eng
+  - terminal
+  - file
+  - code_execution
+  - todo
+  - memory
+  - session_search
+providers:
+  deepseek:
+    name: DeepSeek V4.1 Flash (cheapest frontier; selective reasoning)
+    api: https://api.deepseek.com
+    key_env: DEEPSEEK_API_KEY
+    transport: chat_completions
+    default_model: deepseek-flash
+    models:
+      deepseek-flash:
+        context_length: 1000000
+    discover_models: false
+tools:
+  tool_search:
+    enabled: 'off'

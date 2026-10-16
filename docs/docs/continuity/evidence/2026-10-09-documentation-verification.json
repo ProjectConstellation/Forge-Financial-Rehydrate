@@ -1,0 +1,40 @@
+{
+  "verified_at_utc": "2026-10-09T00:23:00.351374+00:00",
+  "kind": "documentation readback/link/scope/hash validation; no application tests",
+  "markdown_links_resolve": true,
+  "credential_pattern_scan": "clear",
+  "original_source_hashes_match": {
+    "FORGE_MASTER_BUILD_DOSSIER.md": true,
+    "FORGE_AUTONOMOUS_BUILD_DIRECTIVE.md": true
+  },
+  "baseline_git_head": "7b6fca7cd9975fea2e5227d3591550e673f0cc10",
+  "new_git_status_entries": [
+    " M AGENTS.md",
+    " M docs/BUILD_STATUS.md",
+    " M docs/CURRENT_STATE.md",
+    "?? docs/continuity/"
+  ],
+  "unexpected_entries": [],
+  "preexisting_status_entries_removed": [],
+  "runtime_tests_run": false,
+  "runtime_modifications_by_this_session": false,
+  "file_sha256": {
+    "FOUNDER_INTENT.md": "e7c0cd7672661abb26496d098c23855e19cee1f49b25e1727ac1342a438f9dda",
+    "LUKE_CONTRACT.md": "953138a588095942ba6f54c410a9c153992cb6ee5ceb8095cb7c8d9f0e84afe4",
+    "REHYDRATE.md": "a2faed48ce31341d367cc138e30953a6051c2c7193107c7b250143caf2f16dca",
+    "TEAM_ECONOMICS.md": "e2ad323d95a530a00779027fa021301c511548d47ee35ef1db6990b2e19057f5",
+    "README.md": "02f188454f8bbead6fc5d042bb306c1908fba81e2bbcf5d2b95b1e0393034890",
+    "CURRENT_STATE.md": "3d1645e7bfd652ea1970d0faa931fc3b47cfdb83618d8ba7dce48902d417cc38",
+    "CHANGELOG.md": "add29281a2cd025a01d324512789f52a30a5d3229e54dd63d952ef364eed7134",
+    "KNOWN_ISSUES.md": "d84446ac5e9f7b345e4d6fb7fd7b6ddb60c15041550e8a8502fc12f6b6b6ad0c",
+    "SYSTEM_MAP.md": "2452fe756ba5bf185f7fd438c86d719517d90c2b49e59f91a2574fe839a3671a",
+    "WORK_QUEUE.md": "3f07991c942dbf8fb88afbebaf9b0ae18ec11b0a01a40ac08d3f8c9a176b2cc4",
+    "templates/INCIDENT.md": "3fef1dc43600233131ab1dd71ff1052364487eaf104508a994efc8ec1e66ff91",
+    "templates/CHANGE_RECEIPT.md": "968e572ed870a1fddade6467c8728813a8ab61aa3287f271df58f65bd89668c9",
+    "templates/EXPERIMENT.md": "65859601423652d9d40f127610b4b26316b280b98038386edc935c0ef701b50a",
+    "templates/SESSION.md": "1d9f4d78e5474b00461fe62dfc4e62f3f91e62eab036c1d550e284df67295e13",
+    "sessions/20261009T002138Z-codex-takeover.md": "3f460969ef63c2f80767a3fc8416405957b67917df63f1e3822acecc96084db9",
+    "reports/2026-10-09-INDEPENDENT_ASSESSMENT.md": "b56ba2c0ffbf9ffab0d51db2dff135fc1091829d9f362a4dc0d4782ef2c8031f",
+    "evidence/20261009T002138Z-baseline.json": "69ed36ca04d4d68fc4691a4b6270bd4d6ab76472570b3011d3d5b2ecda6a352c"
+  }
+}

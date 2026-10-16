@@ -1,0 +1,77 @@
+model:
+  provider: deepseek
+  default: deepseek-flash
+approvals:
+  mode: manual
+  cron_mode: deny
+  single_query_mode: deny
+  unattended_mode: deny
+agent:
+  reasoning_effort: high
+  max_turns: 30
+  disabled_toolsets:
+  - terminal
+  - code_execution
+  - file
+  - browser
+  - computer_use
+  - image_gen
+  - homeassistant
+  - discord
+  - discord_admin
+  - spotify
+  - kanban
+  - connections
+  - skills
+  reasoning_overrides:
+    deepseek-flash: high
+    deepseek-v4-pro: high
+memory:
+  user_profile_enabled: false
+plugins:
+  enabled:
+  - hermes-forge-ops
+  disabled:
+  - hermes-forge
+platforms:
+  telegram:
+    gateway_restart_notification: false
+platform_toolsets:
+  telegram:
+  - forge_ops
+  - memory
+  - session_search
+  - todo
+  - clarify
+  - cronjob
+  - delegation
+  cli:
+  - forge_ops
+  - memory
+  - session_search
+  - todo
+providers:
+  deepseek:
+    name: DeepSeek V4.1 Flash (cheapest frontier; selective reasoning)
+    api: https://api.deepseek.com
+    key_env: DEEPSEEK_API_KEY
+    transport: chat_completions
+    default_model: deepseek-flash
+    models:
+      deepseek-flash:
+        context_length: 1000000
+    discover_models: false
+tools:
+  tool_search:
+    enabled: 'off'
+stt:
+  enabled: true
+  echo_transcripts: true
+  provider: local
+  language: en
+  prompt: FORGE, Kalshi, Coinbase, Modal, DeepSeek, Hermes, USDC, PAXG, debrief, treasury
+  local:
+    model: base
+cron:
+  model: deepseek-flash
+  model_provider: deepseek
