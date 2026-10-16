@@ -113,6 +113,12 @@ def _schema(name, desc, props, required=None):
 
 
 def register(ctx):
+    def h_research_results(params, session_id=None, **kw):
+        return _out(_call("GET", "/api/v1/research/results", actor=_actor(session_id)))
+    ctx.register_tool(name="ops_research_results", toolset="forge_ops", handler=h_research_results,
+                      schema=_schema("ops_research_results", "[FORGE OPS] Where research money went: calls by role, "
+                                     "jobs, artifacts, decisions, outstanding costs and paper curriculum. "
+                                     "Report unresolved expenditure honestly; forecasts are not earned cash.", {}))
     # ---------------------------------------------------------------- live status + FORGE read tools
     def h_status(params, session_id=None, **kw):
         return _out(_call("GET", "/api/ops/status", actor=_actor(session_id)))

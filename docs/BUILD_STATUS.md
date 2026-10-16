@@ -23,3 +23,7 @@
 | Hermes integration (agent API, plugin, gates, 9 cron roles, Opus/DeepSeek swap) | WORKING LIVE | tests/simulation/test_agent_api.py; role_reports |
 | Agent cognitive architecture (Constitution, 7 genomes, prompt genome evolution, blind panels) | WORKING LIVE | tests/simulation/test_prompt_genomes.py |
 | Data integrity (time-sorted history, bad-tick repair, quarantine lifecycle) | FIXED + TESTED | test_candle_store_merge_keeps_time_order, test_bad_print_detector_and_repair |
+
+
+## Continuity addition — 2026-10-09
+Engineering handoff system installed in `docs/continuity/`; exact files, scope and documentation verification belong to its session journal. Existing runtime completion rows above were not re-tested or upgraded by this change. Financial/workflow repairs remain PLANNED in continuity/WORK_QUEUE.md.

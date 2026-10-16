@@ -36,3 +36,9 @@ Coinbase = crypto/stables. Kalshi = event contracts. Both add independent FLOW t
 4. Fund ~$25; keep KALSHI_LIVE=off until PAPER evidence + founder LIVE auth
 5. Never paste the private key into chat
 
+
+## Alpaca PAPER (equities training rail)
+1. Sign up: https://app.alpaca.markets/signup — use **Paper Trading** keys only until founder authorizes live.
+2. Dashboard → Paper → API Keys → Generate → `APCA_API_KEY_ID` + `APCA_API_SECRET_KEY`
+3. Install: `sudo bash /srv/forge/scripts/install_alpaca_paper_creds.sh <KEY_ID> <SECRET>`
+4. Keep `ALPACA_LIVE=off`. Paper endpoint: `https://paper-api.alpaca.markets`

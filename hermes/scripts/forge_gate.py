@@ -30,6 +30,17 @@ urgent = bool(d.get("urgent") or d.get("open_critical") or d.get("pending_handof
 due = now() - last >= quiet_h * 3600 or a.get("mode") == "credit"
 meaningful = bool(d.get("meaningful"))
 
+# Repeated alerts are not fresh research. A periodic review remains available after two hours.
+import hashlib
+signal = {"directives": [x.get("id") for x in d.get("ops_directives", [])],
+          "handoffs": d.get("pending_handoff"), "strategy": d.get("strategy_events"),
+          "listings": d.get("listing_events"), "settled": d.get("crossrail_settled_since")}
+fingerprint = hashlib.sha256(json.dumps(signal, sort_keys=True).encode()).hexdigest()
+prior = st.get(key + ".evidence") or {}
+if prior.get("fingerprint") == fingerprint and now() - float(prior.get("ts") or 0) < 7200:
+    skip()
+    sys.exit(0)
+
 if not urgent and not meaningful and not due:
     # Final check: recovery under floor with actionable lever for this role
     if not d.get("recovery_lever"):
@@ -37,6 +48,7 @@ if not urgent and not meaningful and not due:
         sys.exit(0)
 
 st[key] = now()
+st[key + ".evidence"] = {"fingerprint": fingerprint, "ts": now()}
 save(st)
 wake({
     "budget": {k: a.get(k) for k in ("headroom", "budget_24h", "spent_24h", "hermes_value_per_usd")},

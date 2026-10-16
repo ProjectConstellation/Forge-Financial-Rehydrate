@@ -56,3 +56,7 @@
   persisting across restarts, false stale-bar quarantines after restarts, Modal 5m bursts exceeding 900 s (5m window 90 d),
   population trim killing newcomers, genome schema drift crash, WS L2 shard limit.
 - Kalshi: shadow only (no API key/funding). SURFACE_RV is the candidate edge (n=40, P=0.86).
+
+
+## Continuity entrypoint — 2026-10-09
+For current takeover context and future agent handoffs, read `docs/continuity/README.md`, then `CURRENT_STATE.md`, `WORK_QUEUE.md`, latest session and sanitized evidence in that directory. Older claims above must be refreshed against production. Runtime repairs described in the new assessment are proposed, not deployed.

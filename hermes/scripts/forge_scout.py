@@ -19,6 +19,11 @@ WATCH = {
     "kalshi_docs_index": "https://docs.kalshi.com/llms.txt",
     "kalshi_maintenance": "https://docs.kalshi.com/getting_started/maintenance_and_pauses.md",
     "cdp_docs_index": "https://docs.cdp.coinbase.com/llms.txt",
+        "alpaca_trading_api": "https://alpaca.markets/trading-api",
+    "alpaca_mcp_server": "https://docs.alpaca.markets/us/docs/alpaca-mcp-server",
+    "alpaca_cli": "https://docs.alpaca.markets/us/docs/alpacas-cli",
+    "alpaca_paper": "https://docs.alpaca.markets/us/docs/paper-trading",
+    "alpaca_docs": "https://docs.alpaca.markets/docs/getting-started",
     "kalshi_series_fee_changes": "https://api.elections.kalshi.com/trade-api/v2/series/fee_changes",
 }
 SNAP = HOME / "forge" / "scout"

@@ -1,0 +1,29 @@
+[Unit]
+Description=Forge autonomous Alpaca broker-paper experiments
+After=network-online.target forge.service
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=forge
+Group=forge
+Slice=forge.slice
+EnvironmentFile=/etc/forge/forge.env
+WorkingDirectory=/srv/forge
+ExecStart=/srv/forge/.venv/bin/python -m forge.research.alpaca_broker_engine
+Restart=on-failure
+RestartSec=20
+TimeoutStopSec=30
+CPUQuota=30%
+MemoryMax=384M
+Nice=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/srv/forge/var
+ProtectHome=true
+PrivateTmp=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

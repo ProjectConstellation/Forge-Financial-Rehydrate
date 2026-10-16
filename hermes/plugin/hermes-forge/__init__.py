@@ -56,7 +56,7 @@ def register(ctx):
                                                         "session_id": session_id or "na"})
             except Exception as e:
                 out = {"error": f"FORGE unreachable: {type(e).__name__}: {str(e)[:120]}"}
-            return json.dumps(out, default=str)[:24000]
+            return json.dumps(out, default=str)[:200000]
 
         ctx.register_tool(name=f"forge_{name}", toolset="forge", schema=schema, handler=handler)
 
@@ -86,11 +86,27 @@ def register(ctx):
         if role and session_id:
             with _lock:
                 _roles[session_id] = role
+        if role and kwargs.get("is_first_turn"):
+            return {"context": ("[FORGE MANDATORY FIRST ACTION] Call forge_get_role_brief with role='" + role +
+                                "' BEFORE any other work this session. Your Constitution (C2), role genome, live "
+                                "capital/regime/velocity world-state, your track record and your economic work "
+                                "contract arrive only through that call. Then execute your role duties and finish "
+                                "with forge_submit_role_report.")}
         return None
 
     def _usage(kind, session_id=None, usage=None, model=None, api_request_id=None, api_duration=None, **kwargs):
         if not usage:
             return
+        # Source-accounted gateway responses are already durable in Forge's inference ledger.
+        if str(api_request_id or "").startswith("llm_"):
+            return
+        try:
+            import yaml
+            cfg = yaml.safe_load((HOME / "config.yaml").read_text()) or {}
+            if (cfg.get("model") or {}).get("provider") == "custom:forge-budgeted":
+                return  # Every gateway request is accounted at the source.
+        except (OSError, ValueError):
+            pass
         if isinstance(usage, dict):
             u = usage
         elif hasattr(usage, "model_dump"):
@@ -100,7 +116,7 @@ def register(ctx):
             u = dataclasses.asdict(usage)
         else:
             u = {k: getattr(usage, k) for k in dir(usage) if k.endswith("tokens") and not k.startswith("_")}
-        uid = f"{kind}_{session_id}_{api_request_id}_{kwargs.get('api_call_count')}_{os.urandom(4).hex()}"
+        uid = str(api_request_id) if api_request_id else f"{kind}_{session_id}_{kwargs.get('api_call_count')}"
         body = {"api_request_id": uid[:120], "role": _role(session_id),
                 "model": model or "deepseek-flash", "usage": u, "session_id": session_id,
                 "latency_ms": int(float(api_duration or 0) * 1000), "purpose": kind}
